@@ -1,158 +1,267 @@
-{ lib, stdenv, fetchurl, fetchFromGitHub, perl, curl, bzip2, sqlite, openssl ? null, xz
-, pkgconfig, boehmgc, perlPackages, libsodium, aws-sdk-cpp, brotli, boost
-, autoreconfHook, autoconf-archive, bison, flex, libxml2, libxslt, docbook5, docbook5_xsl
-, busybox-sandbox-shell
-, hostPlatform, buildPlatform
-, storeDir ? "/nix/store"
-, stateDir ? "/nix/var"
-, confDir ? "/etc"
-, withLibseccomp ? libseccomp.meta.available, libseccomp
+{
+  lib,
+  config,
+  stdenv,
+  nixDependencies,
+  generateSplicesForMkScope,
+  fetchFromGitHub,
+  runCommand,
+  pkgs,
+  pkgsi686Linux,
+  pkgsStatic,
+  nixosTests,
 }:
-
 let
+  # Intentionally does not support overrideAttrs etc
+  # Use only for tests that are about the package relation to `pkgs` and/or NixOS.
+  addTestsShallowly =
+    tests: pkg:
+    pkg
+    // {
+      tests = pkg.tests // tests;
+      # In case someone reads the wrong attribute
+      passthru.tests = pkg.tests // tests;
+    };
 
-  sh = busybox-sandbox-shell;
+  addFallbackPathsCheck =
+    pkg:
+    addTestsShallowly {
+      nix-fallback-paths =
+        runCommand "test-nix-fallback-paths-version-equals-nix-stable"
+          {
+            paths = lib.concatStringsSep "\n" (
+              builtins.attrValues (import ../../../../nixos/modules/installer/tools/nix-fallback-paths.nix)
+            );
+          }
+          ''
+            # NOTE: name may contain cross compilation details between the pname
+            #       and version this is permitted thanks to ([^-]*-)*
+            if [[ "" != $(grep -vE 'nix-([^-]*-)*${
+              lib.strings.replaceStrings [ "." ] [ "\\." ] pkg.version
+            }$' <<< "$paths") ]]; then
+              echo "nix-fallback-paths not up to date with nixVersions.stable (nix-${pkg.version})"
+              echo "The following paths are not up to date:"
+              grep -v 'nix-${pkg.version}$' <<< "$paths"
+              echo
+              echo "Fix it by running in nixpkgs:"
+              echo
+              echo "curl https://releases.nixos.org/nix/nix-${pkg.version}/fallback-paths.nix >nixos/modules/installer/tools/nix-fallback-paths.nix"
+              echo
+              exit 1
+            else
+              echo "nix-fallback-paths versions up to date"
+              touch $out
+            fi
+          '';
+    } pkg;
 
-  common = { name, suffix ? "", src, fromGit ? false }: stdenv.mkDerivation rec {
-    inherit name src;
-    version = lib.getVersion name;
+  # (meson based packaging)
+  # Add passthru tests to the package, and re-expose package set overriding
+  # functions. This will not incorporate the tests into the package set.
+  # TODO (roberth): add package-set level overriding to the "everything" package.
+  addTests =
+    selfAttributeName: pkg:
+    let
+      tests =
+        pkg.tests or { }
+        // import ./tests.nix {
+          inherit
+            runCommand
+            lib
+            stdenv
+            pkgs
+            pkgsi686Linux
+            pkgsStatic
+            nixosTests
+            ;
+          inherit (pkg) version src;
+          nix = pkg;
+          self_attribute_name = selfAttributeName;
+        };
+    in
+    # preserve old pkg, including overrideSource, etc
+    pkg
+    // {
+      tests = pkg.tests or { } // tests;
+      passthru = pkg.passthru or { } // {
+        tests =
+          lib.warn "nix.passthru.tests is deprecated. Use nix.tests instead." pkg.passthru.tests or { }
+          // tests;
+      };
+    };
 
-    is20 = lib.versionAtLeast version "2.0pre";
+  # Factored out for when we have package sets for multiple versions of
+  # Nix.
+  #
+  # `nixPackages_*` would be the most regular name, analogous to
+  # `linuxPackages_*`, especially if we put other 3rd-party software in
+  # here, but `nixPackages_*` would also be *very* confusing to humans!
+  generateSplicesForNixComponents =
+    nixComponentsAttributeName:
+    generateSplicesForMkScope [
+      "nixVersions"
+      nixComponentsAttributeName
+    ];
 
-    VERSION_SUFFIX = lib.optionalString fromGit suffix;
+  teams = [
+    lib.teams.nix
+    lib.teams.security-review
+  ];
 
-    outputs = [ "out" "dev" "man" "doc" ];
-
-    nativeBuildInputs =
-      [ pkgconfig ]
-      ++ lib.optionals (!is20) [ curl perl ]
-      ++ lib.optionals fromGit [ autoreconfHook autoconf-archive bison flex libxml2 libxslt docbook5 docbook5_xsl ];
-
-    buildInputs = [ curl openssl sqlite xz bzip2 ]
-      ++ lib.optional (stdenv.isLinux || stdenv.isDarwin) libsodium
-      ++ lib.optionals is20 [ brotli ] # Since 1.12
-      ++ lib.optional withLibseccomp libseccomp
-      ++ lib.optional ((stdenv.isLinux || stdenv.isDarwin) && is20)
-          (aws-sdk-cpp.override {
-            apis = ["s3"];
-            customMemoryManagement = false;
-          })
-      ++ lib.optional fromGit boost;
-
-    propagatedBuildInputs = [ boehmgc ];
-
-    # Seems to be required when using std::atomic with 64-bit types
-    NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.system == "armv6l-linux") "-latomic";
-
-    configureFlags =
-      [ "--with-store-dir=${storeDir}"
-        "--localstatedir=${stateDir}"
-        "--sysconfdir=${confDir}"
-        "--disable-init-state"
-        "--enable-gc"
-      ]
-      ++ lib.optionals (!is20) [
-        "--with-dbi=${perlPackages.DBI}/${perl.libPrefix}"
-        "--with-dbd-sqlite=${perlPackages.DBDSQLite}/${perl.libPrefix}"
-        "--with-www-curl=${perlPackages.WWWCurl}/${perl.libPrefix}"
-      ] ++ lib.optionals (is20 && stdenv.isLinux) [
-        "--with-sandbox-shell=${sh}/bin/busybox"
-      ]
-      ++ lib.optional (
-          hostPlatform != buildPlatform && hostPlatform ? nix && hostPlatform.nix ? system
-      ) ''--with-system=${hostPlatform.nix.system}''
-         # RISC-V support in progress https://github.com/seccomp/libseccomp/pull/50
-      ++ lib.optional (!libseccomp.meta.available) "--disable-seccomp-sandboxing";
-
-    makeFlags = "profiledir=$(out)/etc/profile.d";
-
-    installFlags = "sysconfdir=$(out)/etc";
-
-    doInstallCheck = true; # not cross
-
-    # socket path becomes too long otherwise
-    preInstallCheck = lib.optional stdenv.isDarwin "export TMPDIR=/tmp";
-
-    separateDebugInfo = stdenv.isLinux;
-
-    enableParallelBuilding = true;
-
-    meta = {
-      description = "Powerful package manager that makes package management reliable and reproducible";
-      longDescription = ''
-        Nix is a powerful package manager for Linux and other Unix systems that
-        makes package management reliable and reproducible. It provides atomic
-        upgrades and rollbacks, side-by-side installation of multiple versions of
-        a package, multi-user package management and easy setup of build
-        environments.
+  # Comment out functional tests from meson.build file
+  # This is to prevent test list reordering between releases in `tests/functional/**/meson.build`
+  # `tests` is a list of `{ file; test; }`
+  removeFunctionalTests =
+    tests: src:
+    # empty implies noop
+    if tests == [ ] then
+      src
+    else
+      runCommand src.name { inherit src; } ''
+        cp -r "$src" "$out"
+        chmod -R u+w "$out"
+        ${lib.concatMapStringsSep "\n" (
+          { file, test }:
+          ''substituteInPlace "$out/${file}" --replace-fail "'${test}'," "# '${test}',"''
+        ) tests}
       '';
-      homepage = https://nixos.org/;
-      license = stdenv.lib.licenses.lgpl2Plus;
-      maintainers = [ stdenv.lib.maintainers.eelco ];
-      platforms = stdenv.lib.platforms.all;
-      outputsToInstall = [ "out" "man" ];
-    };
 
-    passthru = { inherit fromGit; };
-  };
+  # Disables tests that have been flaky due to the darwin sandbox and fork safety
+  # with missing shebangs.
+  # See:
+  # - https://github.com/NixOS/nix/pull/14778
+  # - https://github.com/NixOS/nixpkgs/issues/476794
+  # - https://github.com/NixOS/nix/issues/13106
+  commonDisabledTests = lib.optionals (stdenv.hostPlatform.system == "aarch64-darwin") [
+    {
+      file = "tests/functional/meson.build";
+      test = "nix-shell.sh";
+    }
+    {
+      file = "tests/functional/meson.build";
+      test = "user-envs.sh";
+    }
+    {
+      file = "tests/functional/ca/meson.build";
+      test = "nix-shell.sh";
+    }
+    {
+      file = "tests/functional/flakes/meson.build";
+      test = "shebang.sh";
+    }
+  ];
+in
+lib.makeExtensible (
+  self:
+  (
+    {
+      nixComponents_2_31 =
+        (nixDependencies.callPackage ./modular/packages.nix rec {
+          version = "2.31.5";
+          inherit teams;
+          otherSplices = generateSplicesForNixComponents "nixComponents_2_31";
+          src = fetchFromGitHub {
+            owner = "NixOS";
+            repo = "nix";
+            tag = version;
+            hash = "sha256-b7fhCXxl9qKTNPQvG8T/+nOxB95kalt9/aSY+ZSRctk=";
+          };
+        }).appendPatches
+          (
+            lib.optionals stdenv.hostPlatform.isDarwin [
+              # Avoid recursive arch probes when libnixstore is preloaded by Cachix.
+              # https://github.com/NixOS/nixpkgs/issues/562481
+              ./detect-rosetta-via-runtime-file.patch
+            ]
+          );
 
-  perl-bindings = { nix, needsBoost ? false }: stdenv.mkDerivation {
-    name = "nix-perl-" + nix.version;
+      nix_2_31 = addTests "nix_2_31" self.nixComponents_2_31.nix-everything;
 
-    inherit (nix) src;
+      nixComponents_2_34 =
+        (nixDependencies.callPackage ./modular/packages.nix rec {
+          version = "2.34.8";
+          inherit teams;
+          otherSplices = generateSplicesForNixComponents "nixComponents_2_34";
+          src = removeFunctionalTests commonDisabledTests (fetchFromGitHub {
+            owner = "NixOS";
+            repo = "nix";
+            tag = version;
+            hash = "sha256-Rvy1PmIUMGI0IS/kwDwmf/VrorU8v1iZYejssSVu1rY=";
+          });
+        }).appendPatches
+          [ ];
 
-    postUnpack = "sourceRoot=$sourceRoot/perl";
+      nix_2_34 = addTests "nix_2_34" self.nixComponents_2_34.nix-everything;
 
-    # This is not cross-compile safe, don't have time to fix right now
-    # but noting for future travellers.
-    nativeBuildInputs =
-      [ perl pkgconfig curl nix libsodium ]
-      ++ lib.optionals nix.fromGit [ autoreconfHook autoconf-archive ]
-      ++ lib.optional needsBoost boost;
+      nixComponents_2_35 =
+        (nixDependencies.callPackage ./modular/packages.nix rec {
+          version = "2.35.2";
+          inherit teams;
+          otherSplices = generateSplicesForNixComponents "nixComponents_2_35";
+          src = removeFunctionalTests commonDisabledTests (fetchFromGitHub {
+            owner = "NixOS";
+            repo = "nix";
+            tag = version;
+            hash = "sha256-C/YEm/5IPiAMxQH5aHlkwgQMkLqK7NVsudEWdlzBZAA=";
+          });
+        }).appendPatches
+          [ ];
 
-    configureFlags =
-      [ "--with-dbi=${perlPackages.DBI}/${perl.libPrefix}"
-        "--with-dbd-sqlite=${perlPackages.DBDSQLite}/${perl.libPrefix}"
-      ];
+      nix_2_35 = addTests "nix_2_35" self.nixComponents_2_35.nix-everything;
 
-    preConfigure = "export NIX_STATE_DIR=$TMPDIR";
+      nixComponents_git =
+        let
+          src = fetchFromGitHub {
+            owner = "NixOS";
+            repo = "nix";
+            rev = "203f85b2e851fc52e253e8e33eff5fb92936736a";
+            hash = "sha256-ahm58Y+ASv19VGVzC2IwNsQpkVR8rgEwwHDYwnMadkI=";
+          };
+        in
+        (nixDependencies.callPackage ./modular/packages.nix {
+          version = "2.36pre20260912_${lib.substring 0 8 src.rev}";
+          inherit teams;
+          otherSplices = generateSplicesForNixComponents "nixComponents_git";
+          src = removeFunctionalTests commonDisabledTests src;
+        }).appendPatches
+          [ ];
 
-    preBuild = "unset NIX_INDENT_MAKE";
-  };
+      git = addTests "git" self.nixComponents_git.nix-everything;
 
-in rec {
+      latest = self.nix_2_35;
 
-  nix = nixStable;
+      # Read ./README.md before bumping a major release
+      stable = addFallbackPathsCheck self.nix_2_34;
+    }
+    // lib.optionalAttrs config.allowAliases (
+      lib.listToAttrs (
+        map (
+          minor:
+          let
+            attr = "nix_2_${toString minor}";
+          in
+          lib.nameValuePair attr (throw "${attr} has been removed")
+        ) (lib.range 4 23)
+      )
+      // {
+        nixComponents_2_27 = throw "nixComponents_2_27 has been removed. use nixComponents_2_31.";
+        nixComponents_2_29 = throw "nixComponents_2_29 has been removed. use nixComponents_2_31.";
+        nixComponents_2_30 = throw "nixComponents_2_30 has been removed. use nixComponents_2_31.";
+        nixComponents_2_32 = throw "nixComponents_2_32 has been removed. use nixComponents_2_34.";
+        nixComponents_2_33 = throw "nixComponents_2_33 has been removed. use nixComponents_2_34.";
+        nix_2_24 = throw "nix_2_24 has been removed. use nix_2_31.";
+        nix_2_26 = throw "nix_2_26 has been removed. use nix_2_31.";
+        nix_2_27 = throw "nix_2_27 has been removed. use nix_2_31.";
+        nix_2_25 = throw "nix_2_25 has been removed. use nix_2_31.";
+        nix_2_28 = throw "nix_2_28 has been removed. use nix_2_31.";
+        nix_2_29 = throw "nix_2_29 has been removed. use nix_2_31.";
+        nix_2_30 = throw "nix_2_30 has been removed. use nix_2_31.";
+        nix_2_32 = throw "nix_2_32 has been removed. use nix_2_34.";
+        nix_2_33 = throw "nix_2_33 has been removed. use nix_2_34.";
 
-  nix1 = (common rec {
-    name = "nix-1.11.16";
-    src = fetchurl {
-      url = "http://nixos.org/releases/nix/${name}/${name}.tar.xz";
-      sha256 = "0ca5782fc37d62238d13a620a7b4bff6a200bab1bd63003709249a776162357c";
-    };
-  }) // { perl-bindings = nixStable; };
-
-  nixStable = (common rec {
-    name = "nix-2.0.4";
-    src = fetchurl {
-      url = "http://nixos.org/releases/nix/${name}/${name}.tar.xz";
-      sha256 = "166540ff7b8bb41449586b67e5fc6ab9e25525f6724b6c6bcbfb0648fbd6496b";
-    };
-  }) // { perl-bindings = perl-bindings { nix = nixStable; }; };
-
-  nixUnstable = (lib.lowPrio (common rec {
-    name = "nix-2.1${suffix}";
-    suffix = "pre6148_a4aac7f";
-    src = fetchFromGitHub {
-      owner = "NixOS";
-      repo = "nix";
-      rev = "a4aac7f88c59c97299027c9668461c637bbc6a72";
-      sha256 = "1250fg1rgzcd0qy960nhl2bw9hsc1a6pyz11rmxasr0h3j1a2z53";
-    };
-    fromGit = true;
-  })) // { perl-bindings = perl-bindings {
-    nix = nixUnstable;
-    needsBoost = true;
-  }; };
-
-}
+        minimum = throw "nixVersions.minimum has been removed. Use a specific version instead.";
+        unstable = throw "nixVersions.unstable has been removed. use nixVersions.latest or the nix flake.";
+      }
+    )
+  )
+)

@@ -1,20 +1,31 @@
-{ lib, buildPythonPackage, fetchurl, pydns }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  py3dns,
+}:
 
 buildPythonPackage rec {
-  name = "pyspf-${version}";
-  version = "2.0.12";
+  pname = "pyspf";
+  version = "2.0.14";
+  format = "setuptools";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/pymilter/pyspf/${name}/${name}.tar.gz";
-    sha256 = "18j1rmbmhih7q6y12grcj169q7sx1986qn4gmpla9y5gwfh1p8la";
+  src = fetchFromGitHub {
+    owner = "sdgathman";
+    repo = "pyspf";
+    rev = "pyspf-${version}";
+    sha256 = "0bmimlmwrq9glnjc4i6pwch30n3y5wyqmkjfyayxqxkfrixqwydi";
   };
 
-  propagatedBuildInputs = [ pydns ];
+  propagatedBuildInputs = [ py3dns ];
 
-  meta = with lib; {
-    homepage = http://bmsi.com/python/milter.html;
+  # requires /etc/resolv.conf to exist
+  doCheck = false;
+
+  meta = {
+    homepage = "http://bmsi.com/python/milter.html";
     description = "Python API for Sendmail Milters (SPF)";
-    maintainers = with maintainers; [ abbradar ];
-    license = licenses.gpl2;
+    maintainers = [ ];
+    license = lib.licenses.gpl2;
   };
 }

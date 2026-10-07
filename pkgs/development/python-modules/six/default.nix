@@ -1,30 +1,40 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  isPyPy,
+  pytestCheckHook,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "six";
-  version = "1.11.0";
+  version = "1.17.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "70e8a77beed4562e7f14fe23a786b54f6296e34344c23bc42f07b15018ff98e9";
+  src = fetchFromGitHub {
+    owner = "benjaminp";
+    repo = "six";
+    tag = version;
+    hash = "sha256-tz99C+dz5xJhunoC45bl0NdSdV9NXWya9ti48Z/KaHY=";
   };
 
-  checkInputs = [ pytest ];
+  build-system = [ setuptools ];
 
-  checkPhase = ''
-    py.test test_six.py
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  # To prevent infinite recursion with pytest
-  doCheck = false;
+  disabledTestPaths = lib.optionals isPyPy [
+    # uses ctypes to find native library
+    "test_six.py::test_move_items"
+  ];
+
+  pythonImportsCheck = [ "six" ];
 
   meta = {
-    description = "A Python 2 and 3 compatibility library";
-    homepage = https://pypi.python.org/pypi/six/;
+    changelog = "https://github.com/benjaminp/six/blob/${version}/CHANGES";
+    description = "Python 2 and 3 compatibility library";
+    homepage = "https://github.com/benjaminp/six";
     license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

@@ -1,23 +1,50 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pytest, pytestcov, mock, cmdline, pytest-fixture-config, pytest-shutil }:
+{
+  lib,
+  buildPythonPackage,
+  cmdline,
+  importlib-metadata,
+  mock,
+  pytestCheckHook,
+  pytest,
+  pytest-fixture-config,
+  pytest-shutil,
+  setuptools,
+  virtualenv,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage {
   pname = "pytest-virtualenv";
-  version = "1.3.0";
+  inherit (pytest-fixture-config) version src patches;
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "8d8a0b9b57f5efb7db6457c1f57347e35fe332979ecefe592d5324430ae3ed7f";
-  };
+  postPatch = ''
+    cd pytest-virtualenv
+  '';
 
-  buildInputs = [ pytest pytestcov mock cmdline ];
-  propagatedBuildInputs = [ pytest-fixture-config pytest-shutil ];
-  checkPhase = '' py.test tests/unit '';
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "Create a Python virtual environment in your test that cleans up on teardown. The fixture has utility methods to install packages and list what’s installed.";
-    homepage = https://github.com/manahl/pytest-plugins;
-    license = licenses.mit;
-    maintainers = with maintainers; [ ryansydnor ];
+  buildInputs = [ pytest ];
+
+  dependencies = [
+    importlib-metadata
+    pytest-fixture-config
+    pytest-shutil
+    virtualenv
+  ];
+
+  nativeCheckInputs = [
+    cmdline
+    mock
+    pytestCheckHook
+  ];
+
+  # Don't run integration tests
+  disabledTestPaths = [ "tests/integration/*" ];
+
+  meta = {
+    description = "Create a Python virtual environment in your test that cleans up on teardown. The fixture has utility methods to install packages and list what’s installed";
+    homepage = "https://github.com/manahl/pytest-plugins";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ ryansydnor ];
   };
 }

@@ -1,34 +1,94 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
-, tornado
-, zeromq3
-, py
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  isPyPy,
+
+  # build-system
+  cffi,
+  cython,
+  cmake,
+  ninja,
+  packaging,
+  pathspec,
+  scikit-build-core,
+
+  # checks
+  pytestCheckHook,
+  tornado,
+  libsodium,
+  zeromq,
+  pytest-asyncio,
 }:
 
 buildPythonPackage rec {
   pname = "pyzmq";
-  version = "17.0.0";
+  version = "27.1.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0145ae59139b41f65e047a3a9ed11bbc36e37d5e96c64382fcdff911c4d8c3f0";
+    hash = "sha256-rAdl49REVa223b9EF9zORg/ECgWXjAjv3ylIBy9ttUA=";
   };
 
-  checkInputs = [  pytest tornado ];
-  buildInputs = [ zeromq3];
-  propagatedBuildInputs = [ py ];
+  build-system = [
+    cmake
+    ninja
+    packaging
+    pathspec
+    scikit-build-core
+  ]
+  ++ (if isPyPy then [ cffi ] else [ cython ]);
 
-  # test_socket.py seems to be hanging
-  # others fail
-  checkPhase = ''
-    py.test $out/${python.sitePackages}/zmq/ -k "not test_socket \
-      and not test_current \
-      and not test_instance \
-      and not test_callable_check \
-      and not test_on_recv_basic \
-      and not test_on_recv_wake"
+  dontUseCmakeConfigure = true;
+
+  buildInputs = [
+    libsodium
+    zeromq
+  ];
+
+  dependencies = lib.optionals isPyPy [ cffi ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    tornado
+    pytest-asyncio
+  ];
+
+  pythonImportsCheck = [ "zmq" ];
+
+  preCheck = ''
+    rm -r zmq
   '';
+
+  disabledTestMarks = [
+    "flaky"
+  ];
+
+  disabledTests = [
+    # Tests hang
+    "test_socket"
+    "test_monitor"
+    # https://github.com/zeromq/pyzmq/issues/1272
+    "test_cython"
+    # Test fails
+    "test_mockable"
+    # Issues with the sandbox
+    "TestFutureSocket"
+    "TestIOLoop"
+    "TestPubLog"
+  ];
+
+  # Some of the tests use localhost networking.
+  __darwinAllowLocalNetworking = true;
+
+  meta = {
+    description = "Python bindings for ØMQ";
+    homepage = "https://pyzmq.readthedocs.io/";
+    license = with lib.licenses; [
+      bsd3 # or
+      lgpl3Only
+    ];
+    maintainers = [ ];
+  };
 }

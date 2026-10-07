@@ -1,21 +1,44 @@
-{ lib, fetchPypi, buildPythonPackage, pytest }:
+{
+  lib,
+  fetchFromGitHub,
+  setuptools,
+  buildPythonPackage,
+  eth-utils,
+  hypothesis,
+  pytestCheckHook,
+  pydantic,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "rlp";
-  version = "0.6.0";
+  version = "4.1.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0d3gx4mp8q4z369s5yk1n9c55sgfw9fidbwqxq67d6s7l45rm1w7";
+  src = fetchFromGitHub {
+    owner = "ethereum";
+    repo = "pyrlp";
+    rev = "v${version}";
+    hash = "sha256-moerdcAJXqhlzDnTlvxL3Nzz485tOzJVCPlGrof80eQ=";
   };
 
-  buildInputs = [ pytest ];
+  build-system = [ setuptools ];
+
+  propagatedBuildInputs = [ eth-utils ];
+
+  nativeCheckInputs = [
+    hypothesis
+    pytestCheckHook
+    pydantic
+  ];
+
+  pythonImportsCheck = [ "rlp" ];
+
+  disabledTests = [ "test_install_local_wheel" ];
 
   meta = {
-    description = "A package for encoding and decoding data in and from Recursive Length Prefix notation";
+    description = "RLP serialization library";
     homepage = "https://github.com/ethereum/pyrlp";
     license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ gebner ];
+    maintainers = [ ];
   };
 }

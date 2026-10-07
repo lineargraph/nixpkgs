@@ -1,34 +1,53 @@
-{ lib
-, pkgs
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  nix-update-script,
+  setuptools,
+  paup-cli,
+  paupIntegration ? false,
 }:
 
+let
+  paupPath = if paupIntegration then lib.getExe paup-cli else "NONE";
+in
 buildPythonPackage rec {
-  pname   = "DendroPy";
-  version = "4.3.0";
+  pname = "dendropy";
+  version = "5.1.0";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "bd5b35ce1a1c9253209b7b5f3939ac22beaa70e787f8129149b4f7ffe865d510";
+  pyproject = true;
+  build-system = [ setuptools ];
+
+  src = fetchFromGitHub {
+    owner = "jeetsukumaran";
+    repo = "dendropy";
+    tag = "v${version}";
+    hash = "sha256-Y/ecJjVoohsIggH8TK7zHKGWKAtV6yAqTAPnr5+38UY=";
   };
 
-  prePatch = ''
-    # Test removed/disabled and reported upstream: https://github.com/jeetsukumaran/DendroPy/issues/74
-    rm -f dendropy/test/test_dataio_nexml_reader_tree_list.py
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace '["pytest-runner"],' '[],'
+
+    substituteInPlace src/dendropy/interop/paup.py \
+      --replace 'PAUP_PATH = os.environ.get(metavar.DENDROPY_PAUP_PATH_ENVAR, "paup")' 'PAUP_PATH = os.environ.get(metavar.DENDROPY_PAUP_PATH_ENVAR, "${paupPath}")'
   '';
 
-  preCheck = ''
-    # Needed for unicode python tests
-    export LC_ALL="en_US.UTF-8"
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  checkInputs = [ pkgs.glibcLocales ];
+  pythonImportsCheck = [ "dendropy" ];
+
+  passthru.updateScript = nix-update-script { };
 
   meta = {
-    homepage = http://dendropy.org/;
-    description = "A Python library for phylogenetic computing";
-    maintainers = with lib.maintainers; [ unode ];
+    description = "Python library for phylogenetic computing";
+    homepage = "https://jeetsukumaran.github.io/DendroPy/";
     license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [
+      unode
+      pandapip1
+    ];
   };
 }

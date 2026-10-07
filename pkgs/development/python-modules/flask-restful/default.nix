@@ -1,29 +1,76 @@
-{ stdenv, buildPythonPackage, fetchPypi, isPy3k
-, nose, mock, blinker
-, flask, six, pytz, aniso8601, pycrypto
+{
+  lib,
+  aniso8601,
+  blinker,
+  buildPythonPackage,
+  fetchPypi,
+  flask,
+  fetchpatch2,
+  mock,
+  pytest8_3CheckHook,
+  pytz,
+  six,
+  werkzeug,
 }:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
-  pname = "Flask-RESTful";
-  version = "0.3.6";
+  pname = "flask-restful";
+  version = "0.3.10";
+  format = "setuptools";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "01rlvl2iq074ciyn4schmjip7cyplkwkysbb8f610zil06am35ap";
+    pname = "Flask-RESTful";
+    inherit version;
+    hash = "sha256-/kry7wAn34+bT3l6uiDFVmgBtq3plaxjtYir8aWc7Dc=";
   };
 
-# TypeError: Only byte strings can be passed to C code
-  patchPhase = if isPy3k then ''
-    rm tests/test_crypto.py tests/test_paging.py
-    '' else null;
-  buildInputs = [ nose mock blinker ];
-  propagatedBuildInputs = [ flask six pytz aniso8601 pycrypto ];
-  PYTHON_EGG_CACHE = "`pwd`/.egg-cache";
+  # conditional so that overrides are easier for web applications
+  patches =
+    lib.optionals (lib.versionAtLeast werkzeug.version "2.1.0") [ ./werkzeug-2.1.0-compat.patch ]
+    ++ lib.optionals (lib.versionAtLeast flask.version "3.0.0") [ ./flask-3.0-compat.patch ]
+    ++ [
+      # replace use nose by pytest: https://github.com/flask-restful/flask-restful/pull/970
+      (fetchpatch2 {
+        url = "https://github.com/flask-restful/flask-restful/commit/6cc4b057e5450e0c84b3ee5f6f7a97e648a816d6.patch?full_index=1";
+        hash = "sha256-kIjrkyL0OfX+gjoiYfchU0QYTPHz4JMCQcHLFH9oEF4=";
+      })
+      ./fix-test-inputs.patch
+    ];
 
-  meta = with stdenv.lib; {
-    homepage = "http://flask-restful.readthedocs.io/";
-    description = "REST API building blocks for Flask";
-    license = licenses.bsd3;
+  propagatedBuildInputs = [
+    aniso8601
+    flask
+    pytz
+    six
+  ];
+
+  nativeCheckInputs = [
+    blinker
+    mock
+    pytest8_3CheckHook
+  ];
+
+  disabledTests = [
+    # Broke in flask 2.2 upgrade
+    "test_exception_header_forwarded"
+    # Broke in werkzeug 2.3 upgrade
+    "test_media_types_method"
+    "test_media_types_q"
+    # time shenanigans
+    "test_iso8601_date_field_with_offset"
+    "test_rfc822_date_field_with_offset"
+  ];
+
+  pythonImportsCheck = [ "flask_restful" ];
+
+  meta = {
+    description = "Framework for creating REST APIs";
+    homepage = "https://flask-restful.readthedocs.io";
+    longDescription = ''
+      Flask-RESTful provides the building blocks for creating a great
+      REST API.
+    '';
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

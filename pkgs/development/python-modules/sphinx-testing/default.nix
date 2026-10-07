@@ -1,34 +1,42 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, mock
-, sphinx
-, six
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  mock,
+  sphinx,
+  six,
+  unittestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "sphinx-testing";
-  version = "0.7.2";
-  name = "${pname}-${version}";
+  version = "1.0.1";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "9d30f93007620e137b33edf19f52a7225eab853546b7e588ef09d1342e821e94";
+    sha256 = "ef661775b5722d7b00f67fc229104317d35637a4fb4434bf2c005afdf1da4d09";
   };
 
-  checkInputs = [ mock ];
-  propagatedBuildInputs = [ sphinx six ];
+  nativeCheckInputs = [
+    unittestCheckHook
+    mock
+  ];
+  propagatedBuildInputs = [
+    sphinx
+    six
+  ];
 
-  checkPhase = ''
-    ${python.interpreter} -m unittest discover -s tests
-  '';
+  unittestFlagsArray = [
+    "-s"
+    "tests"
+  ];
 
   # Test failures https://github.com/sphinx-doc/sphinx-testing/issues/5
   doCheck = false;
 
   meta = {
-    homepage = https://github.com/sphinx-doc/sphinx-testing;
+    homepage = "https://github.com/sphinx-doc/sphinx-testing";
     license = lib.licenses.bsd2;
     description = "Testing utility classes and functions for Sphinx extensions";
   };

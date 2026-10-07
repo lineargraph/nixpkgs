@@ -1,25 +1,50 @@
-{ stdenv, buildPythonPackage, fetchPypi, pyside, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+
+  # propagates
+  packaging,
+
+  # tests
+  pyqt5,
+  pyside2,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
-  pname = "QtPy";
-  version = "1.4.2";
+  pname = "qtpy";
+  version = "2.4.3";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1d1a4343540433a203280f162d43226e4c87489155fe4a9a6f1923ba11362bf9";
+    hash = "sha256-23RPeDLm09qQVoumzLyj7is7SokMPW+7xjFC9uTN9bs=";
   };
 
-  # no concrete propagatedBuildInputs as multiple backends are supposed
-  checkInputs = [ pyside pytest ];
+  propagatedBuildInputs = [ packaging ];
 
-  doCheck = false; # require X
-  checkPhase = ''
-    py.test qtpy/tests
-  '';
+  doCheck = false; # ModuleNotFoundError: No module named 'PyQt5.QtConnectivity'
+  nativeCheckInputs = [
+    pyside2
+    (pyqt5.override {
+      withConnectivity = true;
+      withMultimedia = true;
+      withWebKit = true;
+      withWebSockets = true;
+    })
+    pytestCheckHook
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Abstraction layer for PyQt5/PyQt4/PySide2/PySide";
-    homepage = https://github.com/spyder-ide/qtpy;
-    license = licenses.mit;
+  disabledTestPaths = [
+    # Fatal error in python on x86_64
+    "qtpy/tests/test_uic.py"
+  ];
+
+  meta = {
+    description = "Abstraction layer for PyQt5/PyQt6/PySide2/PySide6";
+    mainProgram = "qtpy";
+    homepage = "https://github.com/spyder-ide/qtpy";
+    license = lib.licenses.mit;
   };
 }

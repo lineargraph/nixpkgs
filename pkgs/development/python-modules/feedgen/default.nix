@@ -1,25 +1,40 @@
-{ stdenv, buildPythonPackage, fetchPypi, fetchurl, dateutil, lxml }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  python-dateutil,
+  lxml,
+  pytestCheckHook,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "feedgen";
-  version = "0.6.1";
-  name = "${pname}-${version}";
+  version = "1.0.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "e5a1f2a8aaed06dae325e6024aa7083e90655c6cbddeb3671249b3895c135762";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-2b1Rw7XpVqKlKZjDcIxNLHKfL8wxEYjh5dO5cmOTVGo=";
   };
 
-  propagatedBuildInputs = [ dateutil lxml ];
+  build-system = [ setuptools ];
 
-  # No tests in archive
-  doCheck = false;
+  dependencies = [
+    python-dateutil
+    lxml
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Python module to generate ATOM feeds, RSS feeds and Podcasts.";
-    downloadPage = https://github.com/lkiesow/python-feedgen/releases;
-    homepage = https://github.com/lkiesow/python-feedgen;
-    license = with licenses; [ bsd2 lgpl3 ];
-    maintainers = with maintainers; [ casey ];
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = {
+    description = "Python module to generate ATOM feeds, RSS feeds and Podcasts";
+    downloadPage = "https://github.com/lkiesow/python-feedgen/releases";
+    homepage = "https://github.com/lkiesow/python-feedgen";
+    license = with lib.licenses; [
+      bsd2
+      lgpl3
+    ];
+    maintainers = with lib.maintainers; [ casey ];
   };
-}
+})

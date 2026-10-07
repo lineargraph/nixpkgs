@@ -1,17 +1,45 @@
 {
-  mkDerivation, lib,
+  mkDerivation,
+  cmake,
   extra-cmake-modules,
-  attica, kconfig, kconfigwidgets, kglobalaccel, ki18n, kiconthemes, kitemviews,
-  ktextwidgets, kwindowsystem, qtbase, sonnet,
+  qttools,
+  attica,
+  kconfig,
+  kconfigwidgets,
+  kglobalaccel,
+  ki18n,
+  kiconthemes,
+  kitemviews,
+  ktextwidgets,
+  kwindowsystem,
+  qtbase,
+  sonnet,
 }:
 
 mkDerivation {
-  name = "kxmlgui";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ extra-cmake-modules ];
+  pname = "kxmlgui";
+  outputs = [
+    "out"
+    "dev"
+  ];
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
+  ];
   buildInputs = [
-    attica kglobalaccel ki18n kiconthemes kitemviews ktextwidgets kwindowsystem
+    attica
+    kglobalaccel
+    ki18n
+    kiconthemes
+    kitemviews
+    ktextwidgets
+    kwindowsystem
     sonnet
   ];
-  propagatedBuildInputs = [ kconfig kconfigwidgets qtbase ];
+  propagatedBuildInputs = [
+    kconfig
+    kconfigwidgets
+    qtbase
+    qttools
+  ];
 }

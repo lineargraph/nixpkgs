@@ -1,23 +1,32 @@
-{ stdenv, agda, fetchgit }:
+{
+  lib,
+  mkDerivation,
+  fetchFromGitHub,
+  unstableGitUpdater,
+}:
 
-agda.mkDerivation (self: rec {
-  version = "0dca24a81d417db2ae8fc871eccb7776f7eae952";
-  name = "agda-prelude-${version}";
+mkDerivation {
+  version = "0-unstable-2024-08-22";
+  pname = "agda-prelude";
 
-  src = fetchgit {
-    url = "https://github.com/UlfNorell/agda-prelude.git";
-    rev = version;
-    sha256 = "0gwfgvj96i1mx5v01bi46h567d1q1fbgvzv6z8zv91l2jhybwff5";
+  src = fetchFromGitHub {
+    owner = "UlfNorell";
+    repo = "agda-prelude";
+    rev = "4230566d3ae229b6a00258587651ac7bfd38d088";
+    hash = "sha256-ab+KojzRbkUTAFNH5OA78s0F5SUuXTbliai6badveg4=";
   };
 
-  topSourceDirectories = [ "src" ];
-  everythingFile = "src/Prelude.agda";
+  passthru.updateScript = unstableGitUpdater { };
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/UlfNorell/agda-prelude;
+  meta = {
+    homepage = "https://github.com/UlfNorell/agda-prelude";
     description = "Programming library for Agda";
-    license = stdenv.lib.licenses.mit;
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = with maintainers; [ fuuzetsu mudri ];
+    license = lib.licenses.mit;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [
+      mudri
+      alexarice
+      turion
+    ];
   };
-})
+}

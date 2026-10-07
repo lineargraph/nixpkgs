@@ -1,27 +1,46 @@
-{ lib, buildPythonPackage, fetchPypi, isPy3k, glibcLocales, future }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  hypothesis,
+  python,
+}:
 
 buildPythonPackage rec {
-  pname = "CommonMark";
-  version = "0.7.5";
+  pname = "commonmark";
+  version = "0.9.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "4dfbbd1dbc669a9b71a015032b2bbe5c4b019ca8b6ca410d89cf7020de46d2c0";
+  src = fetchFromGitHub {
+    owner = "readthedocs";
+    repo = "commonmark.py";
+    tag = version;
+    hash = "sha256-Ui/G/VLdjWcm7YmVjZ5Q8h0DEEFqdDByre29g3zHUq4=";
   };
 
-  preCheck = ''
-    export LC_ALL="en_US.UTF-8"
+  build-system = [ setuptools ];
+
+  nativeCheckInputs = [ hypothesis ];
+
+  checkPhase = ''
+    runHook preCheck
+
+    ${python.interpreter} commonmark/tests/run_spec_tests.py
+    ${python.interpreter} commonmark/tests/unit_tests.py
+
+    export PATH=$out/bin:$PATH
+    cmark commonmark/tests/test.md
+    cmark commonmark/tests/test.md -a
+    cmark commonmark/tests/test.md -aj
+
+    runHook postCheck
   '';
 
-  # UnicodeEncodeError on Python 2
-  doCheck = isPy3k;
-
-  checkInputs = [  glibcLocales ];
-  propagatedBuildInputs = [ future ];
-
-  meta = with lib; {
-    description = "Python parser for the CommonMark Markdown spec";
-    homepage = https://github.com/rolandshoemaker/CommonMark-py;
-    license = licenses.bsd3;
+  meta = {
+    description = "Python CommonMark parser ";
+    mainProgram = "cmark";
+    homepage = "https://github.com/readthedocs/commonmark.py";
+    license = lib.licenses.bsd3;
   };
 }

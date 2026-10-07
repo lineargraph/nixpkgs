@@ -1,65 +1,142 @@
-{ stdenv
-, pkgconfig, autoreconfHook
-, fetchurl, cpio, zlib, bzip2, file, elfutils, libbfd, libarchive, nspr, nss, popt, db, xz, python, lua
+{
+  stdenv,
+  lib,
+  pkg-config,
+  cmake,
+  fetchurl,
+  zlib,
+  bzip2,
+  file,
+  elfutils,
+  libarchive,
+  readline,
+  audit,
+  popt,
+  xz,
+  python3,
+  lua,
+  llvmPackages,
+  sqlite,
+  zstd,
+  libcap,
+  darwinMinVersionHook,
+  openssl,
+  #, libselinux
+  rpm-sequoia,
+  gettext,
+  systemd,
+  bubblewrap,
+  autoconf,
+  gnupg,
+
+  # Disable the unshare RPM plugin, which can be useful if
+  # RPM is ran within the Nix sandbox.
+  disableUnshare ? true,
 }:
 
 stdenv.mkDerivation rec {
-  name = "rpm-${version}";
-  version = "4.14.1";
+  pname = "rpm";
+  version = "4.20.1";
 
   src = fetchurl {
-    url = "http://ftp.rpm.org/releases/rpm-4.14.x/rpm-${version}.tar.bz2";
-    sha256 = "0fvrjq6jsvbllb5q6blchzh7p5flk61rz34g4g9mp9iwrhn0xx23";
+    url = "https://ftp.osuosl.org/pub/rpm/releases/rpm-${lib.versions.majorMinor version}.x/rpm-${version}.tar.bz2";
+    hash = "sha256-UmR+EmODZFM6tnHLyOSFyW+fCIidk/4O0QSmYyZhEk8=";
   };
 
-  outputs = [ "out" "dev" "man" ];
+  postPatch = ''
+    sed -i 's#''${Python3_SITEARCH}#${placeholder "out"}/${python3.sitePackages}#' python/CMakeLists.txt
+    sed -i 's#PATHS ENV MYPATH#PATHS ENV PATH#' CMakeLists.txt
+  ''
+  # clang: error: unknown argument: '-fhardened'
+  + lib.optionalString stdenv.cc.isClang ''
+    substituteInPlace CMakeLists.txt \
+      --replace-fail "-fhardened" ""
+  '';
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
-  buildInputs = [ cpio zlib bzip2 file libarchive nspr nss db xz python lua ];
+  outputs = [
+    "out"
+    "man"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isLinux [
+    "dev"
+  ];
+  separateDebugInfo = true;
 
-  # rpm/rpmlib.h includes popt.h, and then the pkg-config file mentions these as linkage requirements
-  propagatedBuildInputs = [ popt nss db bzip2 libarchive libbfd ]
-    ++ stdenv.lib.optional stdenv.isLinux elfutils;
-
-  NIX_CFLAGS_COMPILE = "-I${nspr.dev}/include/nspr -I${nss.dev}/include/nss";
-
-  configureFlags = [
-    "--with-external-db"
-    "--with-lua"
-    "--enable-python"
-    "--localstatedir=/var"
-    "--sharedstatedir=/com"
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    autoconf
+    python3
+    gettext
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isLinux [ bubblewrap ];
+  buildInputs = [
+    bzip2
+    zlib
+    zstd
+    file
+    libarchive
+    xz
+    lua
+    sqlite
+    openssl
+    readline
+    rpm-sequoia
+    gnupg
+  ]
+  ++ lib.optional stdenv.cc.isClang llvmPackages.openmp
+  ++ lib.optionals stdenv.hostPlatform.isLinux [
+    libcap
+    audit
+    systemd
   ];
 
-  postPatch = ''
-    # For Python3, the original expression evaluates as 'python3.4' but we want 'python3.4m' here
-    substituteInPlace configure.ac --replace 'python''${PYTHON_VERSION}' ${python.executable}
+  patches = lib.optionals stdenv.hostPlatform.isDarwin [
+    ./sighandler_t-macos.patch
+  ];
 
-    substituteInPlace Makefile.am --replace '@$(MKDIR_P) $(DESTDIR)$(localstatedir)/tmp' ""
-  '';
+  cmakeFlags = [
+    "-DWITH_DBUS=OFF"
+    # libselinux is missing propagatedBuildInputs
+    "-DWITH_SELINUX=OFF"
 
-  preFixup = ''
-    # Don't keep a reference to RPM headers or manpages
-    for f in $out/lib/rpm/platform/*/macros; do
-      substituteInPlace $f --replace "$dev" "/rpm-dev-path-was-here"
-      substituteInPlace $f --replace "$man" "/rpm-man-path-was-here"
-    done
+    "-DCMAKE_INSTALL_LOCALSTATEDIR=/var"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isLinux [
+    "-DMKTREE_BACKEND=rootfs"
+  ]
+  ++ lib.optionals (!stdenv.hostPlatform.isLinux) [
+    # Test suite rely on either podman or bubblewrap
+    "-DENABLE_TESTSUITE=OFF"
 
-    # Avoid macros like '%__ld' pointing to absolute paths
-    for tool in ld nm objcopy objdump strip; do
-      sed -i $out/lib/rpm/macros -e "s/^%__$tool.*/%__$tool $tool/"
-    done
+    "-DWITH_CAP=OFF"
+    "-DWITH_AUDIT=OFF"
+    "-DWITH_ACL=OFF"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    "-DWITH_LIBELF=OFF"
+    "-DWITH_LIBDW=OFF"
+  ]
+  ++ lib.optionals disableUnshare [
+    "-DHAVE_UNSHARE=OFF"
+  ];
 
-    # symlinks produced by build are incorrect
-    ln -sf $out/bin/{rpm,rpmquery}
-    ln -sf $out/bin/{rpm,rpmverify}
-  '';
+  # rpm/rpmlib.h includes popt.h, and then the pkg-config file mentions these as linkage requirements
+  propagatedBuildInputs = [
+    popt
+  ]
+  ++ lib.optional (lib.meta.availableOn stdenv.hostPlatform elfutils) elfutils;
 
-  meta = with stdenv.lib; {
-    homepage = http://www.rpm.org/;
-    license = licenses.gpl2;
-    description = "The RPM Package Manager";
-    maintainers = with maintainers; [ copumpkin ];
-    platforms = platforms.linux ++ platforms.darwin;
+  enableParallelBuilding = true;
+
+  meta = {
+    homepage = "https://www.rpm.org/";
+    license = with lib.licenses; [
+      gpl2Plus
+      lgpl21Plus
+    ];
+    description = "RPM package manager";
+    maintainers = [ ];
+    platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };
 }

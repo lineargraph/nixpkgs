@@ -1,33 +1,50 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pip, pandoc, glibcLocales, haskellPackages, texlive }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pandoc,
+  pandocfilters,
+  poetry-core,
+  replaceVars,
+  texliveSmall,
+}:
 
 buildPythonPackage rec {
   pname = "pypandoc";
-  version = "1.4";
+  version = "1.16.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "e914e6d5f84a76764887e4d909b09d63308725f0cbb5293872c2c92f07c11a5b";
+  src = fetchFromGitHub {
+    owner = "JessicaTegner";
+    repo = "pypandoc";
+    tag = "v${version}";
+    hash = "sha256-h0Ur5kWyKz1NCEMdnE0eNCYMAEqjx3g/tnfXs1h9zCs=";
   };
 
-  # Fix tests: first requires network access, second is a bug (reported upstream)
-  preConfigure = ''
-    substituteInPlace tests.py --replace "pypandoc.convert(url, 'html')" "'GPL2 license'"
-    substituteInPlace tests.py --replace "pypandoc.convert_file(file_name, lua_file_name)" "'<h1 id=\"title\">title</h1>'"
-  '';
+  patches = [
+    (replaceVars ./static-pandoc-path.patch {
+      pandoc = "${lib.getBin pandoc}/bin/pandoc";
+      pandocVersion = pandoc.version;
+    })
+    ./skip-tests.patch
+  ];
 
-  LC_ALL="en_US.UTF-8";
+  nativeBuildInputs = [ poetry-core ];
 
-  propagatedBuildInputs = [ pip ];
+  nativeCheckInputs = [
+    texliveSmall
+    pandocfilters
+  ];
 
-  buildInputs = [ pandoc texlive.combined.scheme-small haskellPackages.pandoc-citeproc glibcLocales ];
+  pythonImportsCheck = [ "pypandoc" ];
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Thin wrapper for pandoc";
-    homepage = https://github.com/bebraw/pypandoc;
-    license = licenses.mit;
-    maintainers = with maintainers; [ bennofs ];
-
-    broken = true; # incompatible with pandoc v2
+    homepage = "https://github.com/JessicaTegner/pypandoc";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [
+      sternenseemann
+      bennofs
+    ];
   };
 }

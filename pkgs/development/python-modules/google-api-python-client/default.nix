@@ -1,23 +1,54 @@
-{ lib, buildPythonPackage, fetchPypi
-, httplib2, six, oauth2client, uritemplate }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  google-auth,
+  google-auth-httplib2,
+  google-api-core,
+  httplib2,
+  uritemplate,
+  setuptools,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "google-api-python-client";
-  version = "1.6.7";
+  version = "2.192.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "05583a386e323f428552419253765314a4b29828c3cee15be735f9ebfa5aebf2";
+  src = fetchFromGitHub {
+    owner = "googleapis";
+    repo = "google-api-python-client";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-v6b4WkbXBIqdZFCWVBz7dsMxtHkIsylDGWp5QyNQ9O0=";
+    # Remove mixed-case files that cause hash differences between platforms
+    postFetch = ''
+      rm -rf $out/docs/
+    '';
   };
 
-  # No tests included in archive
-  doCheck = false;
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [ httplib2 six oauth2client uritemplate ];
+  dependencies = [
+    google-auth
+    google-auth-httplib2
+    google-api-core
+    httplib2
+    uritemplate
+  ];
 
-  meta = with lib; {
-    description = "The core Python library for accessing Google APIs";
-    homepage = https://github.com/google/google-api-python-client;
-    license = licenses.asl20;
+  pythonImportsCheck = [ "googleapiclient" ];
+
+  meta = {
+    description = "Official Python client library for Google's discovery based APIs";
+    longDescription = ''
+      These client libraries are officially supported by Google. However, the
+      libraries are considered complete and are in maintenance mode. This means
+      that we will address critical bugs and security issues but will not add
+      any new features.
+    '';
+    homepage = "https://github.com/google/google-api-python-client";
+    changelog = "https://github.com/googleapis/google-api-python-client/releases/tag/${finalAttrs.src.tag}";
+    license = lib.licenses.asl20;
+    maintainers = [ lib.maintainers.sarahec ];
   };
-}
+})

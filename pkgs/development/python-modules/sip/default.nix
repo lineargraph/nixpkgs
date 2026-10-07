@@ -1,27 +1,62 @@
-{ lib, fetchurl, buildPythonPackage, python, isPyPy }:
+{
+  lib,
+  buildPythonPackage,
+  fetchpatch,
+  fetchPypi,
+  setuptools,
+  setuptools-scm,
+  packaging,
 
-if isPyPy then throw "sip not supported for interpreter ${python.executable}" else buildPythonPackage rec {
+  # tests
+  poppler-qt5,
+  qgis,
+  qgis-ltr,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "sip";
-  version = "4.19.6";
-  name = "${pname}-${version}";
-  format = "other";
+  version = "6.16.1";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://sourceforge/pyqt/sip/${name}/${name}.tar.gz";
-    sha256 = "0nlj0zbvmzliyhhspqwf2bjvcnpq4agx4s47php7ishv32p2gnlx";
+  src = fetchPypi {
+    inherit (finalAttrs) pname version;
+    hash = "sha256-CnOcnNKSneTgiERW2Mrzz7IsEFNHV8d5e9jca9ntabw=";
   };
 
-  configurePhase = ''
-    ${python.executable} ./configure.py \
-      -d $out/lib/${python.libPrefix}/site-packages \
-      -b $out/bin -e $out/include
-  '';
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
-  meta = with lib; {
+  dependencies = [
+    packaging
+    setuptools
+  ];
+
+  patches = [
+    # Backports pyqt5 compile failure fix from upstream
+    # https://github.com/Python-SIP/sip/issues/114
+    (fetchpatch {
+      name = "legacy-api-binding-fix.patch";
+      url = "https://github.com/Python-SIP/sip/commit/09598895c607f3e41f0249ade217ace0a4da6437.patch";
+      hash = "sha256-v0YeHyg0ymB0v32gpVRbMBIUk9U2etjs93VuOGPGg2M=";
+    })
+  ];
+
+  # There aren't tests
+  doCheck = false;
+
+  pythonImportsCheck = [ "sipbuild" ];
+
+  passthru.tests = {
+    # test depending packages
+    inherit poppler-qt5 qgis qgis-ltr;
+  };
+
+  meta = {
     description = "Creates C++ bindings for Python modules";
-    homepage    = "http://www.riverbankcomputing.co.uk/";
-    license     = licenses.gpl2Plus;
-    maintainers = with maintainers; [ lovek323 sander ];
-    platforms   = platforms.all;
+    homepage = "https://riverbankcomputing.com/";
+    license = lib.licenses.gpl3Only;
+    maintainers = [ ];
   };
-}
+})

@@ -1,29 +1,48 @@
-{ stdenv, fetchFromGitHub, zlib
-, ocaml, jbuilder, opam, ocamlfuse, findlib, gapi_ocaml, ocaml_sqlite3, camlidl }:
+{
+  lib,
+  ocaml,
+  buildDunePackage,
+  fetchFromGitHub,
+  extlib,
+  fuse3,
+  gapi-ocaml,
+  sqlite3,
+  otoml,
+  tiny_httpd,
+  ounit2,
+}:
 
-stdenv.mkDerivation rec {
-  name = "google-drive-ocamlfuse-${version}";
-  version = "0.6.25";
+buildDunePackage (finalAttrs: {
+  pname = "google-drive-ocamlfuse";
+  version = "0.9.0";
+
+  minimalOCamlVersion = "4.13";
 
   src = fetchFromGitHub {
     owner = "astrada";
     repo = "google-drive-ocamlfuse";
-    rev = "v${version}";
-    sha256 = "1rjm2jcc93sz7l25zbgqal81534vvvbmwy7847s0k8fkr5nq97gp";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-nTZdE9F6ufQ/O/Ck6fzoK65uZ0ylMR6HkwKsBNRDjMs=";
   };
 
-  nativeBuildInputs = [ jbuilder opam ];
+  doCheck = lib.versionAtLeast ocaml.version "4.14";
+  checkInputs = [ ounit2 ];
 
-  buildInputs = [ zlib ocaml ocamlfuse findlib gapi_ocaml ocaml_sqlite3 camlidl ];
-
-  buildPhase = "jbuilder build @install";
-  installPhase = "mkdir $out && jbuilder install --prefix $out";
+  buildInputs = [
+    extlib
+    fuse3
+    gapi-ocaml
+    sqlite3
+    otoml
+    tiny_httpd
+  ];
 
   meta = {
-    homepage = http://gdfuse.forge.ocamlcore.org/;
-    description = "A FUSE-based file system backed by Google Drive, written in OCaml";
-    license = stdenv.lib.licenses.mit;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ obadz ];
+    homepage = "https://github.com/astrada/google-drive-ocamlfuse/";
+    description = "FUSE-based file system backed by Google Drive, written in OCaml";
+    license = lib.licenses.mit;
+    platforms = lib.platforms.linux;
+    maintainers = with lib.maintainers; [ obadz ];
+    mainProgram = "google-drive-ocamlfuse";
   };
-}
+})

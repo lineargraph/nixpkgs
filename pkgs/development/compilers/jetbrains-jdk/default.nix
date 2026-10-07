@@ -1,80 +1,64 @@
-{ stdenv, lib, fetchurl, file, glib, libxml2, libav_0_8, ffmpeg, libxslt
-, libGL , xorg, alsaLib, fontconfig, freetype, pango, gtk2, cairo
-, gdk_pixbuf, atk }:
+{
+  lib,
+  callPackage,
+  fetchurl,
+  jetbrains,
+  jdk,
+  debugBuild ? false,
+  withJcef ? true,
+  wayland-scanner,
+  wayland-protocols,
+  libxkbcommon,
+  speechd-minimal,
+}:
 
-# TODO: Investigate building from source instead of patching binaries.
-# TODO: Binary patching for not just x86_64-linux but also x86_64-darwin i686-linux
-
-let drv = stdenv.mkDerivation rec {
-  pname = "jetbrainsjdk";
-  version = "152b1248.6";
-  name = pname + "-" + version;
-
-  src = if stdenv.system == "x86_64-linux" then
+let
+  gtk-protocols =
+    let
+      rev = "refs/tags/4.22.1";
+      hash = "sha256-zCcXuiEYL2N4Q+WT96ouVDwdZVSohgU/QA2BkGlnZZ0=";
+    in
     fetchurl {
-      url = "https://bintray.com/jetbrains/intellij-jdk/download_file?file_path=jbsdk8u${version}_linux_x64.tar.gz";
-      sha256 = "12l81g8zhaymh4rzyfl9nyzmpkgzc7wrphm3j4plxx129yn9i7d7";
-    }
-  else
-    throw "unsupported system: ${stdenv.system}";
+      # We only need the wayland protocols file
+      url = "https://raw.githubusercontent.com/GNOME/gtk/${rev}/gdk/wayland/protocol/gtk-shell.xml";
+      hash = hash;
+    };
+  # To get the new tag:
+  # git clone https://github.com/jetbrains/jetbrainsruntime
+  # cd jetbrainsruntime
+  # git tag --points-at [revision]
+  # Look for the line that starts with jbr-
+  javaVersion = "25.0.3";
+  build = "508.4";
+in
+callPackage ./common.nix
+  {
+    inherit jdk debugBuild withJcef;
+  }
+  {
+    inherit javaVersion build;
+    # run `git log -1 --pretty=%ct` in jdk repo for new value on update
+    sourceDateEpoch = 1780959777;
+    srcHash = "sha256-N+7D++Cxu0RGWChEWW8gtNz7E2I8qM2AFbXv4luAXto=";
+    jcefPackage = jetbrains.jcef;
+    extraBuildPhase = ''
+      cp -r ${gtk-protocols.out} gtk-shell.xml
 
-  nativeBuildInputs = [ file ];
-
-  unpackCmd = "mkdir jdk; pushd jdk; tar -xzf $src; popd";
-
-  installPhase = ''
-    cd ..
-
-    exes=$(file $sourceRoot/bin/* $sourceRoot/jre/bin/* 2> /dev/null | grep -E 'ELF.*(executable|shared object)' | sed -e 's/: .*$//')
-    for file in $exes; do
-      paxmark m "$file"
-    done
-
-    mv $sourceRoot $out
-    jrePath=$out/jre
-  '';
-
-  postFixup = let
-    arch = "amd64";
-    rSubPaths = [
-      "lib/${arch}/jli"
-      "lib/${arch}/server"
-      "lib/${arch}/xawt"
-      "lib/${arch}"
-    ];
-    in ''
-    rpath+="''${rpath:+:}${stdenv.lib.concatStringsSep ":" (map (a: "$jrePath/${a}") rSubPaths)}"
-    find $out -type f -perm -0100 \
-        -exec patchelf --interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-        --set-rpath "$rpath" {} \;
-    find $out -name "*.so" -exec patchelf --set-rpath "$rpath" {} \;
-  '';
-
-  rpath = lib.makeLibraryPath ([
-    stdenv.cc.cc stdenv.cc.libc glib libxml2 libav_0_8 ffmpeg libxslt libGL
-    alsaLib fontconfig freetype pango gtk2 cairo gdk_pixbuf atk
-  ] ++ (with xorg; [
-    libX11 libXext libXtst libXi libXp libXt libXrender libXxf86vm
-  ]));
-
-  passthru.home = drv;
-
-  meta = with stdenv.lib; {
-    description = "An OpenJDK fork to better support Jetbrains's products.";
-    longDescription = ''
-     JetBrains Runtime is a runtime environment for running IntelliJ Platform
-     based products on Windows, Mac OS X, and Linux. JetBrains Runtime is
-     based on OpenJDK project with some modifications. These modifications
-     include: Subpixel Anti-Aliasing, enhanced font rendering on Linux, HiDPI
-     support, ligatures, some fixes for native crashes not presented in
-     official build, and other small enhancements.
-
-     JetBrains Runtime is not a certified build of OpenJDK. Please, use at
-     your own risk.
+      # JBR hardcodes the speech-dispatcher header location to
+      # /usr/include/speech-dispatcher in its mkimages scripts.
+      substituteInPlace \
+        jb/project/tools/linux/scripts/mkimages_x64.sh \
+        jb/project/tools/linux/scripts/mkimages_aarch64.sh \
+        --replace-fail \
+          "--with-speechd-include=/usr/include/speech-dispatcher" \
+          "--with-speechd-include=${lib.getDev speechd-minimal}/include/speech-dispatcher"
     '';
-    homepage = "https://bintray.com/jetbrains/intellij-jdk/";
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ edwtjo ];
-    platforms = with platforms; [ "x86_64-linux" ];
-  };
-}; in drv
+    vendorVersionString = "nix/JBR-${javaVersion}-b${build}${if withJcef then "-jcef" else ""}";
+    extraConfigureFlags = [
+      "--with-wayland-protocols=${wayland-protocols.out}/share/wayland-protocols"
+    ];
+    extraNativeBuildInputs = [
+      wayland-scanner
+      libxkbcommon
+    ];
+  }

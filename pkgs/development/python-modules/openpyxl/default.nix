@@ -1,33 +1,55 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
-, jdcal
-, et_xmlfile
-, lxml
+{
+  lib,
+  buildPythonPackage,
+  et-xmlfile,
+  fetchFromGitLab,
+  lxml,
+  pandas,
+  pillow,
+  pytestCheckHook,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "openpyxl";
-  version = "2.5.3";
-  name = "${pname}-${version}";
+  version = "3.1.5";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0046fca88d6731875a385bf7edd689d7c4133f829203ea615a81291de3fa48b6";
+  src = fetchFromGitLab {
+    domain = "foss.heptapod.net";
+    owner = "openpyxl";
+    repo = "openpyxl";
+    tag = version;
+    hash = "sha256-vp+TIWcHCAWlDaBcmC7w/kV7DZTZpa6463NusaJmqKo=";
   };
 
-  checkInputs = [ pytest ];
-  propagatedBuildInputs = [ jdcal et_xmlfile lxml ];
+  build-system = [ setuptools ];
 
-  # Tests are not included in archive.
-  # https://bitbucket.org/openpyxl/openpyxl/issues/610
-  doCheck = false;
+  dependencies = [ et-xmlfile ];
+
+  nativeCheckInputs = [
+    lxml
+    pandas
+    pillow
+    pytestCheckHook
+  ];
+
+  pytestFlags = [
+    "-Wignore::DeprecationWarning"
+  ];
+
+  disabledTests = [
+    # lxml 6.0
+    "test_iterparse"
+  ];
+
+  pythonImportsCheck = [ "openpyxl" ];
 
   meta = {
-    description = "A Python library to read/write Excel 2007 xlsx/xlsm files";
-    homepage = https://openpyxl.readthedocs.org;
+    description = "Python library to read/write Excel 2010 xlsx/xlsm files";
+    homepage = "https://openpyxl.readthedocs.org";
+    changelog = "https://foss.heptapod.net/openpyxl/openpyxl/-/blob/${version}/doc/changes.rst";
     license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ lihop sjourdois ];
+    maintainers = with lib.maintainers; [ lihop ];
   };
 }

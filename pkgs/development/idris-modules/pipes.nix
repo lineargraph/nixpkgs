@@ -1,15 +1,11 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, base
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  lib,
 }:
-build-idris-package  {
-  name = "pipes";
+build-idris-package {
+  pname = "pipes";
   version = "2017-12-02";
-
-  idrisDeps = [ prelude base ];
 
   src = fetchFromGitHub {
     owner = "QuentinDuval";
@@ -20,9 +16,8 @@ build-idris-package  {
 
   meta = {
     description = "Composable and effectful production, transformation and consumption of streams of data";
-    homepage = https://github.com/QuentinDuval/IdrisPipes;
+    homepage = "https://github.com/QuentinDuval/IdrisPipes";
     license = lib.licenses.bsd3;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

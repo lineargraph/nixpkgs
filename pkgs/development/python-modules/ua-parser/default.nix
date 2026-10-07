@@ -1,23 +1,52 @@
-{ stdenv, buildPythonPackage, fetchPypi, pyyaml }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  google-re2,
+  pyyaml,
+  pytestCheckHook,
+  setuptools,
+  ua-parser-builtins,
+  ua-parser-rs,
+}:
 
 buildPythonPackage rec {
   pname = "ua-parser";
-  version = "0.7.3";
+  version = "1.0.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1p8siba0rnb5nsl354fd5fc4751d5ybw7hgnd56yn8dncxdb1bqa";
+  src = fetchFromGitHub {
+    owner = "ua-parser";
+    repo = "uap-python";
+    tag = version;
+    fetchSubmodules = true;
+    hash = "sha256-KKQlM1AonRqanhWlWIqPMoD+AzDCdwAzBsAbhqpZ4cs=";
   };
 
-  buildInputs = [ pyyaml ];
+  build-system = [
+    pyyaml
+    setuptools
+  ];
 
-  doCheck = false; # requires files from uap-core
+  dependencies = [
+    ua-parser-builtins
+  ];
 
-  meta = with stdenv.lib; {
-    description = "A python implementation of the UA Parser";
-    homepage = https://github.com/ua-parser/uap-python;
-    license = licenses.asl20;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ dotlambda ];
+  optional-dependencies = {
+    yaml = [ pyyaml ];
+    re2 = [ google-re2 ];
+    regex = [ ua-parser-rs ];
+  };
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "ua_parser" ];
+
+  meta = {
+    changelog = "https://github.com/ua-parser/uap-python/releases/tag/${version}";
+    description = "Python implementation of the UA Parser";
+    homepage = "https://github.com/ua-parser/uap-python";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

@@ -1,6 +1,13 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, pytest, nose, libarchive, glibcLocales
-# unrar is non-free software
-, useUnrar ? false, unrar
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  libarchive,
+  setuptools,
+  # unrar is non-free software
+  useUnrar ? false,
+  unrar,
 }:
 
 assert useUnrar -> unrar != null;
@@ -8,37 +15,45 @@ assert !useUnrar -> libarchive != null;
 
 buildPythonPackage rec {
   pname = "rarfile";
-  name = "${pname}-${version}";
-  version = "3.0";
+  version = "4.5";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "markokr";
     repo = "rarfile";
-    rev = "rarfile_3_0";
-    sha256 = "07yliz6p1bxzhipnrgz133gl8laic35gl4rqfay7f1vc384ch7sn";
+    tag = "v${version}";
+    hash = "sha256-QhNzpNKOuBF/QEQ9XBXwKudcq4VqJyN/0chT+9uCcKg=";
   };
-  buildInputs = [ pytest nose glibcLocales ];
 
   prePatch = ''
     substituteInPlace rarfile.py \
-  '' + (if useUnrar then
-        ''--replace 'UNRAR_TOOL = "unrar"' "UNRAR_TOOL = \"${unrar}/bin/unrar\""
-        ''
-       else
-        ''--replace 'ALT_TOOL = "bsdtar"' "ALT_TOOL = \"${libarchive}/bin/bsdtar\""
-        '')
-     + ''
-   '';
-  # the tests only work with the standard unrar package
-  doCheck = useUnrar;
-  LC_ALL = "en_US.UTF-8";
-  checkPhase = ''
-    py.test test -k "not test_printdir"
-  '';
+  ''
+  + (
+    if useUnrar then
+      ''
+        --replace 'UNRAR_TOOL = "unrar"' "UNRAR_TOOL = \"${unrar}/bin/unrar\""
+      ''
+    else
+      ''
+        --replace 'ALT_TOOL = "bsdtar"' "ALT_TOOL = \"${libarchive}/bin/bsdtar\""
+      ''
+  )
+  + "";
 
-  meta = with stdenv.lib; {
+  build-system = [ setuptools ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  # The tests only work with the standard unrar package
+  doCheck = useUnrar;
+
+  pythonImportsCheck = [ "rarfile" ];
+
+  meta = {
     description = "RAR archive reader for Python";
-    homepage = https://github.com/markokr/rarfile;
-    license = licenses.isc;
+    homepage = "https://github.com/markokr/rarfile";
+    changelog = "https://github.com/markokr/rarfile/releases/tag/v${version}";
+    license = lib.licenses.isc;
+    maintainers = [ ];
   };
 }

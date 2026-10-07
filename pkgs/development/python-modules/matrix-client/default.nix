@@ -1,32 +1,50 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, requests
-, tox, pytest, flake8, responses
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  requests,
+  responses,
+  setuptools,
+  urllib3,
 }:
 
 buildPythonPackage rec {
   pname = "matrix-client";
-  version = "0.0.6";
-  name = "${pname}-${version}";
+  version = "0.4.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "15kx5px26hwr0sxpyjk4w61fjnabg1b57hwys1nyarc0jx4qjhiq";
+    pname = "matrix_client";
+    inherit version;
+    hash = "sha256-BnivQPLLLwkoqQikEMApdH1Ay5YaxaPxvQWqNVY8MVY=";
   };
 
-  checkInputs = [ tox pytest flake8 responses ];
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [ requests ];
+  pythonRelaxDeps = [ "urllib3" ];
 
-  checkPhase = ''
-    pytest
+  dependencies = [
+    requests
+    urllib3
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    responses
+  ];
+
+  postPatch = ''
+    substituteInPlace setup.py --replace \
+      "pytest-runner~=5.1" ""
   '';
 
-  meta = with stdenv.lib; {
-    description = "Matrix Client-Server SDK";
-    homepage = https://github.com/matrix-org/matrix-python-sdk;
-    license = licenses.asl20;
-    maintainers = with maintainers; [ olejorgenb ];
+  pythonImportsCheck = [ "matrix_client" ];
+
+  meta = {
+    description = "Python Matrix Client-Server SDK";
+    homepage = "https://github.com/matrix-org/matrix-python-sdk";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ olejorgenb ];
   };
 }

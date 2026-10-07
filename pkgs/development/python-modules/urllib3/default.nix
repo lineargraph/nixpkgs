@@ -1,34 +1,103 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pytest, mock, tornado, pyopenssl, cryptography
-, idna, certifi, ipaddress, pysocks }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  isPyPy,
 
-buildPythonPackage rec {
+  # build-system
+  hatchling,
+  hatch-vcs,
+
+  # optional-dependencies
+  backports-zstd,
+  brotli,
+  brotlicffi,
+  h2,
+  pysocks,
+
+  # tests
+  httpx,
+  pyopenssl,
+  pytestCheckHook,
+  pytest-socket,
+  pytest-timeout,
+  quart,
+  quart-trio,
+  tornado,
+  trio,
+  trustme,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "urllib3";
-  version = "1.22";
-  name = "${pname}-${version}";
+  version = "2.7.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0kyvc9zdlxr5r96bng5rhm9a6sfqidrbvvkz64s76qs5267dli6c";
+  src = fetchFromGitHub {
+    owner = "urllib3";
+    repo = "urllib3";
+    tag = finalAttrs.version;
+    hash = "sha256-iN59MS5gKgDxe2v4ILrZ/1y7wV4yB1tFs4ATKppYAAk=";
   };
 
-  NOSE_EXCLUDE = stdenv.lib.concatStringsSep "," [
-    "test_headers" "test_headerdict" "test_can_validate_ip_san" "test_delayed_body_read_timeout"
-    "test_timeout_errors_cause_retries" "test_select_multiple_interrupts_with_event"
+  build-system = [
+    hatchling
+    hatch-vcs
   ];
 
-  checkPhase = ''
-    nosetests -v --cover-min-percentage 1
-  '';
+  optional-dependencies = {
+    brotli = if isPyPy then [ brotlicffi ] else [ brotli ];
+    h2 = [ h2 ];
+    socks = [ pysocks ];
+    zstd = [ backports-zstd ];
+  };
 
+  nativeCheckInputs = [
+    httpx
+    pyopenssl
+    pytest-socket
+    pytest-timeout
+    pytestCheckHook
+    quart
+    quart-trio
+    tornado
+    trio
+    trustme
+  ]
+  ++ lib.concatAttrValues finalAttrs.passthru.optional-dependencies;
+
+  disabledTestMarks = [
+    "requires_network"
+  ];
+
+  # Tests in urllib3 are mostly timeout-based instead of event-based and
+  # are therefore inherently flaky. On your own machine, the tests will
+  # typically build fine, but on a loaded cluster such as Hydra random
+  # timeouts will occur.
+  #
+  # The urllib3 test suite has two different timeouts in their test suite
+  # (see `test/__init__.py`):
+  # - SHORT_TIMEOUT
+  # - LONG_TIMEOUT
+  # When CI is in the env, LONG_TIMEOUT will be significantly increased.
+  # Still, failures can occur and for that reason tests are disabled.
   doCheck = false;
 
-  checkInputs = [ pytest mock tornado ];
-  propagatedBuildInputs = [ pyopenssl cryptography idna certifi ipaddress pysocks ];
+  passthru.tests.pytest = finalAttrs.finalPackage.overrideAttrs (_: {
+    doInstallCheck = true;
+  });
 
-  meta = with stdenv.lib; {
-    description = "Powerful, sanity-friendly HTTP client for Python";
-    homepage = https://github.com/shazow/urllib3;
-    license = licenses.mit;
+  preCheck = ''
+    export CI # Increases LONG_TIMEOUT
+  '';
+
+  pythonImportsCheck = [ "urllib3" ];
+
+  meta = {
+    description = "Powerful, user-friendly HTTP client for Python";
+    homepage = "https://github.com/urllib3/urllib3";
+    changelog = "https://github.com/urllib3/urllib3/blob/${finalAttrs.src.tag}/CHANGES.rst";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ fab ];
   };
-}
+})

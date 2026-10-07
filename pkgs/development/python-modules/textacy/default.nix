@@ -1,65 +1,79 @@
-{ stdenv
-, buildPythonPackage
-, isPy27
-, fetchPypi
-, cachetools
-, cld2-cffi
-, cython
-, cytoolz
-, ftfy
-, ijson
-, matplotlib
-, networkx
-, numpy
-, pyemd
-, pyphen
-, python-Levenshtein
-, requests
-, scikitlearn
-, scipy
-, spacy
-, tqdm
-, unidecode
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  cachetools,
+  cytoolz,
+  fetchPypi,
+  floret,
+  jellyfish,
+  joblib,
+  matplotlib,
+  networkx,
+  numpy,
+  pyphen,
+  pytestCheckHook,
+  requests,
+  scikit-learn,
+  scipy,
+  spacy,
+  tqdm,
 }:
 
-buildPythonPackage rec {
-  name = "${pname}-${version}";
+buildPythonPackage (finalAttrs: {
   pname = "textacy";
-  version = "0.6.1";
+  version = "0.13.0";
+  pyproject = true;
+  __structuredAttrs = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "32ffb796f2abf0577af480d482608cca2baf85d366a4e2981ffd3e632ebeb76c";
+  src = fetchFromGitHub {
+    owner = "chartbeat-labs";
+    repo = "textacy";
+    tag = finalAttrs.version;
+    hash = "sha256-QVxC9oV1X5ifQ9VVYissppni1A8LACz/FVgaoG5/GFU=";
   };
 
-  disabled = isPy27; # 2.7 requires backports.csv
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [
+  dependencies = [
     cachetools
-    cld2-cffi
     cytoolz
-    ftfy
-    ijson
-    matplotlib
+    floret
+    jellyfish
+    joblib
     networkx
     numpy
-    pyemd
     pyphen
-    python-Levenshtein
     requests
-    scikitlearn
+    scikit-learn
     scipy
     spacy
     tqdm
-    unidecode
   ];
 
-  doCheck = false;  # tests want to download data files
-
-  meta = with stdenv.lib; {
-    description = "Higher-level text processing, built on spaCy";
-    homepage = "http://textacy.readthedocs.io/";
-    license = licenses.asl20;
-    maintainers = with maintainers; [ rvl ];
+  optional-dependencies = {
+    vis = [ matplotlib ];
   };
-}
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  enabledTestPaths = [
+    # Almost all tests have to deal with downloading a dataset, only test pure tests
+    "tests/test_constants.py"
+    "tests/preprocessing/test_normalize.py"
+    "tests/similarity/test_edits.py"
+    "tests/preprocessing/test_resources.py"
+    "tests/preprocessing/test_replace.py"
+  ];
+
+  pythonImportsCheck = [ "textacy" ];
+
+  meta = {
+    description = "Higher-level text processing, built on spaCy";
+    homepage = "https://textacy.readthedocs.io/";
+    changelog = "https://github.com/chartbeat-labs/textacy/releases/tag/${finalAttrs.src.tag}";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
+  };
+})

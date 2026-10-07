@@ -1,31 +1,37 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  pytestCheckHook,
 }:
 
-buildPythonPackage rec{
+buildPythonPackage rec {
   pname = "toolz";
-  version = "0.9.0";
-  name = "${pname}-${version}";
+  version = "1.1.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "929f0a7ea7f61c178bd951bdae93920515d3fbdbafc8e6caf82d752b9b3b31c9";
+    hash = "sha256-J6XHcNBowRDZ7ZMj8k8VQ+g7LzAKaHt4kcGm1Wtpe1s=";
   };
 
-  checkInputs = [ nose ];
-
-  checkPhase = ''
-    # https://github.com/pytoolz/toolz/issues/357
-    rm toolz/tests/test_serialization.py
-    nosetests toolz/tests
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace-fail '"setuptools-git-versioning >=2.0",' "" \
+      --replace-fail 'dynamic = ["version"]' 'version = "${version}"'
   '';
 
+  build-system = [
+    setuptools
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
   meta = {
-    homepage = "http://github.com/pytoolz/toolz/";
+    homepage = "https://github.com/pytoolz/toolz";
+    changelog = "https://github.com/pytoolz/toolz/releases/tag/${version}";
     description = "List processing tools and functional utilities";
     license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ fridh ];
   };
 }

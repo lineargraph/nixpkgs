@@ -1,14 +1,13 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  lib,
 }:
-build-idris-package  {
-  name = "canvas";
+build-idris-package {
+  pname = "canvas";
   version = "2017-11-09";
 
-  idrisDeps = [ prelude ];
+  ipkgName = "idriscanvas";
 
   src = fetchFromGitHub {
     owner = "JinWuZhao";
@@ -19,8 +18,7 @@ build-idris-package  {
 
   meta = {
     description = "Idris FFI binding for html5 canvas 2d api";
-    homepage = https://github.com/JinWuZhao/idriscanvas;
+    homepage = "https://github.com/JinWuZhao/idriscanvas";
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

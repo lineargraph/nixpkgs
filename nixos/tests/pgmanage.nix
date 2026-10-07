@@ -1,39 +1,44 @@
-import ./make-test.nix ({ pkgs, ... } :
+{ pkgs, ... }:
 let
-  role     = "test";
+  role = "test";
   password = "secret";
-  conn     = "local";
+  conn = "local";
 in
 {
   name = "pgmanage";
-  meta = with pkgs.stdenv.lib.maintainers; {
+  meta = with pkgs.lib.maintainers; {
     maintainers = [ basvandijk ];
   };
   nodes = {
-    one = { config, pkgs, ... }: {
-      services = {
-        postgresql = {
-          enable = true;
-          initialScript = pkgs.writeText "pg-init-script" ''
-            CREATE ROLE ${role} SUPERUSER LOGIN PASSWORD '${password}';
-          '';
-        };
-        pgmanage = {
-          enable = true;
-          connections = {
-            "${conn}" = "hostaddr=127.0.0.1 port=${toString config.services.postgresql.port} dbname=postgres";
+    one =
+      { config, pkgs, ... }:
+      {
+        services = {
+          postgresql = {
+            enable = true;
+            initialScript = pkgs.writeText "pg-init-script" ''
+              CREATE ROLE ${role} SUPERUSER LOGIN PASSWORD '${password}';
+            '';
+          };
+          pgmanage = {
+            enable = true;
+            connections = {
+              ${conn} =
+                "hostaddr=127.0.0.1 port=${toString config.services.postgresql.settings.port} dbname=postgres";
+            };
           };
         };
       };
-    };
   };
 
   testScript = ''
-    startAll;
-    $one->waitForUnit("default.target");
-    $one->requireActiveUnit("pgmanage.service");
+    start_all()
+    one.wait_for_unit("default.target")
+    one.require_unit_state("pgmanage.service", "active")
 
     # Test if we can log in.
-    $one->waitUntilSucceeds("curl 'http://localhost:8080/pgmanage/auth' --data 'action=login&connname=${conn}&username=${role}&password=${password}' --fail");
+    one.wait_until_succeeds(
+        "curl 'http://localhost:8080/pgmanage/auth' --data 'action=login&connname=${conn}&username=${role}&password=${password}' --fail"
+    )
   '';
-})
+}

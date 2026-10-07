@@ -1,38 +1,24 @@
-{stdenv, fetchurl, ocaml, findlib, lablgtk}:
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+}:
 
-stdenv.mkDerivation rec {
-  name = "ocamlgraph-${version}";
-  version = "1.8.8";
+buildDunePackage (finalAttrs: {
+  pname = "ocamlgraph";
+  version = "2.2.0";
 
   src = fetchurl {
-    url = "http://ocamlgraph.lri.fr/download/ocamlgraph-${version}.tar.gz";
-    sha256 = "0m9g16wrrr86gw4fz2fazrh8nkqms0n863w7ndcvrmyafgxvxsnr";
+    url = "https://github.com/backtracking/ocamlgraph/releases/download/${finalAttrs.version}/ocamlgraph-${finalAttrs.version}.tbz";
+    hash = "sha256-sJViEIY8wk9IAgO6PC7wbfrlV5U2oFdENk595YgisjA=";
   };
 
-  buildInputs = [ ocaml findlib lablgtk ];
-
-  patches = ./destdir.patch;
-
-  postPatch = ''
-    sed -i 's@$(DESTDIR)$(OCAMLLIB)/ocamlgraph@$(DESTDIR)/lib/ocaml/${ocaml.version}/site-lib/ocamlgraph@' Makefile.in
-    sed -i 's@OCAMLFINDDEST := -destdir $(DESTDIR)@@' Makefile.in
-    sed -i 's@+lablgtk2@${lablgtk}/lib/ocaml/${ocaml.version}/site-lib/lablgtk2 -I ${lablgtk}/lib/ocaml/${ocaml.version}/site-lib/stublibs@' configure Makefile.in editor/Makefile
-  '';
-
-  createFindlibDestdir = true;
-
-  buildPhase = ''
-    make all
-    make install-findlib
-  '';
+  minimalOCamlVersion = "4.08";
 
   meta = {
-    homepage = http://ocamlgraph.lri.fr/;
-    description = "Graph library for Objective Caml";
-    license = stdenv.lib.licenses.gpl2Oss;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = [
-      stdenv.lib.maintainers.kkallio
-    ];
+    homepage = "https://github.com/backtracking/ocamlgraph";
+    description = "Graph library for OCaml";
+    license = lib.licenses.lgpl21Only;
+    maintainers = [ ];
   };
-}
+})

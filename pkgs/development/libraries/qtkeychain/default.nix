@@ -1,43 +1,57 @@
-{ stdenv, fetchFromGitHub, cmake, qt4 ? null
-, withQt5 ? false, qtbase ? null, qttools ? null
-, darwin ? null
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  cmake,
+  pkg-config,
+  qtbase,
+  qttools,
+  libsecret,
 }:
 
-assert withQt5 -> qtbase != null;
-assert withQt5 -> qttools != null;
-assert stdenv.isDarwin -> darwin != null;
-
 stdenv.mkDerivation rec {
-  name = "qtkeychain-${if withQt5 then "qt5" else "qt4"}-${version}";
-  version = "0.8.0";            # verify after nix-build with `grep -R "set(PACKAGE_VERSION " result/`
+  pname = "qtkeychain";
+  version = "0.17.0";
 
   src = fetchFromGitHub {
     owner = "frankosterfeld";
     repo = "qtkeychain";
-    rev = "v${version}";
-    sha256 = "1r6qp9l2lp5jpc6ciklbg1swvvzcpc37rg9py46hk0wxy6klnm0b"; # v0.8.0
+    rev = version;
+    sha256 = "sha256-6Aw+hy3WCTr3iEiZns7aH82nkVSG/KMqEA2LE0XZ7Zo=";
   };
 
-  cmakeFlags = [ "-DQT_TRANSLATIONS_DIR=share/qt/translations" ]
-    ++ stdenv.lib.optional stdenv.isDarwin [
-       # correctly detect the compiler
-       # for details see cmake --help-policy CMP0025
-       "-DCMAKE_POLICY_DEFAULT_CMP0025=NEW"
-       ]
-   ;
+  dontWrapQtApps = true;
 
-  nativeBuildInputs = [ cmake ];
+  cmakeFlags = [
+    "-DBUILD_WITH_QT5=${if lib.versions.major qtbase.version == "5" then "ON" else "OFF"}"
+    "-DQT_TRANSLATIONS_DIR=share/qt/translations"
+  ];
 
-  buildInputs = if withQt5 then [ qtbase qttools ] else [ qt4 ]
-    ++ stdenv.lib.optional stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
-         CoreFoundation Security
-    ])
+  nativeBuildInputs = [ cmake ] ++ lib.optionals (!stdenv.hostPlatform.isDarwin) [ pkg-config ] # for finding libsecret
   ;
+
+  buildInputs = lib.optionals (!stdenv.hostPlatform.isDarwin) [ libsecret ] ++ [
+    qtbase
+    qttools
+  ];
+
+  doInstallCheck = true;
+
+  # we previously had a note in here saying to run this check manually, so we might as
+  # well do it automatically. It seems like a perfectly valid sanity check, but I
+  # have no idea *why* we might need it
+  installCheckPhase = ''
+    runHook preInstallCheck
+
+    grep --quiet -R 'set(PACKAGE_VERSION "${version}"' .
+
+    runHook postInstallCheck
+  '';
 
   meta = {
     description = "Platform-independent Qt API for storing passwords securely";
-    homepage = https://github.com/frankosterfeld/qtkeychain;
-    license = stdenv.lib.licenses.bsd3;
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://github.com/frankosterfeld/qtkeychain";
+    license = lib.licenses.bsd3;
+    platforms = lib.platforms.unix;
   };
 }

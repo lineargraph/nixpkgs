@@ -1,27 +1,41 @@
-{ stdenv, fetchurl, buildOcaml, ocaml, findlib, ocamlbuild, topkg, result, js_of_ocaml }:
+{
+  stdenv,
+  lib,
+  fetchurl,
+  ocaml,
+  findlib,
+  ocamlbuild,
+  topkg,
+}:
 
-buildOcaml rec {
-  version = "0.8.3";
-  name = "ptime";
+stdenv.mkDerivation (finalAttrs: {
+  version = "1.2.0";
+  pname = "ocaml${ocaml.version}-ptime";
 
   src = fetchurl {
-    url = "http://erratique.ch/software/ptime/releases/ptime-${version}.tbz";
-    sha256 = "18jimskgnd9izg7kn6zk6sk35adgjm605dkv13plwslbb90kqr44";
+    url = "https://erratique.ch/software/ptime/releases/ptime-${finalAttrs.version}.tbz";
+    hash = "sha256-lhZ0f99JDsNugCTKsn7gHjoK9XfYojImY4+kA03nOrA=";
   };
 
-  unpackCmd = "tar -xf $curSrc";
+  nativeBuildInputs = [
+    findlib
+    ocaml
+    ocamlbuild
+    topkg
+  ];
 
-  buildInputs = [ ocaml findlib ocamlbuild topkg js_of_ocaml ];
+  buildInputs = [
+    topkg
+  ];
 
-  propagatedBuildInputs = [ result ];
+  strictDeps = true;
 
-  buildPhase = "${topkg.run} build --with-js_of_ocaml true";
-
-  inherit (topkg) installPhase;
+  inherit (topkg) buildPhase installPhase;
 
   meta = {
-    homepage = http://erratique.ch/software/ptime;
     description = "POSIX time for OCaml";
+    homepage = "https://erratique.ch/software/ptime";
+    license = lib.licenses.isc;
     longDescription = ''
       Ptime has platform independent POSIX time support in pure OCaml.
       It provides a type to represent a well-defined range of POSIX timestamps
@@ -34,7 +48,7 @@ buildOcaml rec {
 
       Ptime is not a calendar library.
     '';
-    license = stdenv.lib.licenses.isc;
-    maintainers = with stdenv.lib.maintainers; [ sternenseemann ];
+    maintainers = with lib.maintainers; [ sternenseemann ];
+    broken = !(lib.versionAtLeast ocaml.version "4.08");
   };
-}
+})

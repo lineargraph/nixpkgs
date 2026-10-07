@@ -1,32 +1,46 @@
-{ stdenv, buildPythonPackage, isPy3k, fetchFromGitHub, fetchpatch, requests, zeroconf, netifaces, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  requests,
+  setuptools,
+  zeroconf,
+}:
 
 buildPythonPackage rec {
   pname = "netdisco";
-  version = "1.4.0";
+  version = "3.0.0";
+  pyproject = true;
 
-  disabled = !isPy3k;
-
-  # PyPI is missing tests/ directory
-  src = fetchFromGitHub {
-    owner = "home-assistant";
-    repo = pname;
-    rev = version;
-    sha256 = "0q1cl76a0fwxm80lkk7cpd4p23r2bvf1a45nb7n61cgzrqcv43q1";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-TbtZBILzd8zEYeAXQnB8y+jx0tGyhXivkdybf+vNy9I=";
   };
 
-  propagatedBuildInputs = [ requests zeroconf netifaces ];
+  build-system = [ setuptools ];
 
-  checkInputs = [ pytest ];
+  dependencies = [
+    requests
+    zeroconf
+  ];
 
-  checkPhase = ''
-    py.test
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
+  disabledTestPaths = [
+    # Broken due to removed discoverables in https://github.com/home-assistant-libs/netdisco/commit/477db5a1dc93919a6c5bd61b4b1d3c80e75785bd
+    "tests/test_xboxone.py"
+  ];
+
+  pythonImportsCheck = [
+    "netdisco"
+    "netdisco.discovery"
+  ];
+
+  meta = {
     description = "Python library to scan local network for services and devices";
-    homepage = https://github.com/home-assistant/netdisco;
-    license = licenses.asl20;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ dotlambda ];
+    homepage = "https://github.com/home-assistant/netdisco";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

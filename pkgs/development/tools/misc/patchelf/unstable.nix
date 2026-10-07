@@ -1,17 +1,24 @@
-{ stdenv, fetchFromGitHub, autoreconfHook }:
+{
+  lib,
+  stdenv,
+  autoreconfHook,
+  fetchFromGitHub,
+  unstableGitUpdater,
+}:
 
-stdenv.mkDerivation rec {
-  name = "patchelf-0.10-pre-20180108";
+stdenv.mkDerivation {
+  pname = "patchelf";
+  version = "0.18.0-unstable-2025-08-13";
 
   src = fetchFromGitHub {
     owner = "NixOS";
     repo = "patchelf";
-    rev = "48452cf6b4ccba1c1f47a09f4284a253634ab7d1";
-    sha256 = "1f1s8q3as3nrhcc1a8qc2z7imm644jfz44msn9sfv4mdynp2m2yb";
+    rev = "b49de1b3384e7928bf0df9a889fe5a4e7b3fbddf";
+    hash = "sha256-0AGK+ZPZDc7zTVAmG6jAAynQhh4nP8skVwOEV5hZKh0=";
   };
 
   # Drop test that fails on musl (?)
-  postPatch = stdenv.lib.optionalString stdenv.hostPlatform.isMusl ''
+  postPatch = lib.optionalString stdenv.hostPlatform.isMusl ''
     substituteInPlace tests/Makefile.am \
       --replace "set-rpath-library.sh" ""
   '';
@@ -19,15 +26,25 @@ stdenv.mkDerivation rec {
   setupHook = [ ./setup-hook.sh ];
 
   nativeBuildInputs = [ autoreconfHook ];
-  buildInputs = [ ];
 
-  doCheck = true;
+  strictDeps = true;
+
+  doCheck = !stdenv.hostPlatform.isDarwin;
+
+  passthru = {
+    updateScript = unstableGitUpdater {
+      url = "https://github.com/NixOS/patchelf.git";
+    };
+  };
+
+  __structuredAttrs = true;
 
   meta = {
-    homepage = https://nixos.org/patchelf.html;
-    license = "GPL";
-    description = "A small utility to modify the dynamic linker and RPATH of ELF executables";
-    maintainers = [ stdenv.lib.maintainers.eelco ];
-    platforms = stdenv.lib.platforms.all;
+    homepage = "https://github.com/NixOS/patchelf";
+    license = lib.licenses.gpl3;
+    description = "Small utility to modify the dynamic linker and RPATH of ELF executables";
+    mainProgram = "patchelf";
+    maintainers = [ ];
+    platforms = lib.platforms.all;
   };
 }

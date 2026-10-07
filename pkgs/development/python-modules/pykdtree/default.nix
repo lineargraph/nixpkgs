@@ -1,24 +1,52 @@
-{ stdenv, buildPythonPackage, fetchPypi, numpy, nose, openmp }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+
+  # build-system
+  cython,
+  numpy,
+  setuptools,
+
+  # native dependencies
+  openmp,
+
+  # tests
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pykdtree";
-  version = "1.3.0";
+  version = "1.4.3";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "79351b79087f473f83fb27a5cd552bd1056f2dfa7acec5d4a68f35a7cbea6776";
+    hash = "sha256-2Rh5MP+4yCLFJZW2SUi0c0ZpTuKknicCQgtY90PXhvU=";
   };
+
+  nativeBuildInputs = [
+    cython
+    numpy
+    setuptools
+  ];
 
   buildInputs = [ openmp ];
 
   propagatedBuildInputs = [ numpy ];
 
-  checkInputs = [ nose ];
+  preCheck = ''
+    # make sure we don't import pykdtree from the source tree
+    mv pykdtree/test_tree.py .
+    rm -rf pykdtree
+  '';
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = {
     description = "kd-tree implementation for fast nearest neighbour search in Python";
-    homepage = https://github.com/storpipfugl/pykdtree;
-    license = licenses.lgpl3;
-    maintainers = with maintainers; [ psyanticy ];
+    homepage = "https://github.com/storpipfugl/pykdtree";
+    license = lib.licenses.lgpl3;
+    maintainers = with lib.maintainers; [ psyanticy ];
   };
 }

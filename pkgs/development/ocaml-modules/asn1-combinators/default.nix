@@ -1,46 +1,36 @@
-{ stdenv, buildOcaml, fetchFromGitHub, ocaml, findlib
-, cstruct, zarith, ounit, result, topkg, ptime
+{
+  lib,
+  buildDunePackage,
+  fetchurl,
+  ptime,
+  alcotest,
+  ohex,
 }:
 
-let param =
-  if stdenv.lib.versionAtLeast ocaml.version "4.02" then {
-    version = "0.2.0";
-    sha256 = "0yfq4hnyzx6hy05m60007cfpq88wxwa8wqzib19lnk2qrgy772mx";
-    propagatedBuildInputs = [ ptime ];
-  } else {
-    version = "0.1.3";
-    sha256 = "0hpn049i46sdnv2i6m7r6m6ch0jz8argybh71wykbvcqdby08zxj";
-  propagatedBuildInputs = [ ];
-  };
-in
+buildDunePackage (finalAttrs: {
+  minimalOCamlVersion = "4.13.0";
 
-buildOcaml rec {
-  name = "asn1-combinators";
-  inherit (param) version;
+  pname = "asn1-combinators";
+  version = "0.3.3";
 
-  minimumSupportedOcamlVersion = "4.01";
-
-  src = fetchFromGitHub {
-    owner  = "mirleft";
-    repo   = "ocaml-asn1-combinators";
-    rev    = "v${version}";
-    inherit (param) sha256;
+  src = fetchurl {
+    url = "https://github.com/mirleft/ocaml-asn1-combinators/releases/download/v${finalAttrs.version}/asn1-combinators-${finalAttrs.version}.tbz";
+    hash = "sha256-9NFZqL2nw7GGpIAUSOh5zO0TZ5nGiuxR+zc85OEoSxE=";
   };
 
-  buildInputs = [ ocaml findlib ounit topkg ];
-  propagatedBuildInputs = [ result cstruct zarith ] ++ param.propagatedBuildInputs;
-
-  buildPhase = "${topkg.run} build --tests true";
-
-  inherit (topkg) installPhase;
+  propagatedBuildInputs = [ ptime ];
 
   doCheck = true;
-  checkPhase = "${topkg.run} test";
+  checkInputs = [
+    alcotest
+    ohex
+  ];
 
   meta = {
-    homepage = https://github.com/mirleft/ocaml-asn1-combinators;
+    homepage = "https://github.com/mirleft/ocaml-asn1-combinators";
+    changelog = "https://github.com/mirleft/ocaml-asn1-combinators/blob/v${finalAttrs.version}/CHANGES.md";
     description = "Combinators for expressing ASN.1 grammars in OCaml";
-    license = stdenv.lib.licenses.isc;
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
+    license = lib.licenses.isc;
+    maintainers = with lib.maintainers; [ vbgl ];
   };
-}
+})

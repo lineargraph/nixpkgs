@@ -1,27 +1,41 @@
-{ buildPythonPackage
-, fetchPypi
-, lib
-, pexpect
-, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  pytest,
+  pytestCheckHook,
+  pexpect,
 }:
 
 buildPythonPackage rec {
   pname = "pytest-timeout";
-  version = "1.2.1";
-  name = "${pname}-${version}";
+  version = "2.4.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1kdp6qbh5v1168l99rba5yfzvy05gmzkmkhldgp36p9xcdjd5dv8";
+  src = fetchFromGitHub {
+    owner = "pytest-dev";
+    repo = "pytest-timeout";
+    tag = version;
+    hash = "sha256-NGTy3Hua6yEMWXQDJQO2Z5DD3clXTZXEH6DNQBMSGtQ=";
   };
-  buildInputs = [ pytest ];
-  checkInputs = [ pytest pexpect ];
-  checkPhase = ''pytest -ra'';
 
-  meta = with lib;{
-    description = "py.test plugin to abort hanging tests";
-    homepage = http://bitbucket.org/pytest-dev/pytest-timeout/;
-    license = licenses.mit;
-    maintainers = with maintainers; [ makefu ];
+  build-system = [ setuptools ];
+
+  buildInputs = [ pytest ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    pexpect
+  ];
+
+  pythonImportsCheck = [ "pytest_timeout" ];
+
+  meta = {
+    description = "Pytest plugin to abort hanging tests";
+    homepage = "https://github.com/pytest-dev/pytest-timeout/";
+    changelog = "https://github.com/pytest-dev/pytest-timeout/tree/${src.tag}#changelog";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ makefu ];
   };
 }

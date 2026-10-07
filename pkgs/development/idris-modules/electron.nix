@@ -1,18 +1,20 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, contrib
-, jheiling-extras
-, jheiling-js
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  contrib,
+  jheiling-extras,
+  jheiling-js,
+  lib,
 }:
-
-build-idris-package  {
-  name = "electron";
+build-idris-package {
+  pname = "electron";
   version = "2016-03-07";
 
-  idrisDeps = [ prelude contrib jheiling-extras jheiling-js ];
+  idrisDeps = [
+    contrib
+    jheiling-extras
+    jheiling-js
+  ];
 
   src = fetchFromGitHub {
     owner = "jheiling";
@@ -21,16 +23,10 @@ build-idris-package  {
     sha256 = "1rpa7yjvfpzl06h0qbk54jd2n52nmgpf7nq5aamcinqh7h5gbiwn";
   };
 
-  postUnpack = ''
-    rm source/example_main.ipkg
-    rm source/example_view.ipkg
-  '';
-
   meta = {
     description = "Electron bindings for Idris";
-    homepage = https://github.com/jheiling/idris-electron;
+    homepage = "https://github.com/jheiling/idris-electron";
     license = lib.licenses.unlicense;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

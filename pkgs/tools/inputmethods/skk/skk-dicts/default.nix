@@ -1,73 +1,216 @@
-{ stdenv, fetchurl, skktools }:
+{
+  lib,
+  stdenvNoCC,
+  fetchFromGitHub,
+  nix-update-script,
+  nkf,
+  skktools,
+  useUtf8 ? false,
+}:
 
 let
-  # kana to kanji
-  small = fetchurl {
-    url = "https://raw.githubusercontent.com/skk-dev/dict/f61be71246602a49e9f05ded6ac4f9f82031a521/SKK-JISYO.S";
-    sha256 = "15kp4iwz58fp1zg0i13x7w9wwm15v8n2hhm0nf2zsl7az5mn5yi4";
-  };
-  medium = fetchurl {
-    url = "https://raw.githubusercontent.com/skk-dev/dict/f61be71246602a49e9f05ded6ac4f9f82031a521/SKK-JISYO.M";
-    sha256 = "1vhagixhrp9lq5x7dldxcanhznawazp00xivpp1z52kx10lnkmv0";
-  };
-  large = fetchurl {
-    url = "https://raw.githubusercontent.com/skk-dev/dict/f61be71246602a49e9f05ded6ac4f9f82031a521/SKK-JISYO.L";
-    sha256 = "07cv0j95iajkr48j4ln411vnhl3z93yx96zjc03bgs10dbpagaaz";
-  };
+  suffix = lib.optionalString useUtf8 ".utf8";
 
-  # english to japanese
-  edict = fetchurl {
-    url = "https://raw.githubusercontent.com/skk-dev/dict/f61be71246602a49e9f05ded6ac4f9f82031a521/SKK-JISYO.edict";
-    sha256 = "18k8z1wkgwgfwbs6sylf39h1nc1p5l2b00h7mfjlb8p91plkb45w";
-  };
-  # misc
-  assoc = fetchurl {
-    url = "https://raw.githubusercontent.com/skk-dev/dict/f61be71246602a49e9f05ded6ac4f9f82031a521/SKK-JISYO.assoc";
-    sha256 = "12d6xpp1bfin9nwl35ydl5yc6vx0qpwhxss0khi19n1nsbyqnixm";
-  };
+  mkDictNameValue =
+    {
+      name,
+      description,
+      license, # it's written in the beginning of each file
+      files ? [ "SKK-JISYO.${name}" ],
+    }:
+    {
+      name = lib.toLower (builtins.replaceStrings [ "." ] [ "_" ] name);
+      value = stdenvNoCC.mkDerivation {
+        pname = "skk-jisyo-" + lib.toLower name;
+        version = "0-unstable-2026-04-11";
+
+        src = fetchFromGitHub {
+          owner = "skk-dev";
+          repo = "dict";
+          rev = "0a164e6b990c5eb5b59eb7d8789f08865dc2f644";
+          sha256 = "sha256-xKMtHB54kVSwwwr+v248ewa7dwuavYVmc6KHrZwSdnM=";
+        };
+
+        nativeBuildInputs = lib.optionals useUtf8 [ nkf ];
+
+        strictDeps = true;
+
+        buildPhase = ''
+          runHook preBuild
+        ''
+        + lib.concatMapStrings (file: ''
+          nkf -w ${file} \
+            | LC_ALL=C sed 's/coding: [^ ]\{1,\}/coding: utf-8/' \
+            > ${file + suffix}
+        '') (lib.optionals useUtf8 (map lib.escapeShellArg files))
+        + ''
+          runHook postBuild
+        '';
+
+        installPhase = ''
+          runHook preInstall
+        ''
+        + lib.concatMapStrings (file: ''
+          install -Dm644 \
+            ${lib.escapeShellArg file} \
+            $out/share/skk/${lib.escapeShellArg (baseNameOf file)}
+        '') (map (file: file + suffix) files)
+        + ''
+          runHook postInstall
+        '';
+
+        doInstallCheck = true;
+        installCheckPhase = ''
+          emptydict=': 0 candidates$'
+          ${skktools}/bin/skkdic-count /dev/null | grep "$emptydict"
+          ${skktools}/bin/skkdic-count $out/share/skk/* | grep -v "$emptydict"
+        '';
+
+        passthru.updateScript = nix-update-script {
+          extraArgs = [
+            "--version"
+            "branch"
+          ];
+        };
+
+        meta = {
+          inherit description license;
+          longDescription = ''
+            This package provides a kana-to-kanji conversion dictionary for the
+            SKK Japanese input method.
+          '';
+          homepage = "https://github.com/skk-dev/dict";
+          maintainers = with lib.maintainers; [
+            yuriaisaka
+            midchildan
+          ];
+          platforms = lib.platforms.all;
+        };
+      };
+    };
 in
-
-stdenv.mkDerivation rec {
-  name = "skk-dicts-unstable-${version}";
-  version = "2017-10-26";
-  srcs = [ small medium large edict assoc ];
-  nativeBuildInputs = [ skktools ];
-
-  phases = [ "installPhase" ];
-  installPhase = ''
-    function dictname() {
-      src=$1
-      name=$(basename $src)          # remove dir name
-      dict=$(echo $name | cut -b34-) # remove sha256 prefix
-      echo $dict
+lib.listToAttrs (
+  map mkDictNameValue [
+    {
+      name = "L";
+      description = "Standard SKK dictionary";
+      license = lib.licenses.gpl2Plus;
     }
-    mkdir -p $out/share
-
-    for src in $srcs; do
-      dst=$out/share/$(dictname $src)
-      echo ";;; -*- coding: utf-8 -*-" > $dst  # libskk requires this on the first line
-      iconv -f EUC-JP -t UTF-8 $src |\
-        ${skktools}/bin/skkdic-expr2 >> $dst
-    done
-
-    # combine .L .edict and .assoc for convenience
-    dst=$out/share/SKK-JISYO.combined
-    echo ";;; -*- coding: utf-8 -*-" > $dst
-    ${skktools}/bin/skkdic-expr2 \
-      $out/share/$(dictname ${large}) + \
-      $out/share/$(dictname ${edict}) + \
-      $out/share/$(dictname ${assoc}) >> $dst
-  '';
-
-  meta = {
-    description = "A collection of standard SKK dictionaries";
-    longDescription = ''
-      This package provides a collection of standard kana-to-kanji
-      dictionaries for the SKK Japanese input method.
-    '';
-    homepage = https://github.com/skk-dev/dict;
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = with stdenv.lib.maintainers; [ yuriaisaka ];
-    platforms = with stdenv.lib.platforms; linux;
-  };
-}
+    {
+      name = "S";
+      description = "Small SKK dictionary";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "M";
+      description = "Medium sized SKK dictionary";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "ML";
+      description = "Medium to large sized SKK dictionary";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "jinmei";
+      description = "SKK dictionary for names";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "fullname";
+      description = "SKK dictionary for celebrities";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "geo";
+      description = "SKK dictionary for locations";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "propernoun";
+      description = "SKK dictionary for proper nouns";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "station";
+      description = "SKK dictionary for stations";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "law";
+      description = "SKK dictionary for legal terms";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "okinawa";
+      description = "SKK dictionary for the Okinawan language";
+      license = lib.licenses.publicDomain;
+    }
+    {
+      name = "china_taiwan";
+      description = "SKK dictionary for Chinese & Taiwanese locations";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "assoc";
+      description = "SKK dictionary for abbreviated input";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "edict";
+      description = "SKK dictionary for English to Japanese translation";
+      license = lib.licenses.cc-by-sa-30;
+    }
+    {
+      name = "zipcode";
+      description = "SKK dictionary for Japanese zipcodes";
+      files = [
+        "zipcode/SKK-JISYO.zipcode"
+        "zipcode/SKK-JISYO.office.zipcode"
+      ];
+      license = lib.licenses.publicDomain;
+    }
+    {
+      name = "JIS2";
+      description = "SKK dictionary for JIS level 2 kanjis";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "JIS3_4";
+      description = "SKK dictionary for JIS level 3 and 4 kanjis";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "JIS2004";
+      description = ''
+        A complementary SKK dictionary for JIS3_4 with JIS X 0213:2004 additions"
+      '';
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "itaiji";
+      description = "SKK dictionary for variant kanjis";
+      license = lib.licenses.publicDomain;
+    }
+    {
+      name = "itaiji.JIS3_4";
+      description = "SKK dictionary for JIS level 3 and 4 variant kanjis";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "mazegaki";
+      description = "SKK dictionary for mazegaki";
+      license = lib.licenses.gpl2Plus;
+    }
+    {
+      name = "emoji";
+      description = "SKK dictionary for emojis";
+      license = lib.licenses.unicode-dfs-2016;
+    }
+    {
+      name = "pinyin";
+      description = "SKK dictionary for pinyin to simplified Chinese input";
+      license = lib.licenses.gpl1Plus;
+    }
+  ]
+)

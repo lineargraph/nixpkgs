@@ -1,5 +1,14 @@
-{ stdenv, lib, fetchurl, runCommand, buildEnv, vscode, which, writeScript
-, vscodeExtensions ? [] }:
+{
+  lib,
+  stdenv,
+  runCommand,
+  buildEnv,
+  vscode,
+  vscode-utils,
+  makeWrapper,
+  writeTextFile,
+  vscodeExtensions ? [ ],
+}:
 
 /*
   `vscodeExtensions`
@@ -11,7 +20,7 @@
 
         # When the extension is already available in the default extensions set.
         vscodeExtensions = with vscode-extensions; [
-          bbenoist.Nix
+          bbenoist.nix
         ]
 
         # Concise version from the vscode market place when not available in the default set.
@@ -42,46 +51,70 @@
 */
 
 let
-
+  inherit (vscode) executableName longName;
+  # The wrapped editor may override `iconName` (e.g. code-cursor, windsurf,
+  # kiro and antigravity-ide all set it to a name without the `vs` prefix). Read
+  # the real value from the package, falling back to the generic.nix default for
+  # editors built before `iconName` was exposed via passthru.
+  iconName = vscode.iconName or "vs${executableName}";
   wrappedPkgVersion = lib.getVersion vscode;
   wrappedPkgName = lib.removeSuffix "-${wrappedPkgVersion}" vscode.name;
 
-  combinedExtensionsDrv = buildEnv {
-    name = "${wrappedPkgName}-extensions-${wrappedPkgVersion}";
-    paths = vscodeExtensions;
+  extensionJsonFile = writeTextFile {
+    name = "vscode-extensions-json";
+    destination = "/share/vscode/extensions/extensions.json";
+    text = vscode-utils.toExtensionJson vscodeExtensions;
   };
 
-  wrappedExeName = "code";
-  exeName = wrappedExeName;
+  combinedExtensionsDrv = buildEnv {
+    name = "vscode-extensions";
+    paths = vscodeExtensions ++ [ extensionJsonFile ];
+  };
 
-  wrapperExeFile = writeScript "${exeName}" ''
-    #!${stdenv.shell}
-    exec ${vscode}/bin/${wrappedExeName} \
-      --extensions-dir "${combinedExtensionsDrv}/share/${wrappedPkgName}/extensions" \
-      "$@"
+  extensionsFlag = ''
+    --add-flags "--extensions-dir ${combinedExtensionsDrv}/share/vscode/extensions"
   '';
-
 in
 
-# When no extensions are requested, we simply redirect to the original
-# non-wrapped vscode executable.
-runCommand "${wrappedPkgName}-with-extensions-${wrappedPkgVersion}" {
-  buildInputs = [ vscode which ];
-  dontPatchELF = true;
-  dontStrip = true;
-  meta = vscode.meta;
-} ''
-  mkdir -p "$out/bin"
-  mkdir -p "$out/share/applications"
-  mkdir -p "$out/share/pixmaps"
+runCommand "${wrappedPkgName}-with-extensions-${wrappedPkgVersion}"
+  {
+    pname = wrappedPkgName;
+    version = wrappedPkgVersion;
+    nativeBuildInputs = [ makeWrapper ];
+    buildInputs = [ vscode ];
+    dontPatchELF = true;
+    dontStrip = true;
+    meta = vscode.meta;
+  }
+  (
+    if stdenv.hostPlatform.isDarwin then
+      ''
+        mkdir -p $out/bin/
+        mkdir -p "$out/Applications/${longName}.app/Contents/MacOS"
 
-  ln -sT "${vscode}/share/applications/code.desktop" "$out/share/applications/code.desktop"
-  ln -sT "${vscode}/share/pixmaps/code.png" "$out/share/pixmaps/code.png"
-  ${if [] == vscodeExtensions
-    then ''
-      ln -sT "${vscode}/bin/${wrappedExeName}" "$out/bin/${exeName}"
-    ''
-    else ''
-      ln -sT "${wrapperExeFile}" "$out/bin/${exeName}"
-    ''}
-''
+        binary_name="$(awk -F'[<>]' '/CFBundleExecutable/{getline; print $3}' '${vscode}/Applications/${longName}.app/Contents/Info.plist')"
+
+        for path in PkgInfo Frameworks Resources _CodeSignature Info.plist; do
+          ln -s "${vscode}/Applications/${longName}.app/Contents/$path" "$out/Applications/${longName}.app/Contents/"
+        done
+
+        makeWrapper "${vscode}/bin/${executableName}" "$out/bin/${executableName}" ${extensionsFlag}
+        makeWrapper "${vscode}/Applications/${longName}.app/Contents/MacOS/$binary_name" "$out/Applications/${longName}.app/Contents/MacOS/$binary_name" ${extensionsFlag}
+      ''
+    else
+      ''
+        mkdir -p "$out/bin"
+        mkdir -p "$out/share/applications"
+        mkdir -p "$out/share/pixmaps"
+
+        ln -sT "${vscode}/share/pixmaps/${iconName}.png" "$out/share/pixmaps/${iconName}.png"
+        # Carry over the themed icons too; the .desktop entry's `Icon=` is
+        # resolved against the icon theme before falling back to pixmaps.
+        if [ -d "${vscode}/share/icons" ]; then
+          ln -sT "${vscode}/share/icons" "$out/share/icons"
+        fi
+        ln -sT "${vscode}/share/applications/${executableName}.desktop" "$out/share/applications/${executableName}.desktop"
+        ln -sT "${vscode}/share/applications/${executableName}-url-handler.desktop" "$out/share/applications/${executableName}-url-handler.desktop"
+        makeWrapper "${vscode}/bin/${executableName}" "$out/bin/${executableName}" ${extensionsFlag}
+      ''
+  )

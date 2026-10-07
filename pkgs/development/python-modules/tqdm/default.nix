@@ -1,38 +1,65 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, nose
-, coverage
-, glibcLocales
-, flake8
-, matplotlib
-, pandas
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  setuptools-scm,
+  wheel,
+  pytestCheckHook,
+  pytest-asyncio,
+  pytest-timeout,
+  numpy,
+  pandas,
+  rich,
+  tkinter,
 }:
 
 buildPythonPackage rec {
   pname = "tqdm";
-  version = "4.21.0";
-  name = "${pname}-${version}";
+  version = "4.68.4";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "b94af236084ceaad93a6ada00bd9976900b172ec9b821828ed0d4b53f7431170";
+    hash = "sha256-GYKclnNjjyoLhhfaTNy5J+gxzYi8/LbnjUKk0a8TFSA=";
   };
 
-  buildInputs = [ nose coverage glibcLocales flake8 ];
+  nativeBuildInputs = [
+    setuptools
+    setuptools-scm
+    wheel
+  ];
 
-  postPatch = ''
-    # Remove performance testing.
-    # Too sensitive for on Hydra.
-    rm tqdm/tests/tests_perf.py
-  '';
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-asyncio
+    pytest-timeout
+    # tests of optional features
+    numpy
+    rich
+    tkinter
+    pandas
+  ];
 
-  LC_ALL="en_US.UTF-8";
+  pytestFlags = [
+    "-Wignore::FutureWarning"
+    "-Wignore::DeprecationWarning"
+  ];
+
+  # Remove performance testing.
+  # Too sensitive for on Hydra.
+  disabledTests = [ "perf" ];
+
+  env.LC_ALL = "en_US.UTF-8";
+
+  pythonImportsCheck = [ "tqdm" ];
 
   meta = {
-    description = "A Fast, Extensible Progress Meter";
-    homepage = https://github.com/tqdm/tqdm;
-    license = with lib.licenses; [ mit ];
-    maintainers = with lib.maintainers; [ fridh ];
+    description = "Fast, Extensible Progress Meter";
+    mainProgram = "tqdm";
+    homepage = "https://github.com/tqdm/tqdm";
+    changelog = "https://tqdm.github.io/releases/";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ miniharinn ];
   };
 }

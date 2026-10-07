@@ -1,29 +1,46 @@
-{ buildPythonPackage, isPy3k, fetchPypi, stdenv, exiv2, boost, libcxx }:
+{
+  lib,
+  stdenv,
+  boost,
+  buildPythonPackage,
+  exiv2,
+  fetchPypi,
+}:
 
 buildPythonPackage rec {
   pname = "py3exiv2";
-  version = "0.2.1";
-  name = "${pname}-${version}";
-  disabled = !(isPy3k);
+  version = "0.12.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "06q7mlqy05c3jr61nmz93fxb6ilizfyggbh5sg0krwjap2sw1fr8";
+    hash = "sha256-crI+X3YMRzPPmpGNsI2U+9bZgwcR0qTowJuPNFY/Ooo=";
   };
 
-  buildInputs = [ exiv2 boost ];
+  # py3exiv2 only checks in `/usr/local/lib` for Boost, which is obviously wrong in nixpkgs.
+  postPatch = lib.optionalString stdenv.hostPlatform.isDarwin ''
+    substituteInPlace setup.py \
+      --replace-fail /usr/local/lib/ ${lib.escapeShellArg (lib.getLib boost)}/lib/
+  '';
 
-  # work around python distutils compiling C++ with $CC (see issue #26709)
-  NIX_CFLAGS_COMPILE = stdenv.lib.optionalString stdenv.isDarwin "-I${libcxx}/include/c++/v1";
+  buildInputs = [
+    boost
+    exiv2
+  ];
 
-  # fix broken libboost_python3 detection
-  patches = [ ./setup.patch ];
+  # Work around Python distutils compiling C++ with $CC (see issue #26709)
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.hostPlatform.isDarwin "-I${lib.getInclude stdenv.cc.libcxx}/include/c++/v1";
+
+  pythonImportsCheck = [ "pyexiv2" ];
+
+  # Tests are not shipped
+  doCheck = false;
 
   meta = {
+    description = "Python binding to the library exiv2";
     homepage = "https://launchpad.net/py3exiv2";
-    description = "A Python3 binding to the library exiv2";
-    license = with stdenv.lib.licenses; [ gpl3 ];
-    maintainers = with stdenv.lib.maintainers; [ vinymeuh ];
-    platforms = with stdenv.lib.platforms; linux ++ darwin;
+    license = lib.licenses.gpl3Plus;
+    maintainers = with lib.maintainers; [ vinymeuh ];
+    platforms = with lib.platforms; linux ++ darwin;
   };
 }

@@ -1,17 +1,14 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, base
-, effects
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  effects,
+  lib,
 }:
-
-build-idris-package  {
-  name = "lightyear";
+build-idris-package {
+  pname = "lightyear";
   version = "2017-09-10";
 
-  idrisDeps = [ prelude base effects ];
+  idrisDeps = [ effects ];
 
   src = fetchFromGitHub {
     owner = "ziman";
@@ -22,9 +19,11 @@ build-idris-package  {
 
   meta = {
     description = "Parser combinators for Idris";
-    homepage = https://github.com/ziman/lightyear;
+    homepage = "https://github.com/ziman/lightyear";
     license = lib.licenses.bsd2;
-    maintainers = with lib.maintainers; [ siddharthist brainrape ];
-    inherit (idris.meta) platforms;
+    maintainers = with lib.maintainers; [
+      siddharthist
+      brainrape
+    ];
   };
 }

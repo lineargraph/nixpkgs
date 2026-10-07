@@ -1,37 +1,59 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, ocamlbuild, topkg
-, ppx_tools, ppx_sexp_conv, result, x509, nocrypto, cstruct, ppx_cstruct, cstruct-unix, ounit
-, lwt     ? null}:
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+  digestif,
+  domain-name,
+  fmt,
+  logs,
+  kdf,
+  mirage-crypto,
+  mirage-crypto-ec,
+  mirage-crypto-pk,
+  mirage-crypto-rng,
+  ohex,
+  ptime,
+  x509,
+  ipaddr,
+  alcotest,
+  ounit2,
+}:
 
-with stdenv.lib;
+buildDunePackage (finalAttrs: {
+  pname = "tls";
+  version = "2.1.3";
 
-let withLwt = lwt != null; in
-
-stdenv.mkDerivation rec {
-  version = "0.9.0";
-  name = "ocaml${ocaml.version}-tls-${version}";
-
-  src = fetchFromGitHub {
-    owner  = "mirleft";
-    repo   = "ocaml-tls";
-    rev    = "${version}";
-    sha256 = "0qgw8lq8pk9hss7b5i6fr08pi711i0zqx7yyjgcil47ipjig6c31";
+  src = fetchurl {
+    url = "https://github.com/mirleft/ocaml-tls/releases/download/v${finalAttrs.version}/tls-${finalAttrs.version}.tbz";
+    hash = "sha256-kNBOBvogamm10TewF+URwUG5WeXHkp58uKFRVTIkej8=";
   };
 
-  buildInputs = [ ocaml ocamlbuild findlib topkg ppx_sexp_conv ounit ppx_cstruct cstruct-unix ];
-  propagatedBuildInputs = [ cstruct nocrypto result x509 ] ++
-                          optional withLwt lwt;
-
-  buildPhase = "${topkg.run} build --tests true --with-mirage false --with-lwt ${if withLwt then "true" else "false"}";
+  propagatedBuildInputs = [
+    digestif
+    domain-name
+    fmt
+    ipaddr
+    kdf
+    logs
+    mirage-crypto
+    mirage-crypto-ec
+    mirage-crypto-pk
+    mirage-crypto-rng
+    ohex
+    ptime
+    x509
+  ];
 
   doCheck = true;
-  checkPhase = "${topkg.run} test";
+  checkInputs = [
+    alcotest
+    ounit2
+  ];
 
-  inherit (topkg) installPhase;
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mirleft/ocaml-tls;
+  meta = {
+    homepage = "https://github.com/mirleft/ocaml-tls";
     description = "TLS in pure OCaml";
-    license = licenses.bsd2;
-    maintainers = with maintainers; [ sternenseemann ];
+    license = lib.licenses.bsd2;
+    maintainers = with lib.maintainers; [ sternenseemann ];
   };
-}
+})

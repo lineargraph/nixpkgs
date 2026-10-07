@@ -1,91 +1,128 @@
-{ config, lib, pkgs, ... }:
-
-with builtins;
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.services.osquery;
+  dirname =
+    path:
+    with lib.strings;
+    with lib.lists;
+    concatStringsSep "/" (init (splitString "/" (normalizePath path)));
+
+  # conf is the osquery configuration file used when the --config_plugin=filesystem.
+  # filesystem is the osquery default value for the config_plugin flag.
+  conf = pkgs.writeText "osquery.conf" (builtins.toJSON cfg.settings);
+
+  # flagfile is the file containing osquery command line flags to be
+  # provided to the application using the special --flagfile option.
+  flagfile = pkgs.writeText "osquery.flags" (
+    lib.concatStringsSep "\n" (
+      lib.mapAttrsToList (name: value: "--${name}=${value}")
+        # Use the conf derivation if not otherwise specified.
+        ({ config_path = conf; } // cfg.flags)
+    )
+  );
+  osquery = cfg.package;
+  osqueryi = pkgs.runCommand "osqueryi" { nativeBuildInputs = [ pkgs.makeWrapper ]; } ''
+    mkdir -p $out/bin
+    makeWrapper ${osquery}/bin/osqueryi $out/bin/osqueryi \
+      --add-flags "--flagfile ${flagfile} --disable-database"
+  '';
 
 in
-
 {
+  options.services.osquery = {
+    enable = lib.mkEnableOption "osqueryd daemon";
 
-  options = {
+    package = lib.mkPackageOption pkgs "osquery" { };
 
-    services.osquery = {
-
-      enable = mkEnableOption "osquery";
-
-      loggerPath = mkOption {
-        type = types.path;
-        description = "Base directory used for logging.";
-        default = "/var/log/osquery";
-      };
-
-      pidfile = mkOption {
-        type = types.path;
-        description = "Path used for pid file.";
-        default = "/var/osquery/osqueryd.pidfile";
-      };
-
-      utc = mkOption {
-        type = types.bool;
-        description = "Attempt to convert all UNIX calendar times to UTC.";
-        default = true;
-      };
-
-      databasePath = mkOption {
-        type = types.path;
-        description = "Path used for database file.";
-        default = "/var/osquery/osquery.db";
-      };
-
-      extraConfig = mkOption {
-        type = types.attrs // {
-          merge = loc: foldl' (res: def: recursiveUpdate res def.value) {};
-        };
-        description = "Extra config to be recursively merged into the JSON config file.";
-        default = { };
-      };
-    };
-
-  };
-
-  config = mkIf cfg.enable {
-
-    environment.systemPackages = [ pkgs.osquery ];
-
-    environment.etc."osquery/osquery.conf".text = toJSON (
-      recursiveUpdate {
-        options = {
-          config_plugin = "filesystem";
-          logger_plugin = "filesystem";
-          logger_path = cfg.loggerPath;
-          database_path = cfg.databasePath;
-          utc = cfg.utc;
-        };
-      } cfg.extraConfig
-    );
-
-    systemd.services.osqueryd = {
-      description = "The osquery Daemon";
-      after = [ "network.target" "syslog.service" ];
-      wantedBy = [ "multi-user.target" ];
-      path = [ pkgs.osquery ];
-      preStart = ''
-        mkdir -p ${escapeShellArg cfg.loggerPath}
-        mkdir -p "$(dirname ${escapeShellArg cfg.pidfile})"
-        mkdir -p "$(dirname ${escapeShellArg cfg.databasePath})"
+    settings = lib.mkOption {
+      default = { };
+      description = ''
+        Configuration to be written to the osqueryd JSON configuration file.
+        To understand the configuration format, refer to <https://osquery.readthedocs.io/en/stable/deployment/configuration/#configuration-components>.
       '';
-      serviceConfig = {
-        TimeoutStartSec = 0;
-        ExecStart = "${pkgs.osquery}/bin/osqueryd --logger_path ${escapeShellArg cfg.loggerPath} --pidfile ${escapeShellArg cfg.pidfile} --database_path ${escapeShellArg cfg.databasePath}";
-        KillMode = "process";
-        KillSignal = "SIGTERM";
-        Restart = "on-failure";
+      example = {
+        options.utc = false;
       };
+      type = lib.types.attrs;
     };
 
+    flags = lib.mkOption {
+      default = { };
+      description = ''
+        Attribute set of flag names and values to be written to the osqueryd flagfile.
+        For more information, refer to <https://osquery.readthedocs.io/en/stable/installation/cli-flags>.
+      '';
+      example = {
+        config_refresh = "10";
+      };
+      type =
+        with lib.types;
+        submodule {
+          freeformType = attrsOf str;
+          options = {
+            database_path = lib.mkOption {
+              default = "/var/lib/osquery/osquery.db";
+              readOnly = true;
+              description = ''
+                Path used for the database file.
+
+                ::: {.note}
+                If left as the default value, this directory will be automatically created before the
+                service starts, otherwise you are responsible for ensuring the directory exists with
+                the appropriate ownership and permissions.
+              '';
+              type = path;
+            };
+            logger_path = lib.mkOption {
+              default = "/var/log/osquery";
+              readOnly = true;
+              description = ''
+                Base directory used for logging.
+
+                ::: {.note}
+                If left as the default value, this directory will be automatically created before the
+                service starts, otherwise you are responsible for ensuring the directory exists with
+                the appropriate ownership and permissions.
+              '';
+              type = path;
+            };
+            pidfile = lib.mkOption {
+              default = "/run/osquery/osqueryd.pid";
+              readOnly = true;
+              description = "Path used for pid file.";
+              type = path;
+            };
+          };
+        };
+    };
   };
 
+  config = lib.mkIf cfg.enable {
+    environment.systemPackages = [ osqueryi ];
+    systemd.services.osqueryd = {
+      after = [
+        "network.target"
+        "syslog.service"
+      ];
+      description = "The osquery daemon";
+      serviceConfig = {
+        ExecStart = "${osquery}/bin/osqueryd --flagfile ${flagfile}";
+        PIDFile = cfg.flags.pidfile;
+        LogsDirectory = lib.mkIf (cfg.flags.logger_path == "/var/log/osquery") [ "osquery" ];
+        StateDirectory = lib.mkIf (cfg.flags.database_path == "/var/lib/osquery/osquery.db") [ "osquery" ];
+        Restart = "always";
+      };
+      wantedBy = [ "multi-user.target" ];
+    };
+    systemd.tmpfiles.settings."10-osquery".${dirname cfg.flags.pidfile}.d = {
+      user = "root";
+      group = "root";
+      mode = "0755";
+    };
+  };
 }

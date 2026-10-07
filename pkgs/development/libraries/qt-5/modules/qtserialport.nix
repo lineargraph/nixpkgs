@@ -1,11 +1,14 @@
-{ qtModule, stdenv, lib, qtbase, substituteAll, systemd }:
-
-let inherit (lib) getLib optional; in
+{
+  qtModule,
+  stdenv,
+  lib,
+  qtbase,
+  udev,
+  udevSupport ? stdenv.hostPlatform.isLinux,
+}:
 
 qtModule {
-  name = "qtserialport";
-  qtInputs = [ qtbase ];
-  NIX_CFLAGS_COMPILE =
-    optional stdenv.isLinux
-    ''-DNIXPKGS_LIBUDEV="${getLib systemd}/lib/libudev"'';
+  pname = "qtserialport";
+  propagatedBuildInputs = [ qtbase ];
+  env.NIX_CFLAGS_COMPILE = lib.optionalString udevSupport "-DNIXPKGS_LIBUDEV=\"${udev}/lib/libudev\"";
 }

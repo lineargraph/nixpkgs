@@ -1,29 +1,58 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, varnish, python, docutils, removeReferencesTo }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  autoreconfHook,
+  pkg-config,
+  varnish,
+  docutils,
+  removeReferencesTo,
+}:
+let
+  common =
+    {
+      version,
+      hash,
+      extraNativeBuildInputs ? [ ],
+    }:
+    stdenv.mkDerivation rec {
+      pname = "${varnish.name}-modules";
+      inherit version;
 
-stdenv.mkDerivation rec {
-  version = "0.14.0";
-  name = "${varnish.name}-modules-${version}";
+      src = fetchFromGitHub {
+        owner = "varnish";
+        repo = "varnish-modules";
+        tag = version;
+        inherit hash;
+      };
 
-  src = fetchFromGitHub {
-    owner = "varnish";
-    repo = "varnish-modules";
-    rev = version;
-    sha256 = "17fkbr4i70qgdqsrx1x28ag20xkfyz1v3q3d3ywmv409aczqhm40";
-  };
+      nativeBuildInputs = [
+        autoreconfHook
+        docutils
+        pkg-config
+        removeReferencesTo
+        varnish.python # use same python version as varnish server
+      ];
 
-  nativeBuildInputs = [ pkgconfig autoreconfHook docutils removeReferencesTo ];
-  buildInputs = [ varnish python ];
+      buildInputs = [ varnish ];
 
-  postPatch = ''
-    substituteInPlace bootstrap   --replace "''${dataroot}/aclocal"                  "${varnish.dev}/share/aclocal"
-    substituteInPlace Makefile.am --replace "''${LIBVARNISHAPI_DATAROOTDIR}/aclocal" "${varnish.dev}/share/aclocal"
-  '';
+      postPatch = ''
+        substituteInPlace bootstrap   --replace "''${dataroot}/aclocal"                  "${varnish.dev}/share/aclocal"
+        substituteInPlace Makefile.am --replace "''${LIBVARNISHAPI_DATAROOTDIR}/aclocal" "${varnish.dev}/share/aclocal"
+      '';
 
-  postInstall = "find $out -type f -exec remove-references-to -t ${varnish.dev} '{}' +"; # varnish.dev captured only as __FILE__ in assert messages
+      postInstall = "find $out -type f -exec remove-references-to -t ${varnish.dev} '{}' +"; # varnish.dev captured only as __FILE__ in assert messages
 
-  meta = with stdenv.lib; {
-    description = "Collection of Varnish Cache modules (vmods) by Varnish Software";
-    homepage = https://github.com/varnish/varnish-modules;
-    inherit (varnish.meta) license platforms maintainers;
+      meta = {
+        description = "Collection of Varnish Cache modules (vmods) by Varnish Software";
+        homepage = "https://github.com/varnish/varnish-modules";
+        inherit (varnish.meta) license platforms;
+      };
+    };
+in
+{
+  modules27 = common {
+    version = "0.27.0";
+    hash = "sha256-1hE+AKsC6Td+Al7LFN6bgPicU8dtWd3A8PP7VKZLvYM=";
   };
 }

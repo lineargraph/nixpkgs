@@ -1,45 +1,49 @@
-{ stdenv
-, fetchurl
-, buildPythonPackage
-, sphinx
-, pytestcov
-, pytest
-, Mako
-, numpy
-, funcsigs
-, withCuda ? false, pycuda
-, withOpenCL ? true, pyopencl
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  sphinx,
+  pytest-cov-stub,
+  pytestCheckHook,
+  mako,
+  numpy,
+  funcsigs,
+  withCuda ? false,
+  pycuda,
+  withOpenCL ? true,
+  pyopencl,
 }:
 
 buildPythonPackage rec {
   pname = "reikna";
-  name = "${pname}-${version}";
-  version = "0.6.8";
+  version = "0.9.0";
+  format = "setuptools";
 
-  src = fetchurl {
-    url = "mirror://pypi/${builtins.substring 0 1 pname}/${pname}/${name}.tar.gz";
-    sha256 = "34d92786237bef9ab5d37d78f01c155d0dcd1fc24df7782af9498a9f1786890c";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-uzIoGCkIINgmO+r0vAzmihS14GWv5ygakMz3tKIG3zA=";
   };
 
-  buildInputs = [ sphinx pytestcov pytest ];
+  nativeCheckInputs = [
+    sphinx
+    pytest-cov-stub
+    pytestCheckHook
+  ];
 
-  propagatedBuildInputs = [ Mako numpy funcsigs ]
-    ++ stdenv.lib.optional withCuda pycuda
-    ++ stdenv.lib.optional withOpenCL pyopencl;
-
-  checkPhase = ''
-    py.test
-  '';
+  propagatedBuildInputs = [
+    mako
+    numpy
+    funcsigs
+  ]
+  ++ lib.optional withCuda pycuda
+  ++ lib.optional withOpenCL pyopencl;
 
   # Requires device
   doCheck = false;
 
   meta = {
     description = "GPGPU algorithms for PyCUDA and PyOpenCL";
-    homepage = https://github.com/fjarri/reikna;
-    license = stdenv.lib.licenses.mit;
-    maintainers = [ stdenv.lib.maintainers.fridh ];
-
+    homepage = "https://github.com/fjarri/reikna";
+    license = lib.licenses.mit;
   };
-
 }

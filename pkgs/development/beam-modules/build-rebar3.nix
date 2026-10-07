@@ -1,94 +1,90 @@
-{ stdenv, writeText, erlang, rebar3, openssl, libyaml,
-  pc, lib }:
+{
+  erlang,
+  beamCopySourceHook,
+  beamModuleInstallHook,
+  rebar3CompileHook,
+  rebar3WithPlugins,
+  rebarDevendorPatchHook,
 
-{ name, version
-, src
-, setupHook ? null
-, buildInputs ? [], beamDeps ? [], buildPlugins ? []
-, postPatch ? ""
-, compilePorts ? false
-, installPhase ? null
-, buildPhase ? null
-, configurePhase ? null
-, meta ? {}
-, enableDebugInfo ? false
-, ... }@attrs:
+  libyaml,
+  openssl,
 
-with stdenv.lib;
+  lib,
+  stdenv,
+  writeText,
+}:
 
-let
-  debugInfoFlag = lib.optionalString (enableDebugInfo || erlang.debugInfo) "debug-info";
+lib.extendMkDerivation {
+  constructDrv = stdenv.mkDerivation;
+  excludeDrvArgNames = [
+    "beamDeps"
+    "buildPlugins"
+  ];
+  extendDrvArgs =
+    finalAttrs:
+    {
+      beamDeps ? [ ],
+      buildPlugins ? [ ],
 
-  ownPlugins = buildPlugins ++ (if compilePorts then [pc] else []);
+      enableDebugInfo ? false,
+      erlangCompilerOptions ? [ ],
+      # Deterministic Erlang builds remove full system paths from debug information
+      # among other things to keep builds more reproducible. See their docs for more:
+      # https://www.erlang.org/doc/man/compile
+      erlangDeterministicBuilds ? true,
+      ...
+    }@args:
+    let
+      rebar3Custom = rebar3WithPlugins {
+        plugins = buildPlugins;
+      };
+    in
+    {
+      pname = args.name;
+      name = "erlang${erlang.version}-${args.name}-${finalAttrs.version}";
 
-  shell = drv: stdenv.mkDerivation {
-          name = "interactive-shell-${drv.name}";
-          buildInputs = [ drv ];
+      nativeBuildInputs = (args.nativeBuildInputs or [ ]) ++ [
+        erlang
+        rebar3Custom
+
+        rebarDevendorPatchHook
+        beamCopySourceHook
+        beamModuleInstallHook
+        rebar3CompileHook
+      ];
+
+      buildInputs = (args.buildInputs or [ ]) ++ [
+        openssl
+        libyaml
+      ];
+
+      propagatedBuildInputs = lib.unique beamDeps;
+
+      __structuredAttrs = true;
+      strictDeps = true;
+
+      env = {
+        ERL_COMPILER_OPTIONS =
+          let
+            options = erlangCompilerOptions ++ lib.optionals erlangDeterministicBuilds [ "deterministic" ];
+          in
+          "[${lib.concatStringsSep "," options}]";
+
+        beamModuleName = args.name;
+      }
+      // (args.env or { });
+
+      setupHook = writeText "setupHook.sh" ''
+        addToSearchPath ERL_LIBS "$1/lib/erlang/lib/"
+      '';
+
+      meta = {
+        inherit (erlang.meta) platforms;
+      }
+      // (args.meta or { });
+
+      passthru = {
+        inherit beamDeps;
+      };
     };
-
-  customPhases = filterAttrs
-    (_: v: v != null)
-    { inherit setupHook configurePhase buildPhase installPhase; };
-
-  pkg = self: stdenv.mkDerivation (attrs // {
-
-    name = "${name}-${version}";
-    inherit version;
-
-    buildInputs = buildInputs ++ [ erlang rebar3 openssl libyaml ];
-    propagatedBuildInputs = unique (beamDeps ++ ownPlugins);
-
-    dontStrip = true;
-    # The following are used by rebar3-nix-bootstrap
-    inherit compilePorts;
-    buildPlugins = ownPlugins;
-
-    inherit src;
-
-    setupHook = writeText "setupHook.sh" ''
-       addToSearchPath ERL_LIBS "$1/lib/erlang/lib/"
-    '';
-
-    postPatch = ''
-      rm -f rebar rebar3
-    '' + postPatch;
-
-    configurePhase = ''
-      runHook preConfigure
-      ${erlang}/bin/escript ${rebar3.bootstrapper} ${debugInfoFlag}
-      runHook postConfigure
-    '';
-
-    buildPhase = ''
-      runHook preBuild
-      HOME=. rebar3 compile
-      ${if compilePorts then ''
-        HOME=. rebar3 pc compile
-      '' else ''''}
-      runHook postBuild
-    '';
-
-    installPhase = ''
-      runHook preInstall
-      mkdir -p "$out/lib/erlang/lib/${name}-${version}"
-      for reldir in src ebin priv include; do
-        fd="_build/default/lib/${name}/$reldir"
-        [ -d "$fd" ] || continue
-        cp -Hrt "$out/lib/erlang/lib/${name}-${version}" "$fd"
-        success=1
-      done
-      runHook postInstall
-    '';
-
-    meta = {
-      inherit (erlang.meta) platforms;
-    } // meta;
-
-    passthru = {
-      packageName = name;
-      env = shell self;
-      inherit beamDeps;
-    };
-  } // customPhases);
-in
-  fix pkg
+}

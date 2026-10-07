@@ -1,66 +1,64 @@
-{ system ? builtins.currentSystem }:
+{ runTest }:
+{
+  default = runTest {
+    name = "sddm";
 
-with import ../lib/testing.nix { inherit system; };
-
-let
-  inherit (pkgs) lib;
-
-  tests = {
-    default = {
-      name = "sddm";
-
-      machine = { lib, ... }: {
-        imports = [ ./common/user-account.nix ];
-        services.xserver.enable = true;
-        services.xserver.displayManager.sddm.enable = true;
-        services.xserver.windowManager.default = "icewm";
-        services.xserver.windowManager.icewm.enable = true;
-        services.xserver.desktopManager.default = "none";
-      };
-
-      enableOCR = true;
-
-      testScript = { nodes, ... }: let
-        user = nodes.machine.config.users.extraUsers.alice;
-      in ''
-        startAll;
-        $machine->waitForText(qr/select your user/i);
-        $machine->screenshot("sddm");
-        $machine->sendChars("${user.password}\n");
-        $machine->waitForFile("/home/alice/.Xauthority");
-        $machine->succeed("xauth merge ~alice/.Xauthority");
-        $machine->waitForWindow("^IceWM ");
-      '';
+    nodes.machine = {
+      imports = [ ./common/user-account.nix ];
+      services.xserver.enable = true;
+      services.displayManager.sddm.enable = true;
+      services.displayManager.defaultSession = "none+icewm";
+      services.xserver.windowManager.icewm.enable = true;
     };
 
-    autoLogin = {
+    enableOCR = true;
+
+    testScript =
+      { nodes, ... }:
+      let
+        user = nodes.machine.users.users.alice;
+      in
+      ''
+        start_all()
+        machine.wait_for_text("(?i)select your user")
+        machine.screenshot("sddm")
+        machine.send_chars("${user.password}\n")
+        machine.wait_for_file("/tmp/xauth_*")
+        machine.wait_until_succeeds("test -s /tmp/xauth_*")
+        machine.succeed("xauth merge /tmp/xauth_*")
+        machine.wait_for_window("^IceWM ")
+      '';
+  };
+
+  autoLogin = runTest (
+    { lib, ... }:
+    {
       name = "sddm-autologin";
-      meta = with pkgs.stdenv.lib.maintainers; {
-        maintainers = [ ttuegel ];
+      meta = {
+        maintainers = [ ];
       };
 
-      machine = { lib, ... }: {
+      nodes.machine = {
         imports = [ ./common/user-account.nix ];
         services.xserver.enable = true;
-        services.xserver.displayManager.sddm = {
-          enable = true;
+        services.displayManager = {
+          sddm.enable = true;
           autoLogin = {
             enable = true;
             user = "alice";
           };
         };
-        services.xserver.windowManager.default = "icewm";
+        services.displayManager.defaultSession = "none+icewm";
         services.xserver.windowManager.icewm.enable = true;
-        services.xserver.desktopManager.default = "none";
       };
 
-      testScript = { nodes, ... }: ''
-        startAll;
-        $machine->waitForFile("/home/alice/.Xauthority");
-        $machine->succeed("xauth merge ~alice/.Xauthority");
-        $machine->waitForWindow("^IceWM ");
+      testScript = ''
+        start_all()
+        machine.wait_for_file("/tmp/xauth_*")
+        machine.wait_until_succeeds("test -s /tmp/xauth_*")
+        machine.succeed("xauth merge /tmp/xauth_*")
+        machine.wait_for_window("^IceWM ")
       '';
-    };
-  };
-in
-  lib.mapAttrs (lib.const makeTest) tests
+    }
+  );
+}

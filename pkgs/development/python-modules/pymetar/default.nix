@@ -1,20 +1,41 @@
-{ stdenv, buildPythonPackage, isPy3k, fetchPypi }:
+{
+  lib,
+  python,
+  buildPythonPackage,
+  isPy3k,
+  fetchPypi,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "pymetar";
-  version = "0.21";
+  version = "1.4";
+  pyproject = true;
 
-  disabled = isPy3k;
+  disabled = !isPy3k;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1sh3nm5ilnsgpnzbb2wv4xndnizjayw859qp72798jadqpcph69k";
+    hash = "sha256-SNvmxJKZYQIcth5Ju54GBbVMS2G5+5reUQdnBaCOzVQ=";
   };
 
-  meta = with stdenv.lib; {
-    description = "A command-line tool to show the weather report by a given station ID";
-    homepage = http://www.schwarzvogel.de/software/pymetar.html;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ erosennin ];
+  build-system = [ setuptools ];
+
+  checkPhase = ''
+    cd testing/smoketest
+    tar xzf reports.tgz
+    mkdir logs
+    patchShebangs runtests.sh
+    substituteInPlace runtests.sh --replace-fail "break" "exit 1"  # fail properly
+    export PYTHONPATH="$PYTHONPATH:$out/${python.sitePackages}"
+    ./runtests.sh
+  '';
+
+  meta = {
+    description = "Command-line tool to show the weather report by a given station ID";
+    mainProgram = "pymetar";
+    homepage = "https://github.com/klausman/pymetar";
+    license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ erosennin ];
   };
 }

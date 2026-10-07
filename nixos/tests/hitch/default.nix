@@ -1,33 +1,34 @@
-import ../make-test.nix ({ pkgs, ... }:
+{ pkgs, ... }:
 {
   name = "hitch";
-  meta = with pkgs.stdenv.lib.maintainers; {
+  meta = with pkgs.lib.maintainers; {
     maintainers = [ jflanglois ];
   };
-  machine = { config, pkgs, ... }: {
-    environment.systemPackages = [ pkgs.curl ];
-    services.hitch = {
-      enable = true;
-      backend = "[127.0.0.1]:80";
-      pem-files = [
-        ./example.pem
-      ];
+  nodes.machine =
+    { pkgs, ... }:
+    {
+      environment.systemPackages = [ pkgs.curl ];
+      services.hitch = {
+        enable = true;
+        backend = "[127.0.0.1]:80";
+        pem-files = [
+          ./example.pem
+        ];
+      };
+
+      services.httpd = {
+        enable = true;
+        virtualHosts.localhost.documentRoot = ./example;
+        adminAddr = "noone@testing.nowhere";
+      };
     };
 
-    services.httpd = {
-      enable = true;
-      documentRoot = ./example;
-      adminAddr = "noone@testing.nowhere";
-    };
-  };
+  testScript = ''
+    start_all()
 
-  testScript =
-    ''
-      startAll;
-
-      $machine->waitForUnit('multi-user.target');
-      $machine->waitForUnit('hitch.service');
-      $machine->waitForOpenPort(443);
-      $machine->succeed('curl -k https://localhost:443/index.txt | grep "We are all good!"');
-    '';
-})
+    machine.wait_for_unit("multi-user.target")
+    machine.wait_for_unit("hitch.service")
+    machine.wait_for_open_port(443)
+    assert "We are all good!" in machine.succeed("curl -fk https://localhost:443/index.txt")
+  '';
+}

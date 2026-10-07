@@ -1,27 +1,56 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, nose, pyyaml, pathspec }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  pathspec,
+  pytestCheckHook,
+  pyyaml,
+}:
 
 buildPythonPackage rec {
   pname = "yamllint";
-  version = "1.9.0";
-  name = "${pname}-${version}";
+  version = "1.37.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "75295a7cbfb3529e02551d4e95c2e3eb85d66292bedcfb463d25d71308065e34";
+  src = fetchFromGitHub {
+    owner = "adrienverge";
+    repo = "yamllint";
+    tag = "v${version}";
+    hash = "sha256-CohqiBoQcgvGVP0Bt6U768BY1aIwh59YRsgzJfaDmP0=";
   };
 
-  checkInputs = [ nose ];
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [  pyyaml pathspec ];
+  dependencies = [
+    pyyaml
+    pathspec
+  ];
 
-  # Two test failures
-  doCheck = false;
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
-    description = "A linter for YAML files";
-    homepage = https://github.com/adrienverge/yamllint;
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ mikefaille ];
+  disabledTests = [
+    # test failure reported upstream: https://github.com/adrienverge/yamllint/issues/373
+    "test_find_files_recursively"
+    # Issue with fixture
+    "test_codec_built_in_equivalent"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    # locale tests are broken on BSDs; see https://github.com/adrienverge/yamllint/issues/307
+    "test_locale_accents"
+    "test_locale_case"
+    "test_run_with_locale"
+  ];
+
+  pythonImportsCheck = [ "yamllint" ];
+
+  meta = {
+    description = "Linter for YAML files";
+    homepage = "https://github.com/adrienverge/yamllint";
+    changelog = "https://github.com/adrienverge/yamllint/blob/${src.tag}/CHANGELOG.rst";
+    license = lib.licenses.gpl3Plus;
+    maintainers = [ ];
+    mainProgram = "yamllint";
   };
 }

@@ -1,145 +1,113 @@
-{ stdenv, fetchurl, swiProlog, haskellPackages
-, glibcLocales, makeWrapper, rlwrap, tk, which }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  fetchpatch2,
+  makeWrapper,
+  haskellPackages,
+  haskell,
+  which,
+  swi-prolog,
+  rlwrap,
+  tk,
+  curl,
+  git,
+  unzip,
+  gnutar,
+  coreutils,
+  sqlite,
+  gettext,
+}:
 
 let
-  fname = "pakcs-1.14.0";
+  pname = "pakcs";
+  version = "3.9.0";
 
-  fsrc = fetchurl {
-    url = "http://www.informatik.uni-kiel.de/~pakcs/download/${fname}-src.tar.gz";
-    sha256 = "1651ssh4ql79x8asd7kp4yis2n5rhn3lml4s26y03b0cgbfhs78s";
+  src = fetchurl {
+    url = "https://www.curry-lang.org/pakcs/download/pakcs-${version}-src.tar.gz";
+    hash = "sha256-uiWlHJsiy1o4CQOZBa69YJacjhFBap1mSlhxEMtUDKI=";
   };
 
-  swiPrologLocked = stdenv.lib.overrideDerivation swiProlog (oldAttrs: rec {
-    version = "6.6.6";
-    name = "swi-prolog-${version}";
-    src = fetchurl {
-      url = "http://www.swi-prolog.org/download/stable/src/pl-${version}.tar.gz";
-      sha256 = "0vcrfskm2hyhv30lxr6v261myb815jc3bgmcn1lgsc9g9qkvp04z";
-    };
-  });
+  curry-frontend =
+    (haskellPackages.override {
+      overrides = self: super: {
+        curry-frontend = lib.pipe (super.callPackage ./curry-frontend.nix { }) [
+          haskell.lib.doJailbreak
+          (haskell.lib.compose.overrideCabal (drv: {
+            inherit src;
+            postUnpack = "sourceRoot+=/frontend";
+          }))
+        ];
+      };
+    }).curry-frontend;
 
 in
-stdenv.mkDerivation rec {
+stdenv.mkDerivation {
+  inherit pname version src;
 
-  name = fname;
-
-  curryBase = haskellPackages.callPackage (
-    { mkDerivation, base, Cabal, containers, directory, either
-    , filepath, mtl, pretty, stdenv, syb, time
-    }:
-    mkDerivation {
-      pname = "curry-base";
-      version = "0.4.1";
-      src = fsrc;
-      libraryHaskellDepends = [
-        base containers directory either filepath mtl pretty syb time
-      ];
-      testHaskellDepends = [ base Cabal filepath mtl ];
-      homepage = http://curry-language.org;
-      description = "Functions for manipulating Curry programs";
-      license = "unknown";
-
-      postUnpack = ''
-        mv ${name} ${name}.orig
-        ln -s ${name}.orig/frontend/curry-base ${name}
-      '';
-      doCheck = false;
-    }
-  ) {};
-
-  curryFront = haskellPackages.callPackage (
-    { mkDerivation, base, Cabal, containers, directory
-    , filepath, mtl, network-uri, process, stdenv, syb, transformers
-    }:
-    mkDerivation {
-      pname = "curry-frontend";
-      version = "0.4.1";
-      src = fsrc;
-      isLibrary = true;
-      isExecutable = true;
-      libraryHaskellDepends = [
-        base containers curryBase directory filepath mtl network-uri
-        process syb transformers
-      ];
-      executableHaskellDepends = [
-        base containers curryBase directory filepath mtl network-uri
-        process syb transformers
-      ];
-      testHaskellDepends = [ base Cabal curryBase filepath ];
-      homepage = http://curry-language.org;
-      description = "Compile the functional logic language Curry to several intermediate formats";
-      license = "unknown";
-
-      postUnpack = ''
-        mv ${name} ${name}.orig
-        ln -s ${name}.orig/frontend/curry-frontend ${name}
-      '';
-      doCheck = false;
-    }
-  ) {};
-
-  src = fsrc;
-
-  buildInputs = [ swiPrologLocked makeWrapper glibcLocales rlwrap tk which ];
-
-  patches = [
-    ./adjust-buildsystem.patch
-    ./case-insensitive.patch
+  buildInputs = [ swi-prolog ];
+  nativeBuildInputs = [
+    which
+    makeWrapper
+    gettext
   ];
 
-  configurePhase = ''
-    # Phony HOME.
-    mkdir phony-home
-    export HOME=$(pwd)/phony-home
+  makeFlags = [
+    "CURRYFRONTEND=${curry-frontend}/bin/curry-frontend"
+    "DISTPKGINSTALL=yes"
+    # Not needed, just to make script pass
+    "CURRYTOOLSDIR=0"
+    "CURRYLIBSDIR=0"
+  ];
 
-    # SWI Prolog
-    sed -i 's@SWIPROLOG=@SWIPROLOG='${swiPrologLocked}/bin/swipl'@' scripts/pakcsinitrc.sh
+  preConfigure = ''
+    for file in examples/test.sh             \
+                currytools/optimize/Makefile \
+                testsuite/test.sh            \
+                scripts/cleancurry.sh        \
+                scripts/compile-all-libs.sh; do
+        substituteInPlace $file --replace "/bin/rm" "rm"
+    done
   '';
 
-  buildPhase = ''
-    # Some comments in files are in UTF-8, so include the locale needed by GHC runtime.
-    export LC_ALL=en_US.UTF-8
-
-    # PAKCS must be build in place due to embedded filesystem references placed by swi.
-
-    # Prepare PAKCSHOME directory.
-    mkdir -p $out/pakcs/bin
-
-    # Set up link to cymake, which has been built already.
-    ln -s ${curryFront}/bin/cymake $out/pakcs/bin/
-    rm -r frontend
-
-    # Prevent embedding the derivation build directory as temp.
-    export TEMP=/tmp
-
-    # Copy to in place build location and run the build.
+  preBuild = ''
+    mkdir -p $out/pakcs
     cp -r * $out/pakcs
-    (cd $out/pakcs ; make)
+    cd $out/pakcs
   '';
 
   installPhase = ''
-    # Install bin.
-    mkdir -p $out/bin
-    for b in $(ls $out/pakcs/bin) ; do
-      ln -s $out/pakcs/bin/$b $out/bin/ ;
-    done
+    runHook preInstall
 
-    # Place emacs lisp files in expected locations.
-    mkdir -p $out/share/emacs/site-lisp/curry-pakcs
-    for e in "$out/pakcs/tools/emacs/"*.el ; do
-      cp $e $out/share/emacs/site-lisp/curry-pakcs/ ;
-    done
+    ln -s $out/pakcs/bin $out
 
-    # Wrap for rlwrap and tk support.
+    mkdir -p $out/share/emacs/site-lisp
+    ln -s $out/pakcs/tools/emacs $out/share/emacs/site-lisp/curry-pakcs
+
     wrapProgram $out/pakcs/bin/pakcs \
       --prefix PATH ":" "${rlwrap}/bin" \
-      --prefix PATH ":" "${tk}/bin" \
+      --prefix PATH ":" "${tk}/bin"
+
+    # List of dependencies from currytools/cpm/src/CPM/Main.curry
+    wrapProgram $out/pakcs/bin/cypm \
+      --prefix PATH ":" "${
+        lib.makeBinPath [
+          curl
+          git
+          unzip
+          gnutar
+          coreutils
+          sqlite
+        ]
+      }"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.informatik.uni-kiel.de/~pakcs/;
-    description = "An implementation of the multi-paradigm declarative language Curry";
-    license = licenses.bsd3;
+  meta = {
+    homepage = "https://www.curry-lang.org/pakcs";
+    description = "Implementation of the multi-paradigm declarative language Curry";
+    license = lib.licenses.bsd3;
 
     longDescription = ''
       PAKCS is an implementation of the multi-paradigm declarative language
@@ -153,7 +121,7 @@ stdenv.mkDerivation rec {
       with dynamic web pages, prototyping embedded systems).
     '';
 
-    maintainers = with maintainers; [ kkallio gnidorah ];
-    platforms = platforms.unix;
+    maintainers = with lib.maintainers; [ t4ccer ];
+    platforms = lib.platforms.linux;
   };
 }

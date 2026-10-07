@@ -1,23 +1,79 @@
-{ stdenv, buildPythonPackage, fetchurl, django }:
-buildPythonPackage rec {
-  version = "3.8.2";
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  django,
+
+  # optional-dependencies
+  coreapi,
+  coreschema,
+  django-guardian,
+  inflection,
+  psycopg2,
+  pygments,
+  pyyaml,
+
+  # tests
+  dj-database-url,
+  pytestCheckHook,
+  pytest-django,
+  pytz,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "djangorestframework";
-  name = "${pname}-${version}";
+  version = "3.18.1";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/d/djangorestframework/${name}.tar.gz";
-    sha256 = "b6714c3e4b0f8d524f193c91ecf5f5450092c2145439ac2769711f7eba89a9d9";
+  src = fetchFromGitHub {
+    owner = "encode";
+    repo = "django-rest-framework";
+    tag = finalAttrs.version;
+    hash = "sha256-ZOzGJOIyN6X7NxplIDUeII87IlsXViNLPeW7f4/vIfY=";
   };
 
-  # Test settings are missing
-  doCheck = false;
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [ django ];
+  dependencies = [
+    django
+  ];
 
-  meta = with stdenv.lib; {
+  optional-dependencies = {
+    complete = [
+      coreapi
+      coreschema
+      django-guardian
+      inflection
+      psycopg2
+      pygments
+      pyyaml
+    ];
+  };
+
+  nativeCheckInputs = [
+    dj-database-url
+    pytest-django
+    pytestCheckHook
+    pytz
+  ]
+  ++ finalAttrs.passthru.optional-dependencies.complete;
+
+  disabledTestPaths = lib.optionals (lib.versionAtLeast django.version "6") [
+    # AssertionError: assert '�\\u0125\\u01a6.txt' == 'ÀĥƦ.txt'"
+    "tests/test_parsers.py::TestFileUploadParser::test_get_encoded_filename"
+  ];
+
+  pythonImportsCheck = [ "rest_framework" ];
+
+  meta = {
+    changelog = "https://github.com/encode/django-rest-framework/releases/tag/${finalAttrs.src.tag}";
     description = "Web APIs for Django, made easy";
-    homepage = http://www.django-rest-framework.org/;
-    maintainers = with maintainers; [ desiderius ];
-    license = licenses.bsd2;
+    homepage = "https://www.django-rest-framework.org/";
+    license = lib.licenses.bsd2;
   };
-}
+})

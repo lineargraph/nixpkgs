@@ -1,81 +1,130 @@
-{ stdenv, substituteAll, fetchurl, fetchpatch
-, pkgconfig, freetype, expat, libxslt, gperf, dejavu_fonts
-, hostPlatform
+{
+  stdenv,
+  lib,
+  fetchurl,
+  pkg-config,
+  python3,
+  freetype,
+  expat,
+  libxslt,
+  gperf,
+  dejavu_fonts,
+  autoreconfHook,
+  versionCheckHook,
+  testers,
+  gitUpdater,
 }:
 
-/** Font configuration scheme
- - ./config-compat.patch makes fontconfig try the following root configs, in order:
-    $FONTCONFIG_FILE, /etc/fonts/${configVersion}/fonts.conf, /etc/fonts/fonts.conf
-    This is done not to override config of pre-2.11 versions (which just blow up)
-    and still use *global* font configuration at both NixOS or non-NixOS.
- - NixOS creates /etc/fonts/${configVersion}/fonts.conf link to $out/etc/fonts/fonts.conf,
-    and other modifications should go to /etc/fonts/${configVersion}/conf.d
- - See ./make-fonts-conf.xsl for config details.
+stdenv.mkDerivation (finalAttrs: {
+  pname = "fontconfig";
+  version = "2.18.3";
 
-*/
+  outputs = [
+    "bin"
+    "dev"
+    "lib"
+    "out"
+  ]; # $out contains all the config
 
-let
-  configVersion = "2.11"; # bump whenever fontconfig breaks compatibility with older configurations
-in
-stdenv.mkDerivation rec {
-  name = "fontconfig-${version}";
-  version = "2.12.6";
-
+  # GitLab repositrory does not include pre-generated man pages.
+  # ref: https://github.com/NixOS/nixpkgs/pull/401037#discussion_r2055430206
   src = fetchurl {
-    url = "http://fontconfig.org/release/${name}.tar.bz2";
-    sha256 = "05zh65zni11kgnhg726gjbrd55swspdvhqbcnj5a5xh8gn03036g";
+    url = "https://gitlab.freedesktop.org/api/v4/projects/890/packages/generic/fontconfig/${finalAttrs.version}/fontconfig-${finalAttrs.version}.tar.xz";
+    hash = "sha256-T3tVSjjN94wDP2ZsiHHzdJ4UoJT2Wgf2MMke0LQ9NeM=";
   };
 
-  patches = [
-    (substituteAll {
-      src = ./config-compat.patch;
-      inherit configVersion;
-    })
+  nativeBuildInputs = [
+    autoreconfHook
+    gperf
+    libxslt
+    pkg-config
+    python3
   ];
 
-  outputs = [ "bin" "dev" "lib" "out" ]; # $out contains all the config
+  propagatedBuildInputs = [
+    freetype
+    expat
+  ];
 
-  propagatedBuildInputs = [ freetype ];
-  nativeBuildInputs = [ pkgconfig gperf ];
-  buildInputs = [ expat ];
+  postPatch = ''
+    # Requires networking.
+    sed -i '/check_PROGRAMS += test-crbug1004254/d' test/Makefile.am
+
+    # Test causes error without patch shebangs.
+    patchShebangs doc/check-whitespace-in-args.py \
+      doc/check-missing-doc.py
+  '';
 
   configureFlags = [
-    "--with-arch=${hostPlatform.parsed.cpu.name}"
+    "--sysconfdir=/etc"
+    "--with-arch=${stdenv.hostPlatform.parsed.cpu.name}"
     "--with-cache-dir=/var/cache/fontconfig" # otherwise the fallback is in $out/
-    "--disable-docs"
     # just <1MB; this is what you get when loading config fails for some reason
     "--with-default-fonts=${dejavu_fonts.minimal}"
-  ] ++ stdenv.lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
-    "--with-arch=${hostPlatform.parsed.cpu.name}"
+  ]
+  ++ lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
+    "--with-arch=${stdenv.hostPlatform.parsed.cpu.name}"
+    "ac_cv_va_copy=C99"
   ];
 
   enableParallelBuilding = true;
 
-  doCheck = true;
+  doCheck = stdenv.buildPlatform.canExecute stdenv.hostPlatform;
 
-  # Don't try to write to /var/cache/fontconfig at install time.
-  installFlags = "fc_cachedir=$(TMPDIR)/dummy RUN_FC_CACHE_TEST=false";
+  installFlags = [
+    # Don't try to write to /var/cache/fontconfig at install time.
+    "fc_cachedir=$(TMPDIR)/dummy"
+    "RUN_FC_CACHE_TEST=false"
+    "sysconfdir=${placeholder "out"}/etc"
+  ];
 
   postInstall = ''
     cd "$out/etc/fonts"
-    "${libxslt.bin}/bin/xsltproc" --stringparam fontDirectories "${dejavu_fonts.minimal}" \
-      --stringparam fontconfigConfigVersion "${configVersion}" \
+    xsltproc --stringparam fontDirectories "${dejavu_fonts.minimal}" \
+      --stringparam includes /etc/fonts/conf.d \
       --path $out/share/xml/fontconfig \
       ${./make-fonts-conf.xsl} $out/etc/fonts/fonts.conf \
       > fonts.conf.tmp
     mv fonts.conf.tmp $out/etc/fonts/fonts.conf
+    # We don't keep section 3 of the manpages, as they are quite large and
+    # probably not so useful.
+    rm -r $bin/share/man/man3
+  '';
+
+  nativeInstallCheckInputs = [
+    versionCheckHook
+  ];
+  doInstallCheck = true;
+  versionCheckProgram = "${placeholder "bin"}/bin/fc-list";
+
+  installCheckPhase = ''
+    runHook preInstallCheck
+
+    [ -d "$bin/share/man/man1" ]
+    [ -d "$bin/share/man/man5" ]
+    echo "man pages exist"
+
+    runHook postInstallCheck
   '';
 
   passthru = {
-    inherit configVersion;
+    tests = {
+      pkg-config = testers.hasPkgConfigModules {
+        package = finalAttrs.finalPackage;
+      };
+    };
+
+    updateScript = gitUpdater {
+      url = "https://gitlab.freedesktop.org/fontconfig/fontconfig.git";
+    };
   };
 
-  meta = with stdenv.lib; {
-    description = "A library for font customization and configuration";
-    homepage = http://fontconfig.org/;
-    license = licenses.bsd2; # custom but very bsd-like
-    platforms = platforms.all;
-    maintainers = [ maintainers.vcunat ];
+  meta = {
+    description = "Library for font customization and configuration";
+    homepage = "http://fontconfig.org/";
+    license = lib.licenses.bsd2; # custom but very bsd-like
+    platforms = lib.platforms.all;
+    teams = [ lib.teams.freedesktop ];
+    pkgConfigModules = [ "fontconfig" ];
   };
-}
-
+})

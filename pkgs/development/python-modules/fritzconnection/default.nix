@@ -1,25 +1,54 @@
-{ stdenv, buildPythonPackage, fetchPypi, lxml, requests, tkinter }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytest9_0CheckHook,
+  requests,
+  segno,
+  setuptools,
+  writableTmpDirAsHomeHook,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "fritzconnection";
-  version = "0.6.5";
+  version = "1.15.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "14g3sxprq65lxbgkf3rjgb1bjqnj2jc5p1swlq9sk9gwnl6ca3ds";
+  src = fetchFromGitHub {
+    owner = "kbr";
+    repo = "fritzconnection";
+    tag = finalAttrs.version;
+    hash = "sha256-J07zAXZxQc3TCfsjYcBhQdxsYwHabE9vdj3eMkWua54=";
   };
 
-  prePatch = ''
-    substituteInPlace fritzconnection/test.py \
-      --replace "from fritzconnection import" "from .fritzconnection import"
-  '';
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [ lxml requests tkinter ];
+  dependencies = [ requests ];
 
-  meta = with stdenv.lib; {
-    description = "Python-Tool to communicate with the AVM FritzBox using the TR-064 protocol";
-    homepage = https://bitbucket.org/kbr/fritzconnection;
-    license = licenses.mit;
-    maintainers = with maintainers; [ dotlambda ];
+  optional-dependencies = {
+    qr = [ segno ];
   };
-}
+
+  nativeCheckInputs = [
+    pytest9_0CheckHook
+    writableTmpDirAsHomeHook
+  ];
+
+  pythonImportsCheck = [ "fritzconnection" ];
+
+  disabledTestPaths = [
+    # Functional tests require network access
+    "fritzconnection/tests/test_functional.py"
+  ];
+
+  meta = {
+    description = "Python module to communicate with the AVM Fritz!Box";
+    homepage = "https://github.com/kbr/fritzconnection";
+    changelog = "https://fritzconnection.readthedocs.io/en/${finalAttrs.src.tag}/sources/version_history.html";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [
+      dotlambda
+      valodim
+    ];
+  };
+})

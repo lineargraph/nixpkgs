@@ -1,20 +1,30 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "django-gravatar2";
-  name = "${pname}-${version}";
-  version = "1.4.2";
+  version = "1.4.5";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "1qsv40xywbqsf4mkrmsswrpzqd7nfljxpfiim9an2z3dykn5rka6";
+    pname = "django_gravatar2";
+    inherit version;
+    hash = "sha256-LbtWRl45Xdizkg1AF+J6R1aRLMKtmxG6SM8UOHGoA2Q=";
   };
+
+  build-system = [ setuptools ];
 
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "django_gravatar" ];
+
+  meta = {
     description = "Essential Gravatar support for Django";
-    homepage = https://github.com/twaddington/django-gravatar;
-    license = licenses.mit;
+    homepage = "https://github.com/twaddington/django-gravatar";
+    license = lib.licenses.mit;
   };
 }

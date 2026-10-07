@@ -1,178 +1,140 @@
-{ stdenv, fetchurl, config, makeWrapper
-, gconf
-, alsaLib
-, at-spi2-atk
-, atk
-, cairo
-, cups
-, curl
-, dbus-glib
-, dbus_libs
-, fontconfig
-, freetype
-, gdk_pixbuf
-, glib
-, glibc
-, gst-plugins-base
-, gstreamer
-, gtk2
-, gtk3
-, kerberos
-, libX11
-, libXScrnSaver
-, libXcomposite
-, libXdamage
-, libXext
-, libXfixes
-, libXinerama
-, libXrender
-, libXt
-, libcanberra-gtk2
-, libgnome
-, libgnomeui
-, defaultIconTheme
-, libGLU_combined
-, nspr
-, nss
-, pango
-, writeScript
-, xidel
-, coreutils
-, gnused
-, gnugrep
-, gnupg
+# Update instructions:
+#
+# To update `thunderbird-bin`'s `release_sources.nix`, run from the nixpkgs root:
+#
+#     nix-shell maintainers/scripts/update.nix --argstr package pkgs.thunderbird-bin-unwrapped
+#     nix-shell maintainers/scripts/update.nix --argstr package pkgs.thunderbird-esr-bin-unwrapped
+{
+  lib,
+  stdenv,
+  fetchurl,
+  config,
+  wrapGAppsHook3,
+  curl,
+  gtk3,
+  writeScript,
+  xidel,
+  coreutils,
+  gnused,
+  gnugrep,
+  gnupg,
+  runtimeShell,
+  systemLocale ? config.i18n.defaultLocale or "en_US",
+  generated,
+  versionSuffix ? "",
+  applicationName ? "Thunderbird",
+  # linux dependencies
+  writeText,
+  autoPatchelfHook,
+  patchelfUnstable,
+  alsa-lib,
+  # darwin dependencies
+  undmg,
 }:
 
-# imports `version` and `sources`
-with (import ./release_sources.nix);
-
 let
-  arch = if stdenv.system == "i686-linux"
-    then "linux-i686"
-    else "linux-x86_64";
+  inherit (generated) version sources;
 
-  isPrefixOf = prefix: string:
-    builtins.substring 0 (builtins.stringLength prefix) string == prefix;
+  pname = "thunderbird-bin";
 
-  sourceMatches = locale: source:
-      (isPrefixOf source.locale locale) && source.arch == arch;
+  mozillaPlatforms = {
+    x86_64-linux = "linux-x86_64";
+    aarch64-darwin = "mac";
+  };
 
-  systemLocale = config.i18n.defaultLocale or "en-US";
+  throwSystem = throw "Unsupported system: ${stdenv.hostPlatform.system}";
 
-  defaultSource = stdenv.lib.findFirst (sourceMatches "en-US") {} sources;
+  arch = mozillaPlatforms.${stdenv.hostPlatform.system} or throwSystem;
 
-  source = stdenv.lib.findFirst (sourceMatches systemLocale) defaultSource sources;
+  sourceMatches = locale: source: (lib.hasPrefix source.locale locale) && source.arch == arch;
 
-  name = "thunderbird-bin-${version}";
-in
+  defaultSource = lib.findFirst (sourceMatches "en-US") { } sources;
 
-stdenv.mkDerivation {
-  inherit name;
+  mozLocale =
+    if systemLocale == "ca_ES@valencia" then
+      "ca-valencia"
+    else
+      lib.replaceStrings [ "_" ] [ "-" ] systemLocale;
+
+  source = lib.findFirst (sourceMatches mozLocale) defaultSource sources;
 
   src = fetchurl {
-    url = "http://download-installer.cdn.mozilla.net/pub/thunderbird/releases/${version}/${source.arch}/${source.locale}/thunderbird-${version}.tar.bz2";
-    inherit (source) sha512;
+    inherit (source) url sha256;
   };
 
-  phases = "unpackPhase installPhase";
-
-  libPath = stdenv.lib.makeLibraryPath
-    [ stdenv.cc.cc
-      gconf
-      alsaLib
-      at-spi2-atk
-      atk
-      cairo
-      cups
-      curl
-      dbus-glib
-      dbus_libs
-      fontconfig
-      freetype
-      gdk_pixbuf
-      glib
-      glibc
-      gst-plugins-base
-      gstreamer
-      gtk2
-      gtk3
-      kerberos
-      libX11
-      libXScrnSaver
-      libXcomposite
-      libXdamage
-      libXext
-      libXfixes
-      libXinerama
-      libXrender
-      libXt
-      libcanberra-gtk2
-      libgnome
-      libgnomeui
-      libGLU_combined
-      nspr
-      nss
-      pango
-    ] + ":" + stdenv.lib.makeSearchPathOutput "lib" "lib64" [
-      stdenv.cc.cc
-    ];
-
-  buildInputs = [ gtk3 defaultIconTheme ];
-
-  nativeBuildInputs = [ makeWrapper ];
-
-  installPhase =
-    ''
-      mkdir -p "$prefix/usr/lib/thunderbird-bin-${version}"
-      cp -r * "$prefix/usr/lib/thunderbird-bin-${version}"
-
-      mkdir -p "$out/bin"
-      ln -s "$prefix/usr/lib/thunderbird-bin-${version}/thunderbird" "$out/bin/"
-
-      for executable in \
-        thunderbird crashreporter thunderbird-bin plugin-container updater
-      do
-        patchelf --interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-          "$out/usr/lib/thunderbird-bin-${version}/$executable"
-      done
-
-      find . -executable -type f -exec \
-        patchelf --set-rpath "$libPath" \
-          "$out/usr/lib/thunderbird-bin-${version}/{}" \;
-
-      # Create a desktop item.
-      mkdir -p $out/share/applications
-      cat > $out/share/applications/thunderbird.desktop <<EOF
-      [Desktop Entry]
-      Type=Application
-      Exec=$out/bin/thunderbird
-      Icon=$out/usr/lib/thunderbird-bin-${version}/chrome/icons/default/default256.png
-      Name=Thunderbird
-      GenericName=Mail Reader
-      Categories=Application;Network;
-      EOF
-
-      wrapProgram "$out/bin/thunderbird" \
-        --argv0 "$out/bin/.thunderbird-wrapped" \
-        --prefix XDG_DATA_DIRS : "$GSETTINGS_SCHEMAS_PATH:" \
-        --suffix XDG_DATA_DIRS : "$XDG_ICON_DIRS"
-    '';
-
-  passthru.updateScript = import ./../../browsers/firefox-bin/update.nix {
-    inherit name writeScript xidel coreutils gnused gnugrep curl gnupg;
-    baseName = "thunderbird";
-    channel = "release";
-    basePath = "pkgs/applications/networking/mailreaders/thunderbird-bin";
-    baseUrl = "http://archive.mozilla.org/pub/thunderbird/releases/";
-  };
-  meta = with stdenv.lib; {
+  meta = {
+    changelog = "https://www.thunderbird.net/en-US/thunderbird/${version}/releasenotes/";
     description = "Mozilla Thunderbird, a full-featured email client (binary package)";
-    homepage = http://www.mozilla.org/thunderbird/;
-    license = {
-      free = false;
-      url = http://www.mozilla.org/en-US/foundation/trademarks/policy/;
-    };
-    maintainers = with stdenv.lib.maintainers; [ fuuzetsu ];
-    platforms = platforms.linux;
+    homepage = "https://www.thunderbird.net/";
+    donationPage = "https://www.thunderbird.net/donate/";
+    mainProgram = "thunderbird";
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
+    license = lib.licenses.mpl20;
+    maintainers = with lib.maintainers; [ lovesegfault ];
+    platforms = builtins.attrNames mozillaPlatforms;
+    hydraPlatforms = [ ];
   };
-}
+
+  updateScript = import ./../../browsers/firefox-bin/update.nix {
+    inherit
+      pname
+      writeScript
+      xidel
+      coreutils
+      gnused
+      gnugrep
+      curl
+      gnupg
+      runtimeShell
+      versionSuffix
+      ;
+    baseName = "thunderbird";
+    basePath = "pkgs/applications/networking/mailreaders/thunderbird-bin";
+    baseUrl = "https://archive.mozilla.org/pub/thunderbird/releases/";
+  };
+
+  nativeBuildInputs = [
+    wrapGAppsHook3
+  ];
+
+  passthru = {
+    inherit
+      applicationName
+      updateScript
+      gtk3
+      ;
+    binaryName = "thunderbird";
+    withGSSAPI = true;
+  };
+
+in
+if stdenv.hostPlatform.isDarwin then
+  import ./darwin.nix {
+    inherit
+      pname
+      version
+      src
+      nativeBuildInputs
+      passthru
+      meta
+      stdenv
+      undmg
+      ;
+  }
+else
+  import ./linux.nix {
+    inherit
+      pname
+      version
+      src
+      nativeBuildInputs
+      passthru
+      meta
+      stdenv
+      config
+      writeText
+      autoPatchelfHook
+      patchelfUnstable
+      alsa-lib
+      ;
+  }

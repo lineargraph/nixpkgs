@@ -1,7 +1,13 @@
-{ stdenv, kernel, ncurses }:
+{
+  lib,
+  stdenv,
+  kernel,
+  ncurses,
+}:
 
 stdenv.mkDerivation {
-  name = "tmon-${kernel.version}";
+  pname = "tmon";
+  version = kernel.version;
 
   inherit (kernel) src;
 
@@ -11,15 +17,22 @@ stdenv.mkDerivation {
     cd tools/thermal/tmon
   '';
 
-  makeFlags = kernel.makeFlags ++ [ "INSTALL_ROOT=\"$(out)\"" "BINDIR=bin" ];
-  NIX_CFLAGS_LINK = "-lgcc_s";
+  makeFlags = [
+    "ARCH=${stdenv.hostPlatform.linuxArch}"
+    "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
+    "INSTALL_ROOT=\"$(out)\""
+    "BINDIR=bin"
+  ];
+
+  env.NIX_CFLAGS_LINK = "-lgcc_s";
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Monitoring and Testing Tool for Linux kernel thermal subsystem";
-    homepage = https://www.kernel.org/;
-    license = licenses.gpl2;
-    platforms = platforms.linux;
+    mainProgram = "tmon";
+    homepage = "https://www.kernel.org/";
+    license = lib.licenses.gpl2Only;
+    platforms = lib.platforms.linux;
   };
 }

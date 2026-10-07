@@ -1,37 +1,56 @@
-{ lib
-, buildPythonPackage
-, flake8
-, nose2
-, mock
-, requests
-, pyjwt
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  cryptography,
+  fetchFromGitHub,
+  flaky,
+  pyjwt,
+  pytestCheckHook,
+  requests,
+  responses,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "globus-sdk";
-  version = "1.5.0";
+  version = "4.3.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "f3ee8294c11f0d1a4430ae7534236c6a6837312f1b4056adbb183a3af663d2be";
+  src = fetchFromGitHub {
+    owner = "globus";
+    repo = "globus-sdk-python";
+    tag = version;
+    hash = "sha256-q3fYU8/r6IfoC55iN83jAGdFrhnXx7bTtvuf0R4RBv4=";
   };
 
-  checkPhase = ''
-    py.test tests
+  build-system = [ setuptools ];
+
+  preCheck = ''
+    export HOME=$(mktemp -d)
   '';
 
-  # No tests in archive
-  doCheck = false;
-  
-  checkInputs = [ flake8 nose2 mock ];
-  
-  propagatedBuildInputs = [ requests pyjwt  ];
- 
-  meta = with lib; {
-    description = "A convenient Pythonic interface to Globus REST APIs, including the Transfer API and the Globus Auth API.";
-    homepage =  https://github.com/globus/globus-sdk-python;
-    license = licenses.asl20;
-    maintainers = with maintainers; [ ixxie ];
+  dependencies = [
+    cryptography
+    requests
+    pyjwt
+  ];
+
+  __darwinAllowLocalNetworking = true;
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  checkInputs = [
+    flaky
+    responses
+  ];
+
+  pythonImportsCheck = [ "globus_sdk" ];
+
+  meta = {
+    description = "Interface to Globus REST APIs, including the Transfer API and the Globus Auth API";
+    homepage = "https://github.com/globus/globus-sdk-python";
+    changelog = "https://github.com/globus/globus-sdk-python/releases/tag/${src.tag}";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ bot-wxt1221 ];
   };
 }

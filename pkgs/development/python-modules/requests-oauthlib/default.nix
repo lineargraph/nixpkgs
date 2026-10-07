@@ -1,22 +1,53 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, oauthlib, requests }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  mock,
+  oauthlib,
+  pytestCheckHook,
+  requests,
+  requests-mock,
+}:
 
 buildPythonPackage rec {
-  version = "0.8.0";
   pname = "requests-oauthlib";
-  name = "${pname}-${version}";
+  version = "2.0.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0s7lh5q661gjza1czlmibkrwf8dcj9qfqm3hs39sdbbyflbc8fl8";
+    hash = "sha256-s9/669iE2M13hJQ2lgOp57WNKREb9rQb3C3NhyA69Ok=";
   };
 
-  doCheck = false;        # Internet tests fail when building in chroot
-  propagatedBuildInputs = [ oauthlib requests ];
+  propagatedBuildInputs = [
+    oauthlib
+    requests
+  ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    mock
+    pytestCheckHook
+    requests-mock
+  ];
+
+  disabledTests = [
+    # Exclude tests which require network access
+    "testCanPostBinaryData"
+    "test_content_type_override"
+    "test_url_is_native_str"
+    # too narrow time comparison
+    "test_fetch_access_token"
+  ];
+
+  # Requires selenium and chrome
+  disabledTestPaths = [ "tests/examples/test_native_spa_pkce_auth0.py" ];
+
+  pythonImportsCheck = [ "requests_oauthlib" ];
+
+  meta = {
     description = "OAuthlib authentication support for Requests";
-    homepage = https://github.com/requests/requests-oauthlib;
-    maintainers = with maintainers; [ prikhi ];
+    homepage = "https://github.com/requests/requests-oauthlib";
+    license = lib.licenses.isc;
+    maintainers = with lib.maintainers; [ prikhi ];
   };
 }

@@ -1,26 +1,45 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.services.vnstat;
-in {
+  settingsFormat = pkgs.formats.keyValue { };
+in
+{
   options.services.vnstat = {
-    enable = mkOption {
-      type = types.bool;
-      default = false;
+    enable = lib.mkEnableOption "update of network usage statistics via vnstatd";
+    package = lib.mkPackageOption pkgs "vnstat" { };
+    settings = lib.mkOption {
+      type = lib.types.submodule { freeformType = settingsFormat.type; };
+      default = { };
       description = ''
-        Whether to enable update of network usage statistics via vnstatd.
+        Configuration for vnstat. Refer to
+        [https://humdi.net/vnstat/man/vnstat.conf.html]
+        or {manpage}`vnstat.conf(5)` for more information.
       '';
+      example = {
+        AlwaysAddNewInterfaces = 1;
+      };
     };
   };
 
-  config = mkIf cfg.enable {
-    users.extraUsers.vnstatd = {
-      isSystemUser = true;
-      description = "vnstat daemon user";
-      home = "/var/lib/vnstat";
-      createHome = true;
+  config = lib.mkIf cfg.enable {
+
+    environment.systemPackages = [ cfg.package ];
+
+    environment.etc."vnstat.conf".source = settingsFormat.generate "vnstat.conf" cfg.settings;
+
+    users = {
+      groups.vnstatd = { };
+
+      users.vnstatd = {
+        isSystemUser = true;
+        group = "vnstatd";
+        description = "vnstat daemon user";
+      };
     };
 
     systemd.services.vnstat = {
@@ -28,16 +47,35 @@ in {
       path = [ pkgs.coreutils ];
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
-      unitConfig.documentation = "man:vnstatd(1) man:vnstat(1) man:vnstat.conf(5)";
-      preStart = "chmod 755 /var/lib/vnstat";
+      documentation = [
+        "man:vnstatd(1)"
+        "man:vnstat(1)"
+        "man:vnstat.conf(5)"
+      ];
       serviceConfig = {
-        ExecStart = "${pkgs.vnstat}/bin/vnstatd -n";
+        ExecStart = "${cfg.package}/bin/vnstatd -n";
         ExecReload = "${pkgs.procps}/bin/kill -HUP $MAINPID";
-        ProtectHome = true;
+
+        # Hardening (from upstream example service)
+        ProtectSystem = "strict";
+        StateDirectory = "vnstat";
         PrivateDevices = true;
+        ProtectKernelTunables = true;
+        ProtectControlGroups = true;
+        ProtectHome = true;
+        ProtectKernelModules = true;
         PrivateTmp = true;
+        MemoryDenyWriteExecute = true;
+        RestrictRealtime = true;
+        RestrictNamespaces = true;
+
         User = "vnstatd";
+        Group = "vnstatd";
       };
     };
+  };
+
+  meta = {
+    maintainers = with lib.maintainers; [ hmenke ];
   };
 }

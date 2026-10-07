@@ -1,34 +1,56 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pytest, django, setuptools_scm
-, fetchpatch
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  django,
+  setuptools,
+  setuptools-scm,
+  django-configurations,
+  pytest,
+  pytestCheckHook,
 }:
-buildPythonPackage rec {
+
+buildPythonPackage (finalAttrs: {
   pname = "pytest-django";
-  name = "${pname}-${version}";
-  version = "3.1.2";
+  version = "4.14.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "02932m2sr8x22m4az8syr8g835g4ak77varrnw71n6xakmdcr303";
+    pname = "pytest_django";
+    inherit (finalAttrs) version;
+    hash = "sha256-Jnh90/Qiz7q49VuAp3bi7ep6EQkst06WC+8TElFXCO8=";
   };
 
-  buildInputs = [ pytest setuptools_scm ];
-  propagatedBuildInputs = [ django ];
-
-  patches = [
-    # Unpin setuptools-scm
-    (fetchpatch {
-      url = "https://github.com/pytest-dev/pytest-django/commit/25cbc3b395dcdeb92bdc9414e296680c2b9d602e.patch";
-      sha256 = "0mz3rcsv44pfzlxy3pv8mx87glmv34gy0d5aknvbzgb2a9niryws";
-    })
+  build-system = [
+    setuptools
+    setuptools-scm
   ];
 
-  # Complicated. Requires Django setup.
-  doCheck = false;
+  buildInputs = [ pytest ];
 
-  meta = with stdenv.lib; {
-    description = "py.test plugin for testing of Django applications";
-    homepage = http://pytest-django.readthedocs.org/en/latest/;
-    license = licenses.bsd3;
+  dependencies = [ django ];
+
+  nativeCheckInputs = [
+    django-configurations
+    # pytest-xidst causes random errors in the form of: django.db.utils.OperationalError: no such table: app_item
+    pytestCheckHook
+  ];
+
+  preCheck = ''
+    # bring pytest_django_test module into PYTHONPATH
+    export PYTHONPATH="$PWD:$PYTHONPATH"
+
+    # test the lightweight sqlite flavor
+    export DJANGO_SETTINGS_MODULE="pytest_django_test.settings_sqlite"
+  '';
+
+  __darwinAllowLocalNetworking = true;
+
+  meta = {
+    changelog = "https://github.com/pytest-dev/pytest-django/blob/v${finalAttrs.version}/docs/changelog.rst";
+    description = "Pytest plugin for testing of Django applications";
+    homepage = "https://pytest-django.readthedocs.org/en/latest/";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
-}
+})

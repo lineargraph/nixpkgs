@@ -1,26 +1,49 @@
-{ stdenv, buildPythonPackage, fetchurl,
-  numpy, django_colorful, pillow, psycopg2,
-  pyparsing, django, celery
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  isPy3k,
+  numpy,
+  django-colorful,
+  pillow,
+  psycopg2,
+  pyparsing,
+  django,
+  celery,
+  boto3,
+  importlib-metadata,
 }:
-buildPythonPackage rec {
-  version = "0.5";
-  pname = "django-raster";
-  name = "${pname}-${version}";
 
-  src = fetchurl {
-    url = "mirror://pypi/d/django-raster/${name}.tar.gz";
-    sha256 = "0v1jldb13s4dqq1vaq8ghfv3743jpi9a9n05bqgjm8szlkq8s7ah";
+buildPythonPackage rec {
+  version = "0.8.1";
+  format = "setuptools";
+  pname = "django-raster";
+
+  disabled = !isPy3k;
+
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "213758fe96d74be502f69f2620f7666961a85caa0551d14573637315035a9745";
   };
 
   # Tests require a postgresql + postgis server
   doCheck = false;
 
-  propagatedBuildInputs = [ numpy django_colorful pillow psycopg2
-                            pyparsing django celery ];
+  propagatedBuildInputs = [
+    numpy
+    django-colorful
+    pillow
+    psycopg2
+    pyparsing
+    django
+    celery
+    boto3
+    importlib-metadata
+  ];
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Basic raster data integration for Django";
-    homepage = https://github.com/geodesign/django-raster;
-    license = licenses.mit;
+    homepage = "https://github.com/geodesign/django-raster";
+    license = lib.licenses.mit;
   };
 }

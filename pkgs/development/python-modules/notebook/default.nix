@@ -1,65 +1,103 @@
-{ stdenv
-, lib
-, buildPythonPackage
-, fetchPypi
-, nose
-, nose_warnings_filters
-, glibcLocales
-, isPy3k
-, mock
-, jinja2
-, tornado
-, ipython_genutils
-, traitlets
-, jupyter_core
-, jupyter_client
-, nbformat
-, nbconvert
-, ipykernel
-, terminado
-, requests
-, send2trash
-, pexpect
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # nativeBuildInputs
+  nodejs,
+  yarn-berry_3,
+  distutils,
+
+  # build-system
+  hatch-jupyter-builder,
+  hatchling,
+  jupyter-builder,
+  jupyterlab,
+
+  # dependencies
+  jupyter-server,
+  jupyterlab-server,
+  notebook-shim,
+  tornado,
+
+  # tests
+  pytest-jupyter,
+  pytestCheckHook,
+  versionCheckHook,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "notebook";
-  version = "5.4.1";
+  version = "7.6.3";
+  pyproject = true;
+  __structuredAttrs = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "01l6yp78sp27vns4cxh8ybr7x0pixxn97cp0i3w6s0lv1v8l6qbx";
+  src = fetchFromGitHub {
+    owner = "jupyter";
+    repo = "notebook";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-77OGrJWMpeM4M+rsJMmBcBDDIO1Xsk+/PHflfMQnkWM=";
   };
 
-  LC_ALL = "en_US.utf8";
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace-fail "timeout = 300" ""
+  '';
 
-  checkInputs = [ nose glibcLocales ]
-    ++ (if isPy3k then [ nose_warnings_filters ] else [ mock ]);
-
-  propagatedBuildInputs = [
-    jinja2 tornado ipython_genutils traitlets jupyter_core send2trash
-    jupyter_client nbformat nbconvert ipykernel terminado requests pexpect
+  nativeBuildInputs = [
+    nodejs
+    yarn-berry_3.yarnBerryConfigHook
+  ]
+  ++ lib.optionals (stdenv.hostPlatform.isLinux && stdenv.hostPlatform.isAarch64) [
+    distutils
   ];
 
-  # disable warning_filters
-  preCheck = lib.optionalString (!isPy3k) ''
-    echo "" > setup.cfg
-  '';
+  missingHashes = ./missing-hashes.json;
+  offlineCache = yarn-berry_3.fetchYarnBerryDeps {
+    inherit (finalAttrs) src missingHashes;
+    hash = "sha256-6Ujcy5g7f+tqe8skHG9RznvsA7+kXocVQccMgQB60Xg=";
+  };
 
-  checkPhase = ''
-    runHook preCheck
-    mkdir tmp
-    HOME=tmp nosetests -v ${if (stdenv.isDarwin) then ''
-      --exclude test_delete \
-      --exclude test_checkpoints_follow_file
-    ''
-    else ""}
-  '';
+  build-system = [
+    hatch-jupyter-builder
+    hatchling
+    jupyter-builder
+    jupyterlab
+  ];
+
+  dependencies = [
+    jupyter-server
+    jupyterlab
+    jupyterlab-server
+    notebook-shim
+    tornado
+  ];
+
+  nativeCheckInputs = [
+    pytest-jupyter
+    pytestCheckHook
+    versionCheckHook
+  ];
+
+  pytestFlags = [
+    "-Wignore::DeprecationWarning"
+  ];
+
+  env = {
+    CI = 1; # quiet lerna progress bar
+    JUPYTER_PLATFORM_DIRS = 1;
+  };
+
+  # Some of the tests use localhost networking.
+  __darwinAllowLocalNetworking = true;
 
   meta = {
-    description = "The Jupyter HTML notebook is a web-based notebook environment for interactive computing";
-    homepage = http://jupyter.org/;
+    description = "Web-based notebook environment for interactive computing";
+    homepage = "https://github.com/jupyter/notebook";
+    changelog = "https://github.com/jupyter/notebook/blob/${finalAttrs.src.tag}/CHANGELOG.md";
     license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ fridh globin ];
+    teams = [ lib.teams.jupyter ];
+    mainProgram = "jupyter-notebook";
   };
-}
+})

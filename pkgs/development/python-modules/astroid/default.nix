@@ -1,39 +1,51 @@
-{ lib, fetchPypi, buildPythonPackage, python, logilab_common, six
-, lazy-object-proxy, wrapt, singledispatch, enum34, pythonOlder
-, backports_functools_lru_cache
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  pip,
+  pylint,
+  pytestCheckHook,
 }:
 
-buildPythonPackage rec {
-  name = "${pname}-${version}";
+buildPythonPackage (finalAttrs: {
   pname = "astroid";
-  version = "1.6.4";
+  version = "4.2.0"; # Check whether the version is compatible with pylint
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "dea42ae6e0b789b543f728ddae7ddb6740ba33a49fb52c4a4d9cb7bb4aa6ec09";
+  src = fetchFromGitHub {
+    owner = "PyCQA";
+    repo = "astroid";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-PwKGAk9tiQzxWydEREg0l0cF4J56SNRwhGRCVjmRoCo=";
   };
 
-  propagatedBuildInputs = [ logilab_common six lazy-object-proxy wrapt ]
-    ++ lib.optionals (pythonOlder "3.4") [ enum34 singledispatch]
-    ++ lib.optionals (pythonOlder "3.3") [ backports_functools_lru_cache ];
+  build-system = [ setuptools ];
 
-  postPatch = ''
-    cd astroid/tests
-    for i in $(ls unittest*); do mv -v $i test_$i; done
-    cd ../..
-    rm -vf astroid/tests/test_unittest_inference.py
-    rm -vf astroid/tests/test_unittest_manager.py
-  '';
+  nativeCheckInputs = [
+    pip
+    pytestCheckHook
+  ];
 
-  checkPhase = ''
-    ${python.interpreter} -m unittest discover
-  '';
+  disabledTests = [
+    # UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html.
+    "test_identify_old_namespace_package_protocol"
+  ];
 
-  meta = with lib; {
-    description = "A abstract syntax tree for Python with inference support";
-    homepage = https://bitbucket.org/logilab/astroid;
-    license = licenses.lgpl2;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ nand0p ];
+  disabledTestPaths = [
+    # requires mypy
+    "tests/test_raw_building.py"
+  ];
+
+  passthru.tests = {
+    inherit pylint;
   };
-}
+
+  meta = {
+    changelog = "https://github.com/PyCQA/astroid/blob/${finalAttrs.src.tag}/ChangeLog";
+    description = "Abstract syntax tree for Python with inference support";
+    homepage = "https://github.com/PyCQA/astroid";
+    license = lib.licenses.lgpl21Plus;
+    maintainers = with lib.maintainers; [ GaetanLepage ];
+  };
+})

@@ -1,33 +1,46 @@
 # To enable specific database drivers, override this derivation and pass the
 # driver packages in the drivers argument (e.g. mysql_jdbc, postgresql_jdbc).
-{ stdenv, fetchurl, makeDesktopItem, makeWrapper, unzip
-, jre
-, drivers ? []
+{
+  lib,
+  stdenv,
+  fetchurl,
+  makeDesktopItem,
+  makeWrapper,
+  unzip,
+  jre,
+  drivers ? [ ],
 }:
-let
-  version = "3.8.1";
-in stdenv.mkDerivation rec {
-  name = "squirrel-sql-${version}";
+stdenv.mkDerivation rec {
+  pname = "squirrel-sql";
+  version = "5.1.0";
 
   src = fetchurl {
     url = "mirror://sourceforge/project/squirrel-sql/1-stable/${version}-plainzip/squirrelsql-${version}-standard.zip";
-    sha256 = "1vv38i4rwm8c8h0p9mmz21dyafd71pqprj7b8i5vx7f4q8xns2d2";
+    sha256 = "sha256-aYwA2TRXI74s1BXfhlatBqPzC1xCfEqTe/yK8DCMo4E=";
   };
 
-  buildInputs = [
-    jre makeWrapper stdenv unzip
+  nativeBuildInputs = [
+    makeWrapper
+    unzip
   ];
+  buildInputs = [ jre ];
 
   unpackPhase = ''
+    runHook preUnpack
     unzip ${src}
+    runHook postUnpack
   '';
 
   buildPhase = ''
+    runHook preBuild
     cd squirrelsql-${version}-standard
     chmod +x squirrel-sql.sh
+    runHook postBuild
   '';
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/squirrel-sql
     cp -r . $out/share/squirrel-sql
 
@@ -42,11 +55,15 @@ in stdenv.mkDerivation rec {
     makeWrapper $out/share/squirrel-sql/squirrel-sql.sh $out/bin/squirrel-sql \
       --set CLASSPATH "$cp" \
       --set JAVA_HOME "${jre}"
+    # Make sure above `CLASSPATH` gets picked up
+    substituteInPlace $out/share/squirrel-sql/squirrel-sql.sh --replace "-cp \"\$CP\"" "-cp \"\$CLASSPATH:\$CP\""
 
     mkdir -p $out/share/icons/hicolor/32x32/apps
     ln -s $out/share/squirrel-sql/icons/acorn.png \
       $out/share/icons/hicolor/32x32/apps/squirrel-sql.png
     ln -s ${desktopItem}/share/applications $out/share
+
+    runHook postInstall
   '';
 
   desktopItem = makeDesktopItem {
@@ -55,15 +72,16 @@ in stdenv.mkDerivation rec {
     comment = meta.description;
     desktopName = "SQuirreL SQL";
     genericName = "SQL Client";
-    categories = "Development;";
+    categories = [ "Development" ];
     icon = "squirrel-sql";
   };
 
   meta = {
     description = "Universal SQL Client";
-    homepage = http://squirrel-sql.sourceforge.net/;
-    license = stdenv.lib.licenses.lgpl21;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ khumba ];
+    mainProgram = "squirrel-sql";
+    homepage = "http://squirrel-sql.sourceforge.net/";
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
+    license = lib.licenses.lgpl21Plus;
+    platforms = lib.platforms.linux;
   };
 }

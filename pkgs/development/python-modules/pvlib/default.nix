@@ -1,25 +1,63 @@
-{ stdenv, buildPythonPackage, fetchPypi, numpy, pandas, pytz, six, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  h5py,
+  numpy,
+  pandas,
+  pytestCheckHook,
+  pytest-mock,
+  pytest-remotedata,
+  pytest-rerunfailures,
+  pytest-timeout,
+  pytz,
+  requests,
+  requests-mock,
+  scipy,
+  setuptools,
+  setuptools-scm,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "pvlib";
-  version = "0.5.2";
+  version = "0.14.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "1897v9qq97nk5n0hfm9089yz8pffd42795mnhcyq48g9bsyap1xi";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-nmpmhlJAzk4xy+nTYKKNbreVO6u2KsQDry+QrtFqRQk=";
   };
 
-  checkInputs = [ pytest ];
-  propagatedBuildInputs = [ numpy pandas pytz six ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
-  # Currently, the PyPI tarball doesn't contain the tests. When that has been
-  # fixed, enable testing. See: https://github.com/pvlib/pvlib-python/issues/473
-  doCheck = false;
+  dependencies = [
+    h5py
+    numpy
+    pandas
+    pytz
+    requests
+    scipy
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://pvlib-python.readthedocs.io;
+  nativeCheckInputs = [
+    pytest-mock
+    pytest-remotedata
+    pytest-rerunfailures
+    pytest-timeout
+    pytestCheckHook
+    requests-mock
+  ];
+
+  pythonImportsCheck = [ "pvlib" ];
+
+  meta = {
     description = "Simulate the performance of photovoltaic energy systems";
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ jluttine ];
+    homepage = "https://pvlib-python.readthedocs.io";
+    changelog = "https://pvlib-python.readthedocs.io/en/v${finalAttrs.version}/whatsnew.html";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ jluttine ];
   };
-}
+})

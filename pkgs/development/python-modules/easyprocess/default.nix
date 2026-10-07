@@ -1,21 +1,50 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  pytestCheckHook,
+  pytest-timeout,
+  pyvirtualdisplay,
+  imagemagick,
+  inetutils,
+  xvfb,
+}:
 
-buildPythonPackage rec {
-  pname = "EasyProcess";
-  version = "0.2.3";
+buildPythonPackage (finalAtrrs: {
+  pname = "easyprocess";
+  version = "1.1";
+  pyproject = true;
+
+  __structuredAttrs = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "07z6485bjxkmx26mp1p1ww19d10qavw0s006bidzailsvk543qll";
+    pname = "EasyProcess";
+    inherit (finalAtrrs) version;
+    hash = "sha256-iFiYMCpXqrlIlz6LXTKkIpOSufstmGqx1P/VkOW6kOw=";
   };
 
-  # No tests
-  doCheck = false;
+  build-system = [
+    setuptools
+  ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-timeout
+    (pyvirtualdisplay.overridePythonAttrs { doCheck = false; }) # avoid reference loop
+    imagemagick
+    inetutils
+    xvfb
+  ];
+
+  disabledTests = [
+    "test_deadlock_pipe" # hangs, https://github.com/ponty/EasyProcess/issues/24
+  ];
+
+  meta = {
     description = "Easy to use python subprocess interface";
-    homepage = https://github.com/ponty/EasyProcess;
-    license = licenses.bsdOriginal;
-    maintainers = with maintainers; [ layus ];
+    homepage = "https://github.com/ponty/EasyProcess";
+    license = lib.licenses.bsdOriginal;
+    maintainers = with lib.maintainers; [ layus ];
   };
-}
+})

@@ -1,18 +1,35 @@
-{ lib, buildPythonPackage, fetchurl }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  fetchpatch,
+  setuptools,
+}:
 
 buildPythonPackage rec {
-  name = "python-axolotl-curve25519-${version}";
-  version = "0.1";
+  pname = "python-axolotl-curve25519";
+  version = "0.4.1.post2";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/p/python-axolotl-curve25519/${name}.tar.gz";
-    sha256 = "1h1rsdr7m8lvgxwrwng7qv0xxmyc9k0q7g9nbcr6ks2ipyjzcnf5";
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "0705a66297ebd2f508a60dc94e22881c754301eb81db93963322f6b3bdcb63a3";
   };
 
-  meta = with lib; {
-    homepage = https://github.com/tgalal/python-axolotl-curve25519;
+  patches = [
+    # https://github.com/tgalal/python-axolotl-curve25519/pull/26
+    (fetchpatch {
+      url = "https://github.com/tgalal/python-axolotl-curve25519/commit/901f4fb12e1290b72fbd26ea1f40755b079fa241.patch";
+      hash = "sha256-hdhaOysRXI9q5D9e/bfy0887bpEFSvUyrbl32nBgteQ=";
+    })
+  ];
+
+  build-system = [ setuptools ];
+
+  meta = {
+    homepage = "https://github.com/tgalal/python-axolotl-curve25519";
     description = "Curve25519 with ed25519 signatures";
-    maintainers = with maintainers; [ abbradar ];
-    license = licenses.gpl3;
+    maintainers = [ ];
+    license = lib.licenses.gpl3;
   };
 }

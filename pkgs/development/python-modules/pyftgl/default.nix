@@ -1,26 +1,53 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, isPy3k
-, boost, freetype, ftgl, libGLU_combined }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  stdenv,
+  setuptools,
+  boost,
+  freetype,
+  ftgl,
+  libGLU,
+  libGL,
+  python,
+}:
 
+let
+  pythonVersion = with lib.versions; "${major python.version}${minor python.version}";
+in
 buildPythonPackage rec {
   pname = "pyftgl";
   version = "0.4b";
-  name = pname + "-" + version;
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "umlaeute";
-    repo = name;
-    rev = version;
-    sha256 = "12zcjv4cwwjihiaf74kslrdmmk4bs47h7006gyqfwdfchfjdgg4r";
+    repo = "pyftgl";
+    tag = version;
+    sha256 = "sha256-mbzXpIPMNe6wfwaAAw/Ri8xaW6Z6kuNUhFFyzsiW7Is=";
   };
 
-  postPatch = stdenv.lib.optional isPy3k ''
-    sed -i "s,'boost_python','boost_python3',g" setup.py
+  build-system = [ setuptools ];
+
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace-fail boost_python boost_python${pythonVersion}
+  ''
+  + lib.optionalString stdenv.hostPlatform.isDarwin ''
+    export NIX_CFLAGS_COMPILE+=" -L$SDKROOT/System/Library/Frameworks/OpenGL.framework/Versions/Current/Libraries"
   '';
 
-  buildInputs = [ boost freetype ftgl libGLU_combined ];
+  buildInputs = [
+    boost
+    freetype
+    ftgl
+    libGLU
+    libGL
+  ];
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Python bindings for FTGL (FreeType for OpenGL)";
-    license = licenses.gpl2Plus;
+    homepage = "https://github.com/umlaeute/pyftgl";
+    license = lib.licenses.gpl2Plus;
   };
 }

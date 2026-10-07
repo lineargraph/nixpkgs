@@ -1,22 +1,121 @@
-{lib, fetchPypi, buildPythonPackage, numpy}:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
 
-buildPythonPackage rec {
+  # build-system
+  hatch-vcs,
+  hatchling,
+
+  # dependencies
+  awkward,
+  cramjam,
+  fsspec,
+  numpy,
+  packaging,
+
+  # tests
+  awkward-pandas,
+  pandas,
+  pytest-timeout,
+  pytestCheckHook,
+  rangehttpserver,
+  scikit-hep-testdata,
+  writableTmpDirAsHomeHook,
+  xxhash,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "uproot";
-  version = "2.8.25";
+  version = "5.7.7";
+  pyproject = true;
+  __structuredAttrs = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "8f790cb8a704b44ffd5efe5a9cb46204a042b55a9cddeb61434193cfd534275c";
+  src = fetchFromGitHub {
+    owner = "scikit-hep";
+    repo = "uproot5";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-uEFX5VRG6baA0NPubjTQLJo3zxOrc+rISiQUAKRDbjw=";
   };
 
-  propagatedBuildInputs = [
-    numpy
+  # shutil.copy preserves the read-only permissions of the test files from the nix store,
+  # which then cannot be opened in update mode.
+  postPatch = ''
+    substituteInPlace tests/test_1687_rntuple_update.py tests/test_1690_ttree_inplace.py \
+      --replace-fail \
+        "shutil.copy(" \
+        "shutil.copyfile("
+  '';
+
+  build-system = [
+    hatch-vcs
+    hatchling
   ];
 
-  meta = with lib; {
-    homepage = https://github.com/scikit-hep/uproot;
+  dependencies = [
+    awkward
+    cramjam
+    fsspec
+    numpy
+    packaging
+    xxhash
+  ];
+
+  nativeCheckInputs = [
+    awkward-pandas
+    pandas
+    pytest-timeout
+    pytestCheckHook
+    rangehttpserver
+    scikit-hep-testdata
+    writableTmpDirAsHomeHook
+  ];
+
+  disabledTests = [
+    # Tests that try to download files
+    "test_descend_into_path_classname_of"
+    "test_fallback"
+    "test_fsspec_cache_http"
+    "test_fsspec_cache_http_directory"
+    "test_fsspec_chunks"
+    "test_fsspec_globbing_http"
+    "test_http"
+    "test_http_fallback_workers"
+    "test_http_multipart"
+    "test_http_port"
+    "test_http_size"
+    "test_http_size_port"
+    "test_http_workers"
+    "test_issue176"
+    "test_issue176_again"
+    "test_issue_1054_filename_colons"
+    "test_no_multipart"
+    "test_open_fsspec_github"
+    "test_open_fsspec_http"
+    "test_pickle_roundtrip_http"
+
+    # Cyclic dependency with dask-awkward
+    "test_dask_duplicated_keys"
+    "test_decompression_executor_for_dask"
+    "test_decompression_threadpool_executor_for_dask"
+  ];
+
+  disabledTestPaths = [
+    # Tests that try to download files
+    "tests/test_0066_fix_http_fallback_freeze.py"
+    "tests/test_0220_contiguous_byte_ranges_in_http.py"
+    "tests/test_1610_read_TMatrixTSym_from_ttree.py"
+  ];
+
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [ "uproot" ];
+
+  meta = {
     description = "ROOT I/O in pure Python and Numpy";
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ ktf ];
+    homepage = "https://github.com/scikit-hep/uproot5";
+    changelog = "https://github.com/scikit-hep/uproot5/releases/tag/${finalAttrs.src.tag}";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ veprbl ];
   };
-}
+})

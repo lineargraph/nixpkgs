@@ -1,22 +1,28 @@
-{ stdenv, buildPythonPackage, python, fetchPypi}:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  unittestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "fastimport";
-  version = "0.9.8";
+  version = "0.9.16";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "b2f2e8eb97000256e1aab83d2a0a053fc7b93c3aa4f7e9b971a5703dfc5963b9";
+    sha256 = "sha256-agpvtWqjYH3nGtTnq9VRr+m9rJS6uNLddNjg+Y9S414=";
   };
 
-  checkPhase = ''
-    ${python.interpreter} -m unittest discover
-  '';
+  nativeCheckInputs = [ unittestCheckHook ];
 
-  meta = with stdenv.lib; {
-    homepage = https://launchpad.net/python-fastimport;
+  pythonImportsCheck = [ "fastimport" ];
+
+  meta = {
+    homepage = "https://github.com/jelmer/python-fastimport";
     description = "VCS fastimport/fastexport parser";
-    maintainers = with maintainers; [ koral ];
-    license = licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ koral ];
+    license = lib.licenses.gpl2Plus;
   };
 }

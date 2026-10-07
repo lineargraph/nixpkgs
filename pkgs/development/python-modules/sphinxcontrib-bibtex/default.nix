@@ -1,22 +1,61 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, oset, pybtex, pybtex-docutils, sphinx
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  fetchpatch2,
+  setuptools,
+  docutils,
+  oset,
+  pybtex,
+  pybtex-docutils,
+  sphinx,
+  sphinx-autoapi,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
-  version = "0.3.6";
   pname = "sphinxcontrib-bibtex";
+  version = "2.6.5";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1mfl3k6axq6rzqwq62fj8y9gabim2zcvydjpqmjj27f8v1qw0kpc";
+  src = fetchFromGitHub {
+    owner = "mcmtroffaes";
+    repo = "sphinxcontrib-bibtex";
+    tag = version;
+    hash = "sha256-sT23DkIfJcb3cFBFdL31RRzlDoJRcCUYIdpUVuYjGuo=";
   };
 
-  propagatedBuildInputs = [ oset pybtex pybtex-docutils sphinx ];
+  patches = [
+    (fetchpatch2 {
+      name = "fix-tests-docutils-0.22.diff";
+      url = "https://github.com/mcmtroffaes/sphinxcontrib-bibtex/commit/20781600dad48fdfee91353c821597690bfe5f54.diff?full_index=1";
+      hash = "sha256-Ia/ng3yUfhLueEB/n+CW51w/UWfzRhrv/5//Mq2OJ0M=";
+    })
+  ];
+
+  build-system = [ setuptools ];
+
+  dependencies = [
+    docutils
+    oset
+    pybtex
+    pybtex-docutils
+    sphinx
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    sphinx-autoapi
+  ];
+
+  pythonImportsCheck = [ "sphinxcontrib.bibtex" ];
+
+  pythonNamespaces = [ "sphinxcontrib" ];
 
   meta = {
-    description = "A Sphinx extension for BibTeX style citations";
+    description = "Sphinx extension for BibTeX style citations";
     homepage = "https://github.com/mcmtroffaes/sphinxcontrib-bibtex";
-    license = stdenv.lib.licenses.bsd2;
+    license = lib.licenses.bsd2;
+    maintainers = [ ];
   };
-
 }

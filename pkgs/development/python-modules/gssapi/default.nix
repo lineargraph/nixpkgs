@@ -1,33 +1,80 @@
-{ stdenv, pkgs, lib, buildPythonPackage, fetchPypi, six, enum34, decorator,
-nose, shouldbe, gss, krb5Full, which, darwin }:
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
 
-buildPythonPackage rec {
+  # build-system
+  cython,
+  setuptools,
+
+  # dependencies
+  decorator,
+
+  # native dependencies
+  krb5-c, # C krb5 library, not PyPI krb5
+
+  # tests
+  parameterized,
+  k5test,
+  pytestCheckHook,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "gssapi";
-  version = "1.4.1";
+  version = "1.11.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "be8f37dd9da726db375b9c693e0a63b391d381d903516e79ecc2a2cc965580e4";
+  src = fetchFromGitHub {
+    owner = "pythongssapi";
+    repo = "python-gssapi";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-E9rX5/7jTFR4nZ7ww2B083Tlz5vwl00yhakBQg75WZs=";
   };
 
-  # It's used to locate headers
   postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace-fail "Cython == 3.2.4" Cython
     substituteInPlace setup.py \
-      --replace "get_output('krb5-config gssapi --prefix')" "'${lib.getDev krb5Full}'"
+      --replace-fail 'get_output(f"{kc} gssapi --prefix")' '"${lib.getDev krb5-c}"'
   '';
 
-  LD_LIBRARY_PATH = "${pkgs.krb5Full}/lib";
-
-  buildInputs = [ krb5Full which nose shouldbe ]
-  ++ ( if stdenv.isDarwin then [ darwin.apple_sdk.frameworks.GSS ] else [ gss ] );
-
-  propagatedBuildInputs =  [ decorator enum34 six ];
-
-  doCheck = false; # No such file or directory: '/usr/sbin/kadmin.local'
-
-  meta = with stdenv.lib; {
-    homepage = https://pypi.python.org/pypi/gssapi;
-    description = "Python GSSAPI Wrapper";
-    license = licenses.mit;
+  env = lib.optionalAttrs (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) {
+    GSSAPI_SUPPORT_DETECT = "false";
   };
-}
+
+  build-system = [
+    cython
+    krb5-c
+    setuptools
+  ];
+
+  dependencies = [ decorator ];
+
+  # k5test is marked as broken on darwin
+  doCheck = !stdenv.hostPlatform.isDarwin;
+
+  nativeCheckInputs = [
+    k5test
+    parameterized
+    pytestCheckHook
+  ];
+
+  preCheck = ''
+    mv gssapi/tests $TMPDIR/
+    pushd $TMPDIR
+  '';
+
+  postCheck = ''
+    popd
+  '';
+
+  pythonImportsCheck = [ "gssapi" ];
+
+  meta = {
+    changelog = "https://github.com/pythongssapi/python-gssapi/releases/tag/${finalAttrs.src.tag}";
+    homepage = "https://github.com/pythongssapi/python-gssapi";
+    description = "Python GSSAPI Wrapper";
+    license = lib.licenses.mit;
+  };
+})

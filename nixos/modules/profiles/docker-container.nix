@@ -1,11 +1,20 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
- pkgs2storeContents = l : map (x: { object = x; symlink = "none"; }) l;
+  inherit (pkgs) writeScript;
 
-in {
+  pkgs2storeContents = map (x: {
+    object = x;
+    symlink = "none";
+  });
+in
+
+{
   # Docker image config.
   imports = [
     ../installer/cd-dvd/channel.nix
@@ -15,36 +24,64 @@ in {
 
   # Create the tarball
   system.build.tarball = pkgs.callPackage ../../lib/make-system-tarball.nix {
-    contents = [];
+    contents = [
+      {
+        source = "${config.system.build.toplevel}/.";
+        target = "./";
+      }
+    ];
     extraArgs = "--owner=0";
 
     # Add init script to image
-    storeContents = [
-      { object = config.system.build.toplevel + "/init";
-        symlink = "/init";
-      }
-    ] ++ (pkgs2storeContents [ pkgs.stdenv ]);
+    storeContents = pkgs2storeContents [
+      config.system.build.toplevel
+      pkgs.stdenv
+    ];
 
     # Some container managers like lxc need these
-    extraCommands = "mkdir -p proc sys dev";
+    extraCommands =
+      let
+        script = writeScript "extra-commands.sh" ''
+          rm etc
+          mkdir -p proc sys dev etc
+        '';
+      in
+      script;
   };
 
   boot.isContainer = true;
-  boot.postBootCommands =
-    ''
-      # After booting, register the contents of the Nix store in the Nix
-      # database.
-      if [ -f /nix-path-registration ]; then
-        ${config.nix.package.out}/bin/nix-store --load-db < /nix-path-registration &&
-        rm /nix-path-registration
-      fi
+  systemd.services.register-nix-paths = {
+    description = "Register Nix Store Paths";
+    unitConfig = {
+      DefaultDependencies = false;
+      ConditionPathExists = "/nix-path-registration";
+    };
+    wantedBy = [ "sysinit.target" ];
+    before = [
+      "sysinit.target"
+      "shutdown.target"
+      "nix-daemon.socket"
+      "nix-daemon.service"
+    ];
+    after = [ "local-fs.target" ];
+    conflicts = [ "shutdown.target" ];
+    restartIfChanged = false;
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      ${lib.getExe' config.nix.package.out "nix-store"} --load-db < /nix-path-registration
+      rm /nix-path-registration
 
       # nixos-rebuild also requires a "system" profile
-      ${config.nix.package.out}/bin/nix-env -p /nix/var/nix/profiles/system --set /run/current-system
+      ${lib.getExe' config.nix.package.out "nix-env"} -p /nix/var/nix/profiles/system --set /run/current-system
     '';
+  };
 
-  # Install new init script
-  system.activationScripts.installInitScript = ''
-    ln -fs $systemConfig/init /init
+  # Update /init symlink when switching configurations so the container
+  # boots the new system on restart.
+  system.build.installBootLoader = pkgs.writeShellScript "install-docker-init" ''
+    ${pkgs.coreutils}/bin/ln -fs "$1/init" /init
   '';
 }

@@ -1,46 +1,55 @@
-{ stdenv, buildPythonPackage, isPy27, isPyPy, fetchPypi, libffi, pycparser, pytest }:
+{
+  buildPythonPackage,
+  fetchFromGitHub,
+  lib,
+  libffi,
+  pkg-config,
+  pycparser,
+  pytestCheckHook,
+  setuptools,
+  stdenv,
+}:
 
-if isPyPy then null else buildPythonPackage rec {
+buildPythonPackage rec {
   pname = "cffi";
-  version = "1.11.5";
-  name = "${pname}-${version}";
+  version = "2.1.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "e90f17980e6ab0f3c2f3730e56d1fe9bcba1891eeea58966e89d352492cc74f4";
+  src = fetchFromGitHub {
+    owner = "python-cffi";
+    repo = "cffi";
+    tag = "v${version}";
+    hash = "sha256-17OgcPo1pYwsPV/2iHe7iXVusCp5zLTFGcHYUfX1g48=";
   };
 
-  outputs = [ "out" "dev" ];
+  nativeBuildInputs = [ pkg-config ];
 
-  propagatedBuildInputs = [ libffi pycparser ];
-  buildInputs = [ pytest ];
+  build-system = [ setuptools ];
 
-  # On Darwin, the cffi tests want to hit libm a lot, and look for it in a global
-  # impure search path. It's obnoxious how much repetition there is, and how difficult
-  # it is to get it to search somewhere else (since we do actually have a libm symlink in libSystem)
-  prePatch = stdenv.lib.optionalString stdenv.isDarwin ''
-    substituteInPlace testing/cffi0/test_parsing.py \
-      --replace 'lib_m = "m"' 'lib_m = "System"' \
-      --replace '"libm" in name' '"libSystem" in name'
-    substituteInPlace testing/cffi0/test_unicode_literals.py --replace 'lib_m = "m"' 'lib_m = "System"'
-    substituteInPlace testing/cffi0/test_zdistutils.py --replace 'self.lib_m = "m"' 'self.lib_m = "System"'
-    substituteInPlace testing/cffi1/test_recompiler.py --replace 'lib_m = "m"' 'lib_m = "System"'
-    substituteInPlace testing/cffi0/test_function.py --replace "lib_m = 'm'" "lib_m = 'System'"
-    substituteInPlace testing/cffi0/test_verify.py --replace "lib_m = ['m']" "lib_m = ['System']"
-  '';
+  buildInputs = [ libffi ];
 
-  # The tests use -Werror but with python3.6 clang detects some unreachable code.
-  NIX_CFLAGS_COMPILE = stdenv.lib.optionals stdenv.cc.isClang [ "-Wno-unused-command-line-argument" "-Wno-unreachable-code" ];
+  # Some dependent packages expect to have pycparser available when using cffi.
+  dependencies = [ pycparser ];
 
-  doCheck = !stdenv.hostPlatform.isMusl; # TODO: Investigate
-  checkPhase = ''
-    py.test
-  '';
+  doCheck = !(stdenv.hostPlatform.isMusl || stdenv.hostPlatform.useLLVM or false);
 
-  meta = with stdenv.lib; {
-    maintainers = with maintainers; [ domenkozar lnl7 ];
-    homepage = https://cffi.readthedocs.org/;
-    license = with licenses; [ mit ];
+  disabledTests = [
+    # parse error
+    "test_dont_remove_comment_in_line_directives"
+    "test_multiple_line_directives"
+    "test_commented_line_directive"
+    # exception mismatch
+    "test_unknown_name"
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = {
+    changelog = "https://github.com/python-cffi/cffi/releases/tag/v${version}";
     description = "Foreign Function Interface for Python calling C code";
+    downloadPage = "https://github.com/python-cffi/cffi";
+    homepage = "https://cffi.readthedocs.org/";
+    license = lib.licenses.mit0;
+    teams = [ lib.teams.python ];
   };
 }

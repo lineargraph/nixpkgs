@@ -1,48 +1,55 @@
-{ lib
-, buildPythonPackage
-, regex
-, langcodes
-, ftfy
-, msgpack
-, mecab-python3
-, jieba
-, nose
-, pythonOlder
-, fetchFromGitHub
+{
+  lib,
+  buildPythonPackage,
+  poetry-core,
+  regex,
+  langcodes,
+  locate,
+  ftfy,
+  msgpack,
+  mecab-python3,
+  jieba,
+  pytestCheckHook,
+  fetchFromGitHub,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "wordfreq";
-  version = "2.0";
+  version = "3.2.0";
+  pyproject = true;
 
-   src = fetchFromGitHub {
-    owner = "LuminosoInsight";
+  src = fetchFromGitHub {
+    owner = "rspeer";
     repo = "wordfreq";
-    rev = "e3a1b470d9f8e0d82e9f179ffc41abba434b823b";
-    sha256 = "1wjkhhj7nxfnrghwvmvwc672s30lp4b7yr98gxdxgqcq6wdshxwv";
-   };
-
-  checkInputs = [ nose ];
-
-  checkPhase = ''
-    # These languages require additional dictionaries
-    nosetests -e test_japanese -e test_korean -e test_languages
-  '';
-   
-  propagatedBuildInputs = [ regex langcodes ftfy msgpack mecab-python3 jieba ];
-  
-  # patch to relax version requirements for regex
-  # dependency to prevent break in upgrade
-  postPatch = ''
-    substituteInPlace setup.py --replace "regex ==" "regex >="
-  '';
-    
-  disabled = pythonOlder "3";
-
-  meta = with lib; {
-    description = "A library for looking up the frequencies of words in many languages, based on many sources of data";
-    homepage =  https://github.com/LuminosoInsight/wordfreq/;
-    license = licenses.mit;
-    maintainers = with maintainers; [ ixxie ];
+    # The v3.2 tag points to the preceding commit before the version bump.
+    rev = "912caf64b657478d1dff1138efdc078947d54bb1";
+    hash = "sha256-Ni93q6557jWTPYpqWCEriFmkJeYtMy9I5A8GLxJ7QfQ=";
   };
-}
+
+  nativeBuildInputs = [ poetry-core ];
+
+  propagatedBuildInputs = [
+    regex
+    langcodes
+    locate
+    ftfy
+    msgpack
+    mecab-python3
+    jieba
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+  disabledTests = [
+    # These languages require additional dictionaries that aren't packaged
+    "test_languages"
+    "test_japanese"
+    "test_korean"
+  ];
+
+  meta = {
+    description = "Library for looking up the frequencies of words in many languages, based on many sources of data";
+    homepage = "https://github.com/rspeer/wordfreq/";
+    changelog = "https://github.com/rspeer/wordfreq/blob/${finalAttrs.src.rev}/CHANGELOG.md";
+    license = lib.licenses.asl20;
+  };
+})

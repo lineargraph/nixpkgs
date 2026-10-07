@@ -1,28 +1,34 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, coverage
-, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "xmltodict";
-  version = "0.11.0";
+  version = "1.0.4";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "8f8d7d40aa28d83f4109a7e8aa86e67a4df202d9538be40c0cb1d70da527b0df";
+  src = fetchFromGitHub {
+    owner = "martinblech";
+    repo = "xmltodict";
+    tag = "v${version}";
+    hash = "sha256-G7hVtS6toUJC0YY1AXBOJSc3wnAZyWilLnT/5vvFRRw=";
   };
 
-  checkInputs = [ coverage nose ];
+  build-system = [ setuptools ];
 
-  checkPhase = ''
-    nosetests
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "xmltodict" ];
 
   meta = {
     description = "Makes working with XML feel like you are working with JSON";
-    homepage = https://github.com/martinblech/xmltodict;
+    homepage = "https://github.com/martinblech/xmltodict";
+    changelog = "https://github.com/martinblech/xmltodict/blob/${src.tag}/CHANGELOG.md";
     license = lib.licenses.mit;
+    maintainers = [ lib.maintainers.dotlambda ];
   };
 }

@@ -1,29 +1,91 @@
-{ stdenv, fetchurl, meson, ninja, pkgconfig
-, gst-plugins-base, gettext, gobjectIntrospection
+{
+  stdenv,
+  lib,
+  fetchurl,
+  meson,
+  ninja,
+  pkg-config,
+  python3,
+  gettext,
+  gobject-introspection,
+  gst-plugins-base,
+  gst-plugins-bad,
+  # only for passthru.gstreamerCpeParts
+  gstreamer,
+  # Checks meson.is_cross_build(), so even canExecute isn't enough.
+  enableDocumentation ? stdenv.hostPlatform == stdenv.buildPlatform,
+  hotdoc,
+  directoryListingUpdater,
+  apple-sdk_gstreamer,
 }:
 
-stdenv.mkDerivation rec {
-  name = "gst-rtsp-server-1.14.0";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "gst-rtsp-server";
+  version = "1.28.7";
 
-  meta = with stdenv.lib; {
-    description = "Gstreamer RTSP server";
-    homepage    = "https://gstreamer.freedesktop.org";
-    longDescription = ''
-      a library on top of GStreamer for building an RTSP server.
-    '';
-    license     = licenses.lgpl2Plus;
-    platforms   = platforms.linux ++ platforms.darwin;
-    maintainers = with maintainers; [ bkchr ];
-  };
+  outputs = [
+    "out"
+    "dev"
+  ];
 
   src = fetchurl {
-    url = "${meta.homepage}/src/gst-rtsp-server/${name}.tar.xz";
-    sha256 = "0mlp9ms5hfbyzyvmc9xgi7934g4zrh1sbgky2p9zc5fqprvs0rbb";
+    url = "https://gstreamer.freedesktop.org/src/gst-rtsp-server/gst-rtsp-server-${finalAttrs.version}.tar.xz";
+    hash = "sha256-3kOlmgyJoU6xwUro6B5bRcTp17H5MLDrqtNg+bXgtcQ=";
   };
 
-  outputs = [ "out" "dev" ];
+  separateDebugInfo = true;
 
-  nativeBuildInputs = [ meson ninja gettext gobjectIntrospection pkgconfig ];
+  __structuredAttrs = true;
+  strictDeps = true;
 
-  buildInputs = [ gst-plugins-base ];
-}
+  nativeBuildInputs = [
+    meson
+    ninja
+    gettext
+    gobject-introspection
+    pkg-config
+    python3
+  ]
+  ++ lib.optionals enableDocumentation [
+    hotdoc
+  ];
+
+  buildInputs = [
+    gst-plugins-base
+    gst-plugins-bad
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    apple-sdk_gstreamer
+  ];
+
+  mesonFlags = [
+    "-Dglib_debug=disabled" # cast checks should be disabled on stable releases
+    "-Dexamples=disabled" # requires many dependencies and probably not useful for our users
+    (lib.mesonEnable "doc" enableDocumentation)
+  ];
+
+  postPatch = ''
+    patchShebangs \
+      scripts/extract-release-date-from-doap-file.py
+  '';
+
+  preFixup = ''
+    moveToOutput "lib/gstreamer-1.0/pkgconfig" "$dev"
+  '';
+
+  passthru = {
+    updateScript = directoryListingUpdater { odd-unstable = true; };
+  };
+
+  meta = {
+    description = "GStreamer RTSP server";
+    homepage = "https://gstreamer.freedesktop.org";
+    longDescription = ''
+      A library on top of GStreamer for building an RTSP server.
+    '';
+    license = lib.licenses.lgpl2Plus;
+    identifiers.cpeParts = gstreamer.passthru.gstreamerCpeParts finalAttrs.version;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ bkchr ];
+  };
+})

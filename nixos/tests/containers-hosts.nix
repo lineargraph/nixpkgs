@@ -1,20 +1,21 @@
-# Test for NixOS' container support.
-
-import ./make-test.nix ({ pkgs, ...} : {
+{ pkgs, lib, ... }:
+{
   name = "containers-hosts";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ montag451 ];
+  meta = {
+    maintainers = with lib.maintainers; [ montag451 ];
   };
 
-  machine =
-    { config, pkgs, lib, ... }:
+  nodes.machine =
+    { lib, ... }:
     {
-      virtualisation.memorySize = 256;
-      virtualisation.vlans = [];
+      virtualisation.vlans = [ ];
 
-      networking.bridges.br0.interfaces = [];
+      networking.bridges.br0.interfaces = [ ];
       networking.interfaces.br0.ipv4.addresses = [
-        { address = "10.11.0.254"; prefixLength = 24; }
+        {
+          address = "10.11.0.254";
+          prefixLength = 24;
+        }
       ];
 
       # Force /etc/hosts to be the only source for host name resolution
@@ -28,7 +29,9 @@ import ./make-test.nix ({ pkgs, ...} : {
         localAddress = "10.10.0.1";
         hostAddress = "10.10.0.254";
 
-        config = {};
+        config = {
+          nix.enable = false; # disabled by default on the test's host. See all-tests.nix / tag(no-nix-by-default)
+        };
       };
 
       containers.netmask = {
@@ -37,16 +40,18 @@ import ./make-test.nix ({ pkgs, ...} : {
         hostBridge = "br0";
         localAddress = "10.11.0.1/24";
 
-        config = {};
+        config = {
+          nix.enable = false; # disabled by default on the test's host. See all-tests.nix / tag(no-nix-by-default)
+        };
       };
     };
 
   testScript = ''
-    startAll;
-    $machine->waitForUnit("default.target");
+    start_all()
+    machine.wait_for_unit("default.target")
 
-    # Ping the containers using the entries added in /etc/hosts
-    $machine->succeed("ping -n -c 1 simple.containers");
-    $machine->succeed("ping -n -c 1 netmask.containers");
+    with subtest("Ping the containers using the entries added in /etc/hosts"):
+        for host in "simple.containers", "netmask.containers":
+            machine.succeed(f"ping -n -c 1 {host}")
   '';
-})
+}

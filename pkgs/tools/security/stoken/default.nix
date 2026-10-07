@@ -1,37 +1,46 @@
-{ stdenv, fetchFromGitHub, autoconf, automake, libtool, pkgconfig
-, libxml2, nettle
-, withGTK3 ? true, gtk3 }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  autoreconfHook,
+  pkg-config,
+  libxml2,
+  nettle,
+  withGTK3 ? !stdenv.hostPlatform.isStatic,
+  gtk3,
+}:
 
 stdenv.mkDerivation rec {
   pname = "stoken";
-  version = "0.92";
-  name = "${pname}-${version}";
+  version = "0.93";
+
   src = fetchFromGitHub {
-    owner = "cernekee";
-    repo = pname;
+    owner = "stoken-dev";
+    repo = "stoken";
     rev = "v${version}";
-    sha256 = "0q7cv8vy5b2cslm57maqb6jsm7s4rwacjyv6gplwp26yhm38hw7y";
+    hash = "sha256-8N7TXdBu37eXWIKCBdaXVW0pvN094oRWrdlcy9raddI=";
   };
 
-  preConfigure = ''
-    aclocal
-    libtoolize --automake --copy
-    autoheader
-    automake --add-missing --copy
-    autoconf
-  '';
+  strictDeps = true;
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ];
+
   buildInputs = [
-    autoconf automake libtool
-    libxml2 nettle
-  ] ++ stdenv.lib.optional withGTK3 gtk3;
+    libxml2
+    nettle
+  ]
+  ++ lib.optionals withGTK3 [
+    gtk3
+  ];
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Software Token for Linux/UNIX";
-    homepage = https://github.com/cernekee/stoken;
-    license = licenses.lgpl21Plus;
-    maintainers = [ maintainers.fuuzetsu ];
-    platforms = platforms.all;
+    homepage = "https://github.com/stoken-dev/stoken";
+    license = lib.licenses.lgpl21Plus;
+    maintainers = [ ];
+    platforms = lib.platforms.all;
   };
 }

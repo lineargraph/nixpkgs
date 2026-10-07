@@ -1,33 +1,124 @@
-{ lib, stdenv, fetchurl, pkgconfig
-, libffi, docbook_xsl, doxygen, graphviz, libxslt, xmlto, libxml2
-, expat ? null # Build wayland-scanner (currently cannot be disabled as of 1.7.0)
+{
+  lib,
+  stdenv,
+  fetchurl,
+  meson,
+  mdbook,
+  pkg-config,
+  ninja,
+  wayland-scanner,
+  withTests ? stdenv.hostPlatform.isLinux,
+  libffi,
+  epoll-shim,
+  withDocumentation ? stdenv.hostPlatform == stdenv.buildPlatform,
+  graphviz-nox,
+  doxygen,
+  libxslt,
+  xmlto,
+  python3,
+  docbook_xsl,
+  docbook_xml_dtd_45,
+  docbook_xml_dtd_42,
+  testers,
 }:
 
-# Require the optional to be enabled until upstream fixes or removes the configure flag
-assert expat != null;
-
-stdenv.mkDerivation rec {
-  name = "wayland-${version}";
-  version = "1.15.0";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "wayland";
+  version = "1.26.0";
 
   src = fetchurl {
-    url = "https://wayland.freedesktop.org/releases/${name}.tar.xz";
-    sha256 = "1c5fnys8hi71cnzjv5k7j0r8gx80p0yyqlrpmn06mmarhnxvwgzb";
+    url =
+      with finalAttrs;
+      "https://gitlab.freedesktop.org/wayland/wayland/-/releases/${version}/downloads/${pname}-${version}.tar.xz";
+    hash = "sha256-ZBduqkbklpkD4ob45e+DMa/8F/3wOsm1g4HSsjFit6M=";
   };
 
-  configureFlags = [ "--with-scanner" "--disable-documentation" ];
+  postPatch = lib.optionalString withDocumentation ''
+    patchShebangs doc/doxygen/gen-doxygen.py
+  '';
 
-  nativeBuildInputs = [ pkgconfig ];
+  outputs = [
+    "out"
+    "dev"
+  ]
+  ++ lib.optionals withDocumentation [
+    "doc"
+    "man"
+  ];
+  separateDebugInfo = true;
 
-  buildInputs = [ libffi /* docbook_xsl doxygen graphviz libxslt xmlto */ expat libxml2 ];
+  mesonFlags = [
+    (lib.mesonBool "documentation" withDocumentation)
+    (lib.mesonBool "tests" withTests)
+    (lib.mesonBool "scanner" false) # wayland-scanner is a separate derivation
+  ];
+
+  depsBuildBuild = [
+    pkg-config
+  ];
+
+  nativeBuildInputs = [
+    meson
+    pkg-config
+    ninja
+    wayland-scanner
+  ]
+  ++ lib.optionals withDocumentation [
+    (graphviz-nox.override { pango = null; }) # To avoid an infinite recursion
+    doxygen
+    libxslt
+    xmlto
+    python3
+    mdbook
+    docbook_xml_dtd_45
+    docbook_xsl
+  ];
+
+  buildInputs = [
+    libffi
+  ]
+  ++ lib.optionals (!stdenv.hostPlatform.isLinux) [
+    epoll-shim
+  ]
+  ++ lib.optionals withDocumentation [
+    docbook_xsl
+    docbook_xml_dtd_45
+    docbook_xml_dtd_42
+  ];
+
+  passthru = {
+    tests.pkg-config = testers.hasPkgConfigModules {
+      package = finalAttrs.finalPackage;
+    };
+  };
 
   meta = {
-    description = "Reference implementation of the wayland protocol";
-    homepage    = https://wayland.freedesktop.org/;
-    license     = lib.licenses.mit;
-    platforms   = lib.platforms.linux;
-    maintainers = with lib.maintainers; [ codyopel wkennington ];
+    description = "Core Wayland window system code and protocol";
+    longDescription = ''
+      Wayland is a project to define a protocol for a compositor to talk to its
+      clients as well as a library implementation of the protocol.
+      The wayland protocol is essentially only about input handling and buffer
+      management, but also handles drag and drop, selections, window management
+      and other interactions that must go through the compositor (but not
+      rendering).
+    '';
+    homepage = "https://wayland.freedesktop.org/";
+    license = lib.licenses.mit; # Expat version
+    platforms = lib.platforms.unix;
+    # Builds with a large downstream patch, but breaks at least the
+    # `qt6Packages.qtbase` build. Please audit Wayland availability
+    # checks throughout the tree before enabling (and work with
+    # upstream if you want sustainable Wayland support on macOS).
+    badPlatforms = lib.platforms.darwin;
+    maintainers = with lib.maintainers; [
+      qyliss
+    ];
+    pkgConfigModules = [
+      "wayland-client"
+      "wayland-cursor"
+      "wayland-egl"
+      "wayland-egl-backend"
+      "wayland-server"
+    ];
   };
-
-  passthru.version = version;
-}
+})

@@ -1,38 +1,73 @@
-{ stdenv, fetchurl, bash, autoconf, automake, libtool, pkgconfig, libcangjie
-, sqlite, buildPythonPackage, cython
+{
+  lib,
+  fetchFromGitLab,
+  pkg-config,
+  libcangjie,
+  sqlite,
+  buildPythonPackage,
+  cython,
+  meson,
+  ninja,
+  cmake,
 }:
 
-let
-  rev = "361bb413203fd43bab624d98edf6f7d20ce6bfd3";
-in buildPythonPackage rec {
+buildPythonPackage rec {
   pname = "pycangjie";
-  version = "1.3_rev_${rev}";
-  format = "other";
+  version = "1.5.0";
 
-  src = fetchurl {
-    url = "https://github.com/Cangjians/pycangjie/archive/${rev}.tar.gz";
-    sha256 = "12yi09nyffmn4va7lzk4irw349qzlbxgsnb89dh15cnw0xmrin05";
+  pyproject = false;
+
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = "cangjie";
+    repo = "pycangjie";
+    rev = version;
+    hash = "sha256-REWX6u3Rc72+e5lIImBwV5uFoBBUTMM5BOfYdKIFL4k=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [
-    autoconf automake libtool libcangjie sqlite cython
-  ];
-
-  preConfigure = ''
-    find . -name '*.sh' -exec sed -e 's@#!/bin/bash@${bash}/bin/bash@' -i '{}' ';'
-    sed -i 's@/usr@${libcangjie}@' tests/__init__.py
+  # `find_installation()` without the `name_or_path` argument uses the
+  # Python interpreter that Meson was built with, which may not be the
+  # one we're using to build pycangjie.
+  # https://mesonbuild.com/Python-module.html#find_installation
+  postPatch = ''
+    substituteInPlace meson.build \
+      --replace-fail \
+        "import('python').find_installation()" \
+        "import('python').find_installation('python3')"
   '';
 
-  configureScript = "./autogen.sh";
+  preConfigure = ''
+    (
+      cd subprojects
+      set -x
+      cp -R --no-preserve=mode,ownership ${libcangjie.src} libcangjie
+    )
+  '';
 
-  doCheck = true;
+  nativeBuildInputs = [
+    pkg-config
+    meson
+    ninja
+    cython
+    cmake
+  ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    sqlite
+  ];
+
+  pythonImportsCheck = [ "cangjie" ];
+
+  # `buildPythonApplication` skips checkPhase
+  postInstallCheck = ''
+    mesonCheckPhase
+  '';
+
+  meta = {
     description = "Python wrapper to libcangjie";
-    homepage = http://cangjians.github.io/projects/pycangjie/;
-    license = licenses.lgpl3Plus;
-    maintainers = [ maintainers.linquize ];
-    platforms = platforms.all;
+    homepage = "https://cangjians.github.io/projects/pycangjie/";
+    license = lib.licenses.lgpl3Plus;
+    maintainers = [ ];
+    platforms = lib.platforms.all;
   };
 }

@@ -1,7 +1,9 @@
-{ config, pkgs, lib, ... }:
-
-with lib;
-
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 let
 
   cfg = config.services.yandex-disk;
@@ -20,44 +22,47 @@ in
 
     services.yandex-disk = {
 
-      enable = mkOption {
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
-        description = "
-          Whether to enable Yandex-disk client. See https://disk.yandex.ru/
-        ";
+        description = ''
+          Whether to enable Yandex-disk client. See <https://disk.yandex.ru/>
+        '';
       };
 
-      username = mkOption {
+      username = lib.mkOption {
         default = "";
-        type = types.string;
+        type = lib.types.str;
         description = ''
           Your yandex.com login name.
         '';
       };
 
-      password = mkOption {
+      password = lib.mkOption {
         default = "";
-        type = types.string;
+        type = lib.types.str;
         description = ''
           Your yandex.com password. Warning: it will be world-readable in /nix/store.
         '';
       };
 
-      user = mkOption {
+      user = lib.mkOption {
         default = null;
+        type = lib.types.nullOr lib.types.str;
         description = ''
           The user the yandex-disk daemon should run as.
         '';
       };
 
-      directory = mkOption {
+      directory = lib.mkOption {
+        type = lib.types.path;
         default = "/home/Yandex.Disk";
         description = "The directory to use for Yandex.Disk storage";
       };
 
-      excludes = mkOption {
+      excludes = lib.mkOption {
         default = "";
-        type = types.string;
+        type = lib.types.commas;
         example = "data,backup";
         description = ''
           Comma-separated list of directories which are excluded from synchronization.
@@ -68,17 +73,18 @@ in
 
   };
 
-
   ###### implementation
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
 
-    users.extraUsers = mkIf (cfg.user == null) [ {
-      name = u;
-      uid = config.ids.uids.yandexdisk;
-      group = "nogroup";
-      home = dir;
-    } ];
+    users.users = lib.mkIf (cfg.user == null) [
+      {
+        name = u;
+        uid = config.ids.uids.yandexdisk;
+        group = "nogroup";
+        home = dir;
+      }
+    ];
 
     systemd.services.yandex-disk = {
       description = "Yandex-disk server";
@@ -110,4 +116,3 @@ in
   };
 
 }
-

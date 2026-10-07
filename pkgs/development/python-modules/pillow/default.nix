@@ -1,76 +1,155 @@
-{ stdenv, buildPythonPackage, fetchPypi, isPyPy
-, olefile
-, freetype, libjpeg, zlib, libtiff, libwebp, tcl, lcms2, tk, libX11
-, pytestrunner
-, pytest
-}:
-buildPythonPackage rec {
-  pname = "Pillow";
-  version = "5.1.0";
-  name = "${pname}-${version}";
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "cee9bc75bff455d317b6947081df0824a8f118de2786dc3d74a3503fd631f4ef";
+  # build-system
+  setuptools,
+  pkg-config,
+  pybind11,
+
+  # native dependencies
+  freetype,
+  lcms2,
+  libavif,
+  libimagequant,
+  libjpeg,
+  libraqm,
+  libtiff,
+  libwebp,
+  libxcb,
+  openjpeg,
+  zlib-ng,
+
+  # optional dependencies
+  defusedxml,
+  olefile,
+
+  # tests
+  numpy,
+  pytest-cov-stub,
+  pytestCheckHook,
+
+  # for passthru.tests
+  imageio,
+  matplotlib,
+  pilkit,
+  pydicom,
+  reportlab,
+  sage,
+}:
+
+buildPythonPackage rec {
+  pname = "pillow";
+  version = "12.3.0";
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "python-pillow";
+    repo = "pillow";
+    tag = version;
+    hash = "sha256-kmUlgR+f75Y8DAKKPdEbchLLgg0m95oyVP53WTQni88=";
   };
 
-  doCheck = !stdenv.isDarwin && !isPyPy;
+  build-system = [
+    setuptools
+    pybind11
+  ];
 
-  # Disable imagefont tests, because they don't work well with infinality:
-  # https://github.com/python-pillow/Pillow/issues/1259
-  postPatch = ''
-    rm Tests/test_imagefont.py
-  '';
+  nativeBuildInputs = [ pkg-config ];
 
-  propagatedBuildInputs = [ olefile ];
-
-  checkInputs = [ pytest pytestrunner ];
-
+  # https://pillow.readthedocs.io/en/latest/installation/building-from-source.html#building-from-source
   buildInputs = [
-    freetype libjpeg zlib libtiff libwebp tcl lcms2 ]
-    ++ stdenv.lib.optionals (isPyPy) [ tk libX11 ];
+    freetype
+    lcms2
+    libavif
+    libimagequant
+    libjpeg
+    libraqm
+    libtiff
+    libwebp
+    libxcb
+    openjpeg
+    zlib-ng
+  ];
 
-  # NOTE: we use LCMS_ROOT as WEBP root since there is not other setting for webp.
-  # NOTE: The Pillow install script will, by default, add paths like /usr/lib
-  # and /usr/include to the search paths. This can break things when building
-  # on a non-NixOS system that has some libraries installed that are not
-  # installed in Nix (for example, Arch Linux has jpeg2000 but Nix doesn't
-  # build Pillow with this support). We patch the `disable_platform_guessing`
-  # setting here, instead of passing the `--disable-platform-guessing`
-  # command-line option, since the command-line option doesn't work when we run
-  # tests.
-  preConfigure = let
-    libinclude' = pkg: ''"${pkg.out}/lib", "${pkg.out}/include"'';
-    libinclude = pkg: ''"${pkg.out}/lib", "${pkg.dev}/include"'';
-  in ''
-    sed -i "setup.py" \
-        -e 's|^FREETYPE_ROOT =.*$|FREETYPE_ROOT = ${libinclude freetype}|g ;
-            s|^JPEG_ROOT =.*$|JPEG_ROOT = ${libinclude libjpeg}|g ;
-            s|^ZLIB_ROOT =.*$|ZLIB_ROOT = ${libinclude zlib}|g ;
-            s|^LCMS_ROOT =.*$|LCMS_ROOT = ${libinclude lcms2}|g ;
-            s|^TIFF_ROOT =.*$|TIFF_ROOT = ${libinclude libtiff}|g ;
-            s|^TCL_ROOT=.*$|TCL_ROOT = ${libinclude' tcl}|g ;
-            s|self\.disable_platform_guessing = None|self.disable_platform_guessing = True|g ;'
-    export LDFLAGS="-L${libwebp}/lib"
-    export CFLAGS="-I${libwebp}/include"
-  ''
-  # Remove impurities
-  + stdenv.lib.optionalString stdenv.isDarwin ''
-    substituteInPlace setup.py \
-      --replace '"/Library/Frameworks",' "" \
-      --replace '"/System/Library/Frameworks"' ""
-  '';
+  pypaBuildFlags = [
+    # Disable platform guessing, which tries various FHS paths
+    "--config-setting=--disable-platform-guessing"
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://python-pillow.github.io/;
-    description = "Fork of The Python Imaging Library (PIL)";
+  preConfigure =
+    let
+      getLibAndInclude = pkg: ''"${pkg.out}/lib", "${lib.getDev pkg}/include"'';
+    in
+    ''
+      # The build process fails to find the pkg-config files for these dependencies
+      substituteInPlace setup.py \
+        --replace-fail 'AVIF_ROOT = None' 'AVIF_ROOT = ${getLibAndInclude libavif}' \
+        --replace-fail 'IMAGEQUANT_ROOT = None' 'IMAGEQUANT_ROOT = ${getLibAndInclude libimagequant}' \
+        --replace-fail 'JPEG2K_ROOT = None' 'JPEG2K_ROOT = ${getLibAndInclude openjpeg}'
+
+      # Build with X11 support
+      export LDFLAGS="$LDFLAGS -L${libxcb}/lib"
+      export CFLAGS="$CFLAGS -I${libxcb.dev}/include"
+    '';
+
+  optional-dependencies = {
+    fpx = [ olefile ];
+    mic = [ olefile ];
+    xmp = [ defusedxml ];
+  };
+
+  nativeCheckInputs = [
+    pytest-cov-stub
+    pytestCheckHook
+    numpy
+  ]
+  ++ lib.concatAttrValues optional-dependencies;
+
+  disabledTests = [
+    # Code quality mismathch 9 vs 10
+    "test_pyroma"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    # Disable darwin tests which require executables: `iconutil` and `screencapture`
+    "test_grab"
+    "test_grabclipboard"
+    "test_save"
+  ];
+
+  disabledTestPaths = lib.optionals stdenv.hostPlatform.isDarwin [
+    # Crashes the interpreter
+    "Tests/test_imagetk.py"
+
+    # Checks for very precise color values on what's basically white
+    "Tests/test_file_avif.py::TestFileAvif::test_background_from_gif"
+  ];
+
+  passthru.tests = {
+    inherit
+      imageio
+      matplotlib
+      pilkit
+      pydicom
+      reportlab
+      sage
+      ;
+  };
+
+  meta = {
+    homepage = "https://python-pillow.github.io/";
+    changelog = "https://pillow.readthedocs.io/en/stable/releasenotes/${version}.html";
+    description = "Friendly PIL fork (Python Imaging Library)";
     longDescription = ''
       The Python Imaging Library (PIL) adds image processing
       capabilities to your Python interpreter.  This library
       supports many file formats, and provides powerful image
       processing and graphics capabilities.
     '';
-    license = "http://www.pythonware.com/products/pil/license.htm";
-    maintainers = with maintainers; [ goibhniu prikhi ];
+    license = lib.licenses.mit-cmu;
+    maintainers = with lib.maintainers; [ hexa ];
   };
+
 }

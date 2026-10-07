@@ -1,25 +1,32 @@
-{ stdenv, fetchzip, ocaml, findlib, ocamlbuild, ipaddr }:
+{
+  lib,
+  buildDunePackage,
+  fetchurl,
+  ipaddr,
+  macaddr,
+}:
 
-assert stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "4.01";
+buildDunePackage (finalAttrs: {
+  pname = "tuntap";
+  version = "2.0.2";
 
-stdenv.mkDerivation {
-  name = "ocaml-tuntap-1.3.0";
-
-  src = fetchzip {
-    url = https://github.com/mirage/ocaml-tuntap/archive/v1.3.0.tar.gz;
-    sha256 = "1cmd4kky875ks02gm2nb8yr80hmlfcnjdfyc63hvkh49acssy3d5";
+  src = fetchurl {
+    url = "https://github.com/mirage/ocaml-tuntap/releases/download/v${finalAttrs.version}/tuntap-${finalAttrs.version}.tbz";
+    hash = "sha256-DfztWPkNhdSIX/TaldCoNhAA/AZwQDqCdRmDOyOORu0=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild ];
-  propagatedBuildInputs = [ ipaddr ];
+  propagatedBuildInputs = [
+    ipaddr
+    macaddr
+  ];
 
-  createFindlibDestdir = true;
+  # tests manipulate network devices and use network
+  # also depend on LWT 5
+  doCheck = false;
 
   meta = {
     description = "Bindings to the UNIX tuntap facility";
-    license = stdenv.lib.licenses.isc;
-    homepage = https://github.com/mirage/ocaml-tuntap;
-    inherit (ocaml.meta) platforms;
+    homepage = "https://github.com/mirage/ocaml-tuntap";
+    license = lib.licenses.isc;
   };
-
-}
+})

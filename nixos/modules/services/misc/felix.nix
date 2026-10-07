@@ -1,8 +1,10 @@
 # Felix server
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.felix;
@@ -17,24 +19,23 @@ in
 
     services.felix = {
 
-      enable = mkOption {
-        default = false;
-        description = "Whether to enable the Apache Felix OSGi service";
-      };
+      enable = lib.mkEnableOption "the Apache Felix OSGi service";
 
-      bundles = mkOption {
-        type = types.listOf types.package;
+      bundles = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
         default = [ pkgs.felix_remoteshell ];
-        defaultText = "[ pkgs.felix_remoteshell ]";
+        defaultText = lib.literalExpression "[ pkgs.felix_remoteshell ]";
         description = "List of bundles that should be activated on startup";
       };
 
-      user = mkOption {
+      user = lib.mkOption {
+        type = lib.types.str;
         default = "osgi";
         description = "User account under which Apache Felix runs.";
       };
 
-      group = mkOption {
+      group = lib.mkOption {
+        type = lib.types.str;
         default = "osgi";
         description = "Group account under which Apache Felix runs.";
       };
@@ -43,21 +44,16 @@ in
 
   };
 
-
   ###### implementation
 
-  config = mkIf cfg.enable {
-    users.extraGroups = singleton
-      { name = "osgi";
-        gid = config.ids.gids.osgi;
-      };
+  config = lib.mkIf cfg.enable {
+    users.groups.osgi.gid = config.ids.gids.osgi;
 
-    users.extraUsers = singleton
-      { name = "osgi";
-        uid = config.ids.uids.osgi;
-        description = "OSGi user";
-        home = "/homeless-shelter";
-      };
+    users.users.osgi = {
+      uid = config.ids.uids.osgi;
+      description = "OSGi user";
+      home = "/homeless-shelter";
+    };
 
     systemd.services.felix = {
       description = "Felix server";

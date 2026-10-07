@@ -1,66 +1,123 @@
-{ stdenv, fetchzip, makeWrapper, jre, pythonPackages, coreutils, hadoop
-, RSupport? true, R
-, mesosSupport ? true, mesos
-, version
+{
+  lib,
+  stdenv,
+  fetchzip,
+  makeWrapper,
+  python3,
+  hadoop,
+  RSupport ? true,
+  R,
+  nixosTests,
+  # needed in situations where hadoop's jdk version is too old
+  jdk21_headless,
 }:
 
 let
-  sha256 = {
-    "1.6.3" = "142hw73wf20d846l83ydx0yg7qj5qxywm4h7qrhwnd7lsy2sbnjf";
-    "2.2.1" = "10nxsf9a6hj1263sxv0cbdqxdb8mb4cl6iqq32ljq9ydvk32s99c";
-  }.${version};
+  spark =
+    {
+      pname,
+      version,
+      hash,
+      extraMeta ? { },
+      pysparkPython ? python3,
+    }:
+    stdenv.mkDerivation (finalAttrs: {
+      inherit
+        pname
+        version
+        hash
+        hadoop
+        R
+        pysparkPython
+        ;
+      jdk =
+        if
+          (
+            (lib.versionAtLeast finalAttrs.version "4") && (lib.versionOlder finalAttrs.hadoop.jdk.version "21")
+          )
+        then
+          jdk21_headless
+        else
+          finalAttrs.hadoop.jdk;
+      src = fetchzip {
+        url =
+
+          "mirror://apache/spark/${pname}-${version}/${pname}-${version}-bin-without-hadoop.tgz";
+        inherit (finalAttrs) hash;
+      };
+      nativeBuildInputs = [ makeWrapper ];
+      buildInputs =
+        with finalAttrs;
+        [
+          jdk
+          pysparkPython
+        ]
+        ++ lib.optional RSupport finalAttrs.R;
+
+      installPhase = ''
+        mkdir -p "$out/opt"
+        mv * $out/
+        for n in $(find $out/bin -type f -executable ! -name "find-spark-home"); do
+          wrapProgram "$n" --set JAVA_HOME "${finalAttrs.jdk}" \
+            --run "[ -z $SPARK_DIST_CLASSPATH ] && export SPARK_DIST_CLASSPATH=$(${finalAttrs.hadoop}/bin/hadoop classpath)" \
+            ${lib.optionalString RSupport ''--set SPARKR_R_SHELL "${finalAttrs.R}/bin/R"''} \
+            --prefix PATH : "${
+              lib.makeBinPath ([ finalAttrs.pysparkPython ] ++ (lib.optionals RSupport [ finalAttrs.R ]))
+            }"
+        done
+        ln -s ${finalAttrs.hadoop} "$out/opt/hadoop"
+        ${lib.optionalString RSupport ''ln -s ${finalAttrs.R} "$out/opt/R"''}
+      '';
+
+      passthru = {
+        tests = nixosTests.spark.default.passthru.override {
+          sparkPackage = finalAttrs.finalPackage;
+        };
+        # Add python packages to PYSPARK_PYTHON
+        withPythonPackages =
+          f:
+          finalAttrs.finalPackage.overrideAttrs (old: {
+            pysparkPython = old.pysparkPython.withPackages f;
+          });
+      };
+
+      meta = {
+        description = "Apache Spark is a fast and general engine for large-scale data processing";
+        homepage = "https://spark.apache.org/";
+        sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
+        license = lib.licenses.asl20;
+        platforms = lib.platforms.all;
+        maintainers = with lib.maintainers; [
+          thoughtpolice
+          kamilchm
+          illustris
+        ];
+      }
+      // extraMeta;
+    });
 in
-
-with stdenv.lib;
-
-stdenv.mkDerivation rec {
-
-  name = "spark-${version}";
-
-  src = fetchzip {
-    inherit sha256;
-    url    = "mirror://apache/spark/${name}/${name}-bin-without-hadoop.tgz";
+{
+  # A note on EOL and removing old versions:
+  # According to spark's versioning policy (https://spark.apache.org/versioning-policy.html),
+  # minor releases are generally maintained with bugfixes for 18 months. But it doesn't
+  # make sense to remove a given minor version the moment it crosses this threshold.
+  # For example, spark 3.3.0 was released on 2022-06-09. It would have to be removed on 2023-12-09 if
+  # we strictly adhere to the EOL timeline, despite 3.3.4 being released one day before (2023-12-08).
+  # A better policy is to keep these versions around, and clean up EOL versions just before
+  # a new NixOS release.
+  spark_4_0 = spark {
+    pname = "spark";
+    version = "4.0.1";
+    hash = "sha256-AW+EQ83b4orJO3+dUPPDlTRAH/D94U7KQBKvKjguChY=";
   };
-
-  buildInputs = [ makeWrapper jre pythonPackages.python pythonPackages.numpy ]
-    ++ optional RSupport R
-    ++ optional mesosSupport mesos;
-
-  untarDir = "${name}-bin-without-hadoop";
-  installPhase = ''
-    mkdir -p $out/{lib/${untarDir}/conf,bin,/share/java}
-    mv * $out/lib/${untarDir}
-
-    sed -e 's/INFO, console/WARN, console/' < \
-       $out/lib/${untarDir}/conf/log4j.properties.template > \
-       $out/lib/${untarDir}/conf/log4j.properties
-
-    cat > $out/lib/${untarDir}/conf/spark-env.sh <<- EOF
-    export JAVA_HOME="${jre}"
-    export SPARK_HOME="$out/lib/${untarDir}"
-    export SPARK_DIST_CLASSPATH=$(${hadoop}/bin/hadoop classpath)
-    export PYSPARK_PYTHON="${pythonPackages.python}/bin/${pythonPackages.python.executable}"
-    export PYTHONPATH="\$PYTHONPATH:$PYTHONPATH"
-    ${optionalString RSupport
-      ''export SPARKR_R_SHELL="${R}/bin/R"
-        export PATH=$PATH:"${R}/bin/R"''}
-    ${optionalString mesosSupport
-      ''export MESOS_NATIVE_LIBRARY="$MESOS_NATIVE_LIBRARY"''}
-    EOF
-
-    for n in $(find $out/lib/${untarDir}/bin -type f ! -name "*.*"); do
-      makeWrapper "$n" "$out/bin/$(basename $n)"
-      substituteInPlace "$n" --replace dirname ${coreutils.out}/bin/dirname
-    done
-    ln -s $out/lib/${untarDir}/lib/spark-assembly-*.jar $out/share/java
-  '';
-
-  meta = {
-    description      = "Apache Spark is a fast and general engine for large-scale data processing";
-    homepage         = "http://spark.apache.org";
-    license          = stdenv.lib.licenses.asl20;
-    platforms        = stdenv.lib.platforms.all;
-    maintainers      = with maintainers; [ thoughtpolice offline kamilchm ];
-    repositories.git = git://git.apache.org/spark.git;
+  spark_3_5 = spark {
+    pname = "spark";
+    version = "3.5.5";
+    hash = "sha256-vzcWgIfHPhN3nyrxdk3f0p4fW3MpQ+FuEPnWPw0xNPg=";
+  };
+  spark_3_4 = spark {
+    pname = "spark";
+    version = "3.4.4";
+    hash = "sha256-GItHmthLhG7y0XSF3QINCyE7wYFb0+lPZmYLUuMa4Ww=";
   };
 }

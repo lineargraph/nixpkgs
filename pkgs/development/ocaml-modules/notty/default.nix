@@ -1,40 +1,41 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg, ocb-stubblr
-, result, uucp, uuseg, uutf
-, lwt     ? null }:
+{
+  lib,
+  buildDunePackage,
+  fetchurl,
+  fetchpatch,
+  cppo,
+  uutf,
+  lwt,
+}:
 
-with stdenv.lib;
+buildDunePackage (finalAttrs: {
+  version = "0.2.3";
+  pname = "notty";
 
-if !versionAtLeast ocaml.version "4.03"
-then throw "notty is not available for OCaml ${ocaml.version}"
-else
-
-let withLwt = lwt != null; in
-
-stdenv.mkDerivation rec {
-  version = "0.2.1";
-  name = "ocaml${ocaml.version}-notty-${version}";
+  minimalOCamlVersion = "4.08";
 
   src = fetchurl {
-    url = "https://github.com/pqwy/notty/releases/download/v${version}/notty-${version}.tbz";
-    sha256 = "0wdfmgx1mz77s7m451vy8r9i4iqwn7s7b39kpbpckf3w9417riq0";
+    url = "https://github.com/pqwy/notty/releases/download/v${finalAttrs.version}/notty-${finalAttrs.version}.tbz";
+    sha256 = "sha256-dGWfsUBz20Q4mJiRqyTyS++Bqkl9rBbZpn+aHJwgCCQ=";
   };
 
-  unpackCmd = "tar -xjf $curSrc";
+  # Compatibility with OCaml 5.4
+  patches = fetchpatch {
+    url = "https://github.com/pqwy/notty/commit/a4d62f467e257196a5192da2184bd021dfd948b7.patch";
+    hash = "sha256-p1eUuCvQKLj8uBeGyT2+i9WOYy4rk84pf9L3QioJDNY=";
+  };
 
-  buildInputs = [ ocaml findlib ocamlbuild topkg ocb-stubblr ];
-  propagatedBuildInputs = [ result uucp uuseg uutf ] ++
-                          optional withLwt lwt;
+  nativeBuildInputs = [ cppo ];
 
-  buildPhase = topkg.buildPhase
-  + " --with-lwt ${boolToString withLwt}";
-
-  inherit (topkg) installPhase;
+  propagatedBuildInputs = [
+    lwt
+    uutf
+  ];
 
   meta = {
     homepage = "https://github.com/pqwy/notty";
-    inherit (ocaml.meta) platforms;
     description = "Declarative terminal graphics for OCaml";
-    license = licenses.isc;
-    maintainers = with maintainers; [ sternenseemann ];
+    license = lib.licenses.isc;
+    maintainers = with lib.maintainers; [ sternenseemann ];
   };
-}
+})

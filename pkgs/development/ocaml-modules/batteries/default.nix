@@ -1,39 +1,47 @@
-{ stdenv, fetchzip, ocaml, findlib, ocamlbuild, qtest, num }:
+{
+  lib,
+  fetchFromGitHub,
+  buildDunePackage,
+  ounit,
+  qtest,
+  qcheck,
+  num,
+  camlp-streams,
+  doCheck ? true,
+}:
 
-let version = "2.8.0"; in
+buildDunePackage (finalAttrs: {
+  pname = "batteries";
+  version = "3.11.0";
 
-stdenv.mkDerivation {
-  name = "ocaml${ocaml.version}-batteries-${version}";
-
-  src = fetchzip {
-    url = "https://github.com/ocaml-batteries-team/batteries-included/archive/v${version}.tar.gz";
-    sha256 = "1cvgljg8lxvfx0v3367z3p43dysg9m33v8gfy43bhw7fjr1bmyas";
+  src = fetchFromGitHub {
+    owner = "ocaml-batteries-team";
+    repo = "batteries-included";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-RFozhk/kGgBg/2WnTYCNwi+kZwJ+l5o7z0YVons5yyw=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild qtest ];
-  propagatedBuildInputs = [ num ];
+  nativeCheckInputs = [ qtest ];
+  checkInputs = [
+    ounit
+    qcheck
+  ];
+  propagatedBuildInputs = [
+    camlp-streams
+    num
+  ];
 
-  configurePhase = if num != null then ''
-    export CAML_LD_LIBRARY_PATH="''${CAML_LD_LIBRARY_PATH}''${CAML_LD_LIBRARY_PATH:+:}${num}/lib/ocaml/${ocaml.version}/site-lib/stublibs/"
-  '' else "true";      # Skip configure
-
-  doCheck = true;
-  checkTarget = "test test";
-
-  createFindlibDestdir = true;
+  inherit doCheck;
+  checkTarget = "test";
 
   meta = {
-    homepage = http://batteries.forge.ocamlcore.org/;
+    homepage = "https://ocaml-batteries-team.github.io/batteries-included/hdoc2/";
     description = "OCaml Batteries Included";
     longDescription = ''
       A community-driven effort to standardize on an consistent, documented,
       and comprehensive development platform for the OCaml programming
       language.
     '';
-    license = stdenv.lib.licenses.lgpl21Plus;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = [
-      stdenv.lib.maintainers.z77z
-    ];
+    license = lib.licenses.lgpl21Plus;
   };
-}
+})

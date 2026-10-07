@@ -1,24 +1,39 @@
-{ stdenv, fetchFromGitHub, pythonPackages, mopidy }:
+{
+  lib,
+  fetchFromGitHub,
+  pythonPackages,
+  mopidy,
+}:
 
-pythonPackages.buildPythonApplication rec {
-  name = "mopidy-soundcloud-${version}";
-
-  version = "2.0.2";
+pythonPackages.buildPythonApplication (finalAttrs: {
+  pname = "mopidy-soundcloud";
+  version = "3.0.2";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "mopidy";
     repo = "mopidy-soundcloud";
-    rev = "v${version}";
-    sha256 = "13n44975n1wwcf7qg1c7drc2bavhjnr9hnq1v0n5hdgyx8ji67gi";
+    tag = "v${finalAttrs.version}";
+    sha256 = "sha256-1Qqbfw6NZ+2K1w+abMBfWo0RAmIRbNyIErEmalmWJ0s=";
   };
 
-  propagatedBuildInputs = [ mopidy ];
+  build-system = [
+    pythonPackages.setuptools
+  ];
+
+  dependencies = [
+    mopidy
+    pythonPackages.beautifulsoup4
+  ];
 
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "mopidy_soundcloud" ];
+
+  meta = {
     description = "Mopidy extension for playing music from SoundCloud";
-    license = licenses.mit;
-    maintainers = [ maintainers.spwhitt ];
+    homepage = "https://github.com/mopidy/mopidy-soundcloud";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
-}
+})

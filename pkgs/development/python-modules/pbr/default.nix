@@ -1,21 +1,43 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  callPackage,
+  distutils,
+  fetchPypi,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "pbr";
-  version = "4.0.3";
-  name = "${pname}-${version}";
+  version = "7.1.2";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "6874feb22334a1e9a515193cba797664e940b763440c88115009ec323a7f2df5";
+    hash = "sha256-Rjm4fMkdDVhHG3vaHyi30ISbpD15NcTEgvPHT+9xmAQ=";
   };
 
-  # circular dependencies with fixtures
+  build-system = [ setuptools ];
+
+  dependencies = [
+    distutils # for distutils.command in pbr/packaging.py
+    setuptools
+  ];
+
+  # check in passthru.tests.pytest to escape infinite recursion with fixtures
   doCheck = false;
 
+  passthru.tests = {
+    tests = callPackage ./tests.nix { };
+  };
+
+  pythonImportsCheck = [ "pbr" ];
+
   meta = {
-    homepage = http://docs.openstack.org/developer/pbr/;
-    license = stdenv.lib.licenses.asl20;
     description = "Python Build Reasonableness";
+    mainProgram = "pbr";
+    homepage = "https://github.com/openstack/pbr";
+    license = lib.licenses.asl20;
+    teams = [ lib.teams.openstack ];
   };
 }

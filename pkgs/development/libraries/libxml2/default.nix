@@ -1,71 +1,72 @@
-{ stdenv, lib, fetchurl, fetchpatch
-, zlib, xz, python2, findXMLCatalogs, libiconv
-, buildPlatform, hostPlatform
-, pythonSupport ? buildPlatform == hostPlatform
-, icuSupport ? false, icu ? null
+{
+  lib,
+  callPackage,
+  fetchFromGitLab,
+  fetchpatch,
 }:
 
 let
-  python = python2;
+  packages = {
+    libxml2_13 = callPackage ./common.nix {
+      version = "2.13.9";
+      src = fetchFromGitLab {
+        domain = "gitlab.gnome.org";
+        owner = "GNOME";
+        repo = "libxml2";
+        tag = "v${packages.libxml2_13.version}";
+        hash = "sha256-1qrgoMu702MglErNH9N2eCWFqxQnNHepR13m53GJb58=";
+      };
+      extraPatches = [
+        # Unmerged ABI-breaking patch required to fix the following security issues:
+        # - https://gitlab.gnome.org/GNOME/libxslt/-/issues/139
+        # - https://gitlab.gnome.org/GNOME/libxslt/-/issues/140
+        # See also https://gitlab.gnome.org/GNOME/libxml2/-/issues/906
+        # Source: https://github.com/chromium/chromium/blob/4fb4ae8ce3daa399c3d8ca67f2dfb9deffcc7007/third_party/libxml/chromium/xml-attr-extra.patch
+        ./xml-attr-extra.patch
 
-in stdenv.mkDerivation rec {
-  name = "libxml2-${version}";
-  version = "2.9.8";
+        (fetchpatch {
+          name = "CVE-2026-0990.patch";
+          url = "https://gitlab.gnome.org/GNOME/libxml2/-/commit/1961208e958ca22f80a0b4e4c9d71cfa050aa982.patch";
+          hash = "sha256-Df2WLCTsP/ItSzgnVkNjRpLKkBP4xUOXEfCUV9o/Yks=";
+        })
 
-  src = fetchurl {
-    url = "http://xmlsoft.org/sources/${name}.tar.gz";
-    sha256 = "0ci7is75bwqqw2p32vxvrk6ds51ik7qgx73m920rakv5jlayax0b";
+        # Based on https://gitlab.gnome.org/GNOME/libxml2/-/commit/f75abfcaa419a740a3191e56c60400f3ff18988d
+        # Vendored, because there is no xmlCatalogPrintDebug in 2.13.9, use fprintf instead
+        ./2.13-CVE-2026-0992.patch
+
+        # Based on https://gitlab.gnome.org/GNOME/libxml2/-/commit/19549c61590c1873468c53e0026a2fbffae428ef.patch
+        # There are only whitespace differences from upstream.
+        ./2.13-CVE-2026-0989.patch
+
+        (fetchpatch {
+          name = "CVE-2026-11979.patch";
+          url = "https://gitlab.gnome.org/GNOME/libxml2/-/commit/c2e233fc1b341685fc99621b2768b503f777a72e.patch";
+          hash = "sha256-DcPZl6rOuP6aycK+1EHUgPX4YWDAH+ctAZtOI48QO2Q=";
+          excludes = [ "test/catalogs/test.sh" ];
+        })
+      ];
+      freezeUpdateScript = true;
+      extraMeta = {
+        maintainers = with lib.maintainers; [
+          gepbird
+        ];
+      };
+    };
+    libxml2 = callPackage ./common.nix {
+      version = "2.15.4";
+      src = fetchFromGitLab {
+        domain = "gitlab.gnome.org";
+        owner = "GNOME";
+        repo = "libxml2";
+        tag = "v${packages.libxml2.version}";
+        hash = "sha256-NHk5HIGBRmWwRbX2JMBmMDiIDdee2atZEfhz3QTgcOo=";
+      };
+      extraMeta = {
+        maintainers = with lib.maintainers; [
+          jtojnar
+        ];
+      };
+    };
   };
-
-  outputs = [ "bin" "dev" "out" "man" "doc" ]
-    ++ lib.optional pythonSupport "py";
-  propagatedBuildOutputs = "out bin" + lib.optionalString pythonSupport " py";
-
-  buildInputs = lib.optional pythonSupport python
-    # Libxml2 has an optional dependency on liblzma.  However, on impure
-    # platforms, it may end up using that from /usr/lib, and thus lack a
-    # RUNPATH for that, leading to undefined references for its users.
-    ++ lib.optional stdenv.isFreeBSD xz;
-
-  propagatedBuildInputs = [ zlib findXMLCatalogs ] ++ lib.optional icuSupport icu;
-
-  configureFlags =
-       lib.optional pythonSupport "--with-python=${python}"
-    ++ lib.optional icuSupport    "--with-icu"
-    ++ [ "--exec_prefix=$dev" ];
-
-  enableParallelBuilding = true;
-
-  doCheck = (stdenv.hostPlatform == stdenv.buildPlatform) && !stdenv.isDarwin &&
-    hostPlatform.libc != "musl";
-
-  crossAttrs = lib.optionalAttrs (hostPlatform.libc == "msvcrt") {
-    # creating the DLL is broken ATM
-    dontDisableStatic = true;
-    configureFlags = configureFlags ++ [ "--disable-shared" ];
-
-    # libiconv is a header dependency - propagating is enough
-    propagatedBuildInputs =  [ findXMLCatalogs libiconv ];
-  };
-
-  preInstall = lib.optionalString pythonSupport
-    ''substituteInPlace python/libxml2mod.la --replace "${python}" "$py"'';
-  installFlags = lib.optionalString pythonSupport
-    ''pythondir="$(py)/lib/${python.libPrefix}/site-packages"'';
-
-  postFixup = ''
-    moveToOutput bin/xml2-config "$dev"
-    moveToOutput lib/xml2Conf.sh "$dev"
-    moveToOutput share/man/man1 "$bin"
-  '';
-
-  passthru = { inherit version; pythonSupport = pythonSupport; };
-
-  meta = {
-    homepage = http://xmlsoft.org/;
-    description = "An XML parsing library for C";
-    license = lib.licenses.mit;
-    platforms = lib.platforms.unix;
-    maintainers = [ lib.maintainers.eelco ];
-  };
-}
+in
+packages

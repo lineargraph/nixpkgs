@@ -1,13 +1,41 @@
-{ stdenv, ocaml, cstruct, ppx_tools_versioned }:
+{
+  lib,
+  buildDunePackage,
+  ocaml,
+  cstruct,
+  sexplib,
+  ppxlib,
+  ocaml-migrate-parsetree-2,
+  crowbar,
+  fmt,
+  cppo,
+  ppx_sexp_conv,
+  cstruct-unix,
+  cstruct-sexp,
+}:
 
-assert stdenv.lib.versionAtLeast ocaml.version "4.02";
+if lib.versionOlder (cstruct.version or "1") "3" then
+  cstruct
+else
 
-stdenv.mkDerivation rec {
-	name = "ocaml${ocaml.version}-ppx_cstruct-${version}";
-	inherit (cstruct) version src unpackCmd installPhase meta;
+  buildDunePackage {
+    pname = "ppx_cstruct";
+    inherit (cstruct) version src meta;
 
-	buildInputs = cstruct.buildInputs ++ [ ppx_tools_versioned ];
-	propagatedBuildInputs = [ cstruct ];
+    propagatedBuildInputs = [
+      cstruct
+      ppxlib
+      sexplib
+    ];
 
-	buildPhase = "jbuilder build -p ppx_cstruct";
-}
+    doCheck = !lib.versionAtLeast ocaml.version "5.1";
+    nativeCheckInputs = [ cppo ];
+    checkInputs = [
+      crowbar
+      fmt
+      ppx_sexp_conv
+      cstruct-sexp
+      cstruct-unix
+      ocaml-migrate-parsetree-2
+    ];
+  }

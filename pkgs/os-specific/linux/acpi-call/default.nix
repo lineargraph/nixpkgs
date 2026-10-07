@@ -1,43 +1,47 @@
-{ stdenv, fetchgit, fetchpatch, kernel }:
-
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  kernel,
+  kernelModuleMakeFlags,
+}:
+let
+  pname = "acpi-call";
+  version = "1.2.2";
+in
 stdenv.mkDerivation {
-  name = "acpi-call-${kernel.version}";
+  inherit pname;
+  version = "${version}-${kernel.version}";
 
-  src = fetchgit {
-    url = "git://github.com/mkottman/acpi_call.git";
-    rev = "ac67445bc75ec4fcf46ceb195fb84d74ad350d51";
-    sha256 = "0jl19irz9x9pxab2qp4z8c3jijv2m30zhmnzi6ygbrisqqlg4c75";
+  src = fetchFromGitHub {
+    owner = "nix-community";
+    repo = "acpi_call";
+    rev = "v${version}";
+    sha256 = "1s7h9y3adyfhw7cjldlfmid79lrwz3vqlvziw9nwd6x5qdj4w9vp";
   };
-
-  patches = [
-    (fetchpatch {
-      url = "https://github.com/mkottman/acpi_call/pull/67.patch";
-      sha256 = "0z07apvdl8nvl8iwfk1sl1iidfjyx12fc0345bmp2nq1537kpbri";
-    })
-  ];
 
   hardeningDisable = [ "pic" ];
 
   nativeBuildInputs = kernel.moduleBuildDependencies;
 
-  preBuild = ''
-    sed -e 's/break/true/' -i examples/turn_off_gpu.sh
-    sed -e 's@/bin/bash@.bin/sh@' -i examples/turn_off_gpu.sh
-    sed -e "s@/lib/modules/\$(.*)@${kernel.dev}/lib/modules/${kernel.modDirVersion}@" -i Makefile
-    sed -e 's@acpi/acpi[.]h@linux/acpi.h@g' -i acpi_call.c
-  '';
+  makeFlags = kernelModuleMakeFlags ++ [
+    "KDIR=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
+  ];
 
   installPhase = ''
-    mkdir -p $out/lib/modules/${kernel.modDirVersion}/misc
-    cp acpi_call.ko $out/lib/modules/${kernel.modDirVersion}/misc
-    mkdir -p $out/bin
-    cp examples/turn_off_gpu.sh $out/bin/test_discrete_video_off.sh
-    chmod a+x $out/bin/test_discrete_video_off.sh
+    install -D acpi_call.ko $out/lib/modules/${kernel.modDirVersion}/misc/acpi_call.ko
+    install -D -m755 examples/turn_off_gpu.sh $out/bin/test_discrete_video_off.sh
   '';
 
   meta = {
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
-    description = "A module allowing arbitrary ACPI calls; use case: hybrid video";
+    maintainers = with lib.maintainers; [
+      raskin
+      mic92
+    ];
+    homepage = "https://github.com/nix-community/acpi_call";
+    platforms = lib.platforms.linux;
+    description = "Module allowing arbitrary ACPI calls; use case: hybrid video";
+    mainProgram = "test_discrete_video_off.sh";
+    license = lib.licenses.gpl3Plus;
   };
 }

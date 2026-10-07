@@ -1,21 +1,34 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "cogapp";
-  version = "2.5.1";
+  version = "3.6.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "f8cf2288fb5a2087eb4a00d8b347ddc86e9058d4ab26b8c868433eb401adfe1c";
+  src = fetchFromGitHub {
+    owner = "nedbat";
+    repo = "cog";
+    tag = "v${version}";
+    hash = "sha256-46ojLTu1elNcjmWSKJuGKDG4XETLLnJDIpL2Al6/aX0=";
   };
 
-  # there are no tests
-  doCheck = false;
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "A code generator for executing Python snippets in source files";
-    homepage = http://nedbatchelder.com/code/cog;
-    license = licenses.mit;
-    maintainers = with maintainers; [ lovek323 ];
+  pythonImportsCheck = [ "cogapp" ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = {
+    description = "Code generator for executing Python snippets in source files";
+    homepage = "https://nedbatchelder.com/code/cog";
+    changelog = "https://github.com/nedbat/cog/blob/${src.tag}/CHANGELOG.rst";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

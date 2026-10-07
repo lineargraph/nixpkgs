@@ -1,28 +1,84 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, darwin
-, mock
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  pytestCheckHook,
+  pytest-instafail,
+  pytest-xdist,
+  gitUpdater,
 }:
 
 buildPythonPackage rec {
   pname = "psutil";
-  version = "5.4.5";
-  name = "${pname}-${version}";
+  version = "7.2.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "ebe293be36bb24b95cdefc5131635496e88b17fabbcf1e4bc9b5c01f5e489cfe";
+  src = fetchFromGitHub {
+    owner = "giampaolo";
+    repo = "psutil";
+    tag = "release-${version}";
+    hash = "sha256-plBv24QgNzmVMV2lFxCbNwHKtd620thJayWdjs4estw=";
   };
 
-  # No tests in archive
-  doCheck = false;
+  postPatch = ''
+    # stick to the old SDK name for now
+    # https://developer.apple.com/documentation/iokit/kiomasterportdefault/
+    # https://developer.apple.com/documentation/iokit/kiomainportdefault/
+    substituteInPlace psutil/arch/osx/cpu.c \
+      --replace-fail kIOMainPortDefault kIOMasterPortDefault
+  '';
 
-  buildInputs = [] ++ stdenv.lib.optionals stdenv.isDarwin [ darwin.IOKit ];
+  build-system = [ setuptools ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-instafail
+    pytest-xdist
+  ];
+
+  # Segfaults on darwin:
+  # https://github.com/giampaolo/psutil/issues/1715
+  doCheck = !stdenv.hostPlatform.isDarwin;
+
+  # In addition to the issues listed above there are some that occur due to
+  # our sandboxing which we can work around by disabling some tests:
+  # - cpu_times was flaky on darwin
+  # - the other disabled tests are likely due to sandboxing (missing specific errors)
+  enabledTestPaths = [
+    # Note: $out must be referenced as test import paths are relative
+    "tests/test_system.py"
+  ];
+
+  disabledTests = [
+    # Some of the tests have build-system hardware-based impurities (like
+    # reading temperature sensor values).  Disable them to avoid the failures
+    # that sometimes result.
+    "cpu_freq"
+    "cpu_times"
+    "disk_io_counters"
+    "sensors_battery"
+    "sensors_temperatures"
+    "user"
+    "test_disk_partitions" # problematic on Hydra's Linux builders, apparently
+  ];
+
+  preCheck = ''
+    rm -rf psutil
+  '';
+
+  pythonImportsCheck = [ "psutil" ];
+
+  passthru.updateScript = gitUpdater {
+    rev-prefix = "release-";
+  };
 
   meta = {
-    description = "Process and system utilization information interface for python";
-    homepage = https://github.com/giampaolo/psutil;
-    license = stdenv.lib.licenses.bsd3;
+    description = "Process and system utilization information interface";
+    homepage = "https://github.com/giampaolo/psutil";
+    changelog = "https://github.com/giampaolo/psutil/blob/${src.tag}/HISTORY.rst";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

@@ -1,11 +1,16 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.services.mstpd;
 in
 with lib;
 {
   options.services.mstpd = {
-    
+
     enable = mkOption {
       default = false;
       type = types.bool;

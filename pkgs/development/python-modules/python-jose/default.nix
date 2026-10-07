@@ -1,35 +1,68 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub
-, future, six, ecdsa, pycryptodome, pytest, cryptography
+{
+  lib,
+  buildPythonPackage,
+  cryptography,
+  fetchFromGitHub,
+  fetchpatch,
+  pycrypto,
+  pycryptodome,
+  pytestCheckHook,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "python-jose";
-  version = "2.0.2";
+  version = "3.5.0";
+  pyproject = true;
 
-  # no tests in PyPI tarball
   src = fetchFromGitHub {
     owner = "mpdavis";
     repo = "python-jose";
-    # 2.0.2 not tagged on GitHub
-    # see https://github.com/mpdavis/python-jose/issues/86
-    rev = "28cc6719eceb89129eed59c25f7bdac015665bdd";
-    sha256 = "03wkq2rszy0rzy5gygsh4s7i6ls8zflgbcvxnflvmh7nis7002fp";
+    tag = version;
+    hash = "sha256-8DQ0RBQ4ZgEIwcosgX3dzr928cYIQoH0obIOgk0+Ozs=";
   };
 
-  checkInputs = [
-    pytest
-    cryptography # optional dependency, but needed in tests
+  patches = [
+    # https://github.com/mpdavis/python-jose/pull/393
+    (fetchpatch {
+      name = "fix-test_incorrect_public_key_hmac_signing.patch";
+      url = "https://github.com/mpdavis/python-jose/commit/7c0e4c6640bdc9cd60ac66d96d5d90f4377873db.patch";
+      hash = "sha256-bCzxZEWKYD20TLqzVv6neZlpU41otbVqaXc7C0Ky9BQ=";
+    })
   ];
-  checkPhase = ''
-    py.test
-  '';
 
-  propagatedBuildInputs = [ future six ecdsa pycryptodome ];
+  pythonRemoveDeps = [
+    # These aren't needed if the cryptography backend is used:
+    # https://github.com/mpdavis/python-jose/blob/3.5.0/README.rst#cryptographic-backends
+    "ecdsa"
+    "pyasn1"
+    "rsa"
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mpdavis/python-jose;
-    description = "A JOSE implementation in Python";
-    license = licenses.mit;
-    maintainers = [ maintainers.jhhuh ];
+  build-system = [ setuptools ];
+
+  dependencies = [
+    cryptography
+  ];
+
+  optional-dependencies = {
+    cryptography = [ cryptography ];
+    pycrypto = [ pycrypto ];
+    pycryptodome = [ pycryptodome ];
+  };
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ]
+  ++ lib.concatAttrValues optional-dependencies;
+
+  pythonImportsCheck = [ "jose" ];
+
+  meta = {
+    description = "JOSE implementation in Python";
+    homepage = "https://github.com/mpdavis/python-jose";
+    changelog = "https://github.com/mpdavis/python-jose/releases/tag/${src.tag}";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

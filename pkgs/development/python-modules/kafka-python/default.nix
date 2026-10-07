@@ -1,30 +1,82 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytest, six, mock }:
+{
+  buildPythonPackage,
+  fetchFromGitHub,
+  lib,
+  pythonAtLeast,
 
-buildPythonPackage rec {
-  name = "${pname}-${version}";
-  version = "1.4.3";
+  # build system
+  setuptools,
+
+  # optional dependencies
+  crc32c,
+  lz4,
+  pyperf,
+  python-snappy,
+  zstandard,
+
+  # test dependencies
+  pytestCheckHook,
+  pytest-mock,
+  pytest-timeout,
+  xxhash,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "kafka-python";
+  version = "3.0.11";
+  pyproject = true;
+  __structuredAttrs = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "078acdcd1fc6eddacc46d437c664998b4cf7613b7e79ced66a460965f2648f88";
+  src = fetchFromGitHub {
+    owner = "dpkp";
+    repo = "kafka-python";
+    tag = finalAttrs.version;
+    hash = "sha256-DwehLBH5OK7DSfMlgbAGvkVrkNBCUazjOYRDUgrtsOU=";
   };
 
-  checkInputs = [ pytest six mock ];
+  build-system = [ setuptools ];
 
-  checkPhase = ''
-    py.test
-  '';
+  optional-dependencies = {
+    benchmarks = [ pyperf ];
+    crc32c = [ crc32c ];
+    lz4 = [ lz4 ];
+    snappy = [ python-snappy ];
+    zstd = [ zstandard ];
+  };
 
-  # Upstream uses tox but we don't on Nix. Running tests manually produces however
-  #     from . import unittest
-  # E   ImportError: cannot import name 'unittest'
-  doCheck = false;
+  pythonImportsCheck = [
+    "kafka"
+    "kafka.admin"
+    "kafka.benchmarks"
+    "kafka.cli"
+    "kafka.consumer"
+    "kafka.coordinator"
+    "kafka.metrics"
+    "kafka.net"
+    "kafka.partitioner"
+    "kafka.producer"
+    "kafka.protocol"
+    "kafka.record"
+    "kafka.serializer"
+    "kafka.vendor"
+  ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    pytest-mock
+    pytest-timeout
+    pytestCheckHook
+    xxhash
+  ]
+  ++ lib.concatAttrValues finalAttrs.passthru.optional-dependencies;
+
+  meta = {
+    changelog = "https://github.com/dpkp/kafka-python/blob/${finalAttrs.src.tag}/CHANGES.md";
     description = "Pure Python client for Apache Kafka";
-    homepage = https://github.com/dpkp/kafka-python;
-    license = licenses.asl20;
-    maintainers = with maintainers; [ ];
+    homepage = "https://github.com/dpkp/kafka-python";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [
+      de11n
+      despsyched
+    ];
   };
-}
+})

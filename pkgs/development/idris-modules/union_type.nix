@@ -1,15 +1,11 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, base
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  lib,
 }:
-build-idris-package  {
-  name = "union_type";
+build-idris-package {
+  pname = "union_type";
   version = "2018-01-30";
-
-  idrisDeps = [ prelude base ];
 
   src = fetchFromGitHub {
     owner = "berewt";
@@ -20,9 +16,8 @@ build-idris-package  {
 
   meta = {
     description = "UnionType in Idris";
-    homepage = https://github.com/berewt/UnionType;
+    homepage = "https://github.com/berewt/UnionType";
     license = lib.licenses.mit;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

@@ -1,67 +1,245 @@
-{ stdenv, fetchurl, fetchpatch, lib
-, pkgconfig, meson, ninja, gettext, gobjectIntrospection
-, python, gstreamer, orc, pango, libtheora, libvisual
-, libintl, libopus
-, enableX11 ? stdenv.isLinux, libXv
-, enableWayland ? stdenv.isLinux, wayland
-, enableAlsa ? stdenv.isLinux, alsaLib
-, enableCocoa ? false, darwin
-, enableCdparanoia ? (!stdenv.isDarwin), cdparanoia }:
+{
+  stdenv,
+  fetchurl,
+  lib,
+  pkg-config,
+  meson,
+  ninja,
+  gettext,
+  python3,
+  gstreamer,
+  graphene,
+  orc,
+  pango,
+  libtheora,
+  libintl,
+  libopus,
+  isocodes,
+  libjpeg,
+  libpng,
+  libvorbis,
+  libGL,
+  withIntrospection ?
+    lib.meta.availableOn stdenv.hostPlatform gobject-introspection
+    && stdenv.hostPlatform.emulatorAvailable buildPackages,
+  buildPackages,
+  gobject-introspection,
+  enableX11 ? stdenv.hostPlatform.isLinux,
+  libxext,
+  libxi,
+  libxv,
+  libdrm,
+  enableWayland ? stdenv.hostPlatform.isLinux,
+  wayland-scanner,
+  wayland,
+  wayland-protocols,
+  enableAlsa ? stdenv.hostPlatform.isLinux,
+  alsa-lib,
+  enableCocoa ? stdenv.hostPlatform.isDarwin,
+  enableGl ? (enableX11 || enableWayland || enableCocoa),
+  enableCdparanoia ? (!stdenv.hostPlatform.isDarwin),
+  cdparanoia,
+  glib,
+  testers,
+  # Checks meson.is_cross_build(), so even canExecute isn't enough.
+  enableDocumentation ? stdenv.hostPlatform == stdenv.buildPlatform,
+  hotdoc,
+  directoryListingUpdater,
+  apple-sdk_gstreamer,
+}:
 
-stdenv.mkDerivation rec {
-  name = "gst-plugins-base-1.14.0";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "gst-plugins-base";
+  version = "1.28.7";
 
-  meta = with lib; {
-    description = "Base plugins and helper libraries";
-    homepage = https://gstreamer.freedesktop.org;
-    license = licenses.lgpl2Plus;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ matthewbauer ];
-  };
+  outputs = [
+    "out"
+    "dev"
+  ];
+
+  separateDebugInfo = true;
 
   src = fetchurl {
-    url = "${meta.homepage}/src/gst-plugins-base/${name}.tar.xz";
-    sha256 = "0h39bcp7fcd9kgb189lxr8l0hm0almvzpzgpdh1jpq2nzxh4d43y";
+    url = "https://gstreamer.freedesktop.org/src/gst-plugins-base/gst-plugins-base-${finalAttrs.version}.tar.xz";
+    hash = "sha256-7W5UEPSW0XGBh2OvImXnl3FUvH+bgn6YrPjFvtId1ac=";
   };
 
-  outputs = [ "out" "dev" ];
-
-  nativeBuildInputs = [ pkgconfig python gettext gobjectIntrospection ]
-
-  # Broken meson with Darwin. Should hopefully be fixed soon. Tracking
-  # in https://bugzilla.gnome.org/show_bug.cgi?id=781148.
-  ++ lib.optionals (!stdenv.isDarwin) [ meson ninja ];
-
-  # TODO How to pass these to Meson?
-  configureFlags = [
-    "--enable-x11=${if enableX11 then "yes" else "no"}"
-    "--enable-wayland=${if enableWayland then "yes" else "no"}"
-    "--enable-cocoa=${if enableCocoa then "yes" else "no"}"
+  __structuredAttrs = true;
+  strictDeps = true;
+  depsBuildBuild = [
+    pkg-config
+  ];
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    python3
+    gettext
+    orc
+    glib
+    gstreamer
   ]
+  ++ lib.optionals withIntrospection [
+    gobject-introspection
+  ]
+  ++ lib.optionals enableDocumentation [
+    hotdoc
+  ]
+  ++ lib.optionals enableWayland [
+    wayland-scanner
+  ];
 
-  # Introspection fails on my MacBook currently
-  ++ lib.optional stdenv.isDarwin "--disable-introspection";
+  buildInputs = [
+    graphene
+    orc
+    libtheora
+    libintl
+    libopus
+    isocodes
+    libpng
+    libjpeg
+    libvorbis
+    pango
+  ]
+  ++ lib.optionals (!stdenv.hostPlatform.isDarwin) [
+    libdrm
+    libGL
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    apple-sdk_gstreamer
+  ]
+  ++ lib.optionals enableAlsa [
+    alsa-lib
+  ]
+  ++ lib.optionals enableX11 [
+    libxext
+    libxi
+    libxv
+  ]
+  ++ lib.optionals enableWayland [
+    wayland
+    wayland-protocols
+  ]
+  ++ lib.optional enableCdparanoia cdparanoia;
 
-  buildInputs = [ orc libtheora libintl libopus ]
-    ++ lib.optional enableAlsa alsaLib
-    ++ lib.optionals enableX11 [ libXv pango ]
-    ++ lib.optional enableWayland wayland
-    ++ lib.optional enableCocoa darwin.apple_sdk.frameworks.Cocoa
-    ++ lib.optional enableCdparanoia cdparanoia;
+  propagatedBuildInputs = [
+    gstreamer
+  ]
+  ++ lib.optionals (!stdenv.hostPlatform.isDarwin) [
+    libdrm
+  ];
 
-  propagatedBuildInputs = [ gstreamer ];
+  mesonFlags =
+    let
+      # For a list of choices, see
+      # https://gitlab.freedesktop.org/gstreamer/gstreamer/-/blob/d529453528a5dd11c15eab788cce6676141134b7/subprojects/gst-plugins-base/meson.options#L14-1
+      # unsupported platforms: win32, winrt, android
+      # deprecated/ancient platforms: dispmanx, eagl
+      # TODO: should we add egl, surfaceless, viv-fb, gbm?
+      # (on Linux, autodiscovery would automatically add egl and surfaceless)
+      # 'egl', 'surfaceless', 'viv-fb', 'gbm',
+      enabledGlWinSys =
+        lib.optional enableX11 "x11"
+        ++ lib.optional enableWayland "wayland"
+        ++ lib.optional enableCocoa "cocoa";
+    in
+    lib.mapAttrsToList lib.mesonEnable {
+      orc = true;
+      orc-compiler = true;
+      nls = true;
+
+      glib_debug = false; # cast checks should be disabled on stable releases
+      examples = false; # requires many dependencies and probably not useful for our users
+      introspection = withIntrospection;
+      doc = enableDocumentation;
+
+      tests = finalAttrs.finalPackage.doCheck;
+
+      libvisual = false;
+      tremor = false; # unmaintained in nixpkgs, just use regular libvorbis instead
+      vorbis = true;
+
+      x11 = enableX11;
+      xi = enableX11;
+      xshm = enableX11;
+      xvideo = enableX11;
+
+      # TODO How to disable Wayland?
+      gl = enableGl;
+      alsa = enableAlsa;
+      cdparanoia = enableCdparanoia;
+      drm = !stdenv.hostPlatform.isDarwin;
+    }
+    ++ [ (lib.mesonOption "gl_winsys" (lib.concatStringsSep "," enabledGlWinSys)) ];
 
   postPatch = ''
-    patchShebangs .
+    patchShebangs \
+      scripts/meson-pkg-config-file-fixup.py \
+      scripts/extract-release-date-from-doap-file.py
   '';
 
-  enableParallelBuilding = true;
+  # This package has some `_("string literal")` string formats
+  # that trip up clang with format security enabled.
+  hardeningDisable = [ "format" ];
 
-  patches = [
-    (fetchpatch {
-        url = "https://bug794856.bugzilla-attachments.gnome.org/attachment.cgi?id=370414";
-        sha256 = "07x43xis0sr0hfchf36ap0cibx0lkfpqyszb3r3w9dzz301fk04z";
-    })
-    ./fix_pkgconfig_includedir.patch
-  ];
-}
+  doCheck = false; # fails, wants DRI access for OpenGL
+
+  preFixup = ''
+    moveToOutput "lib/gstreamer-1.0/pkgconfig" "$dev"
+  '';
+
+  passthru = {
+    # Downstream `gst-*` packages depending on `gst-plugins-base`
+    # have meson build options like 'gl' etc. that depend
+    # on these features being built in `-base`.
+    # If they are not built here, then the downstream builds
+    # will fail, as they, too, use `-Dauto_features=enabled`
+    # which would enable these options unconditionally.
+    # That means we must communicate to these downstream packages
+    # if the `-base` enabled these options or not, so that
+    # the can enable/disable those features accordingly.
+    # The naming `*Enabled` vs `enable*` is intentional to
+    # distinguish inputs from outputs (what is to be built
+    # vs what was built) and to make them easier to search for.
+    glEnabled = enableGl;
+    waylandEnabled = enableWayland;
+
+    updateScript = directoryListingUpdater { odd-unstable = true; };
+
+    tests.pkg-config = testers.hasPkgConfigModules {
+      package = finalAttrs.finalPackage;
+      versionCheck = true;
+    };
+  };
+
+  meta = {
+    description = "Base GStreamer plug-ins and helper libraries";
+    homepage = "https://gstreamer.freedesktop.org";
+    license = lib.licenses.lgpl2Plus;
+    pkgConfigModules = lib.map (m: "gstreamer-${m}-1.0") (
+      [
+        "allocators"
+        "app"
+        "audio"
+        "fft"
+        "pbutils"
+        "plugins-base"
+        "riff"
+        "rtp"
+        "rtsp"
+        "sdp"
+        "tag"
+      ]
+      ++ lib.optionals enableGl [
+        "gl"
+        "gl-egl"
+        "gl-prototypes"
+      ]
+      ++ lib.optional (enableGl && enableWayland) "gl-wayland"
+      ++ lib.optional (enableGl && enableX11) "gl-x11"
+    );
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ tmarkus ];
+    identifiers.cpeParts = gstreamer.passthru.gstreamerCpeParts finalAttrs.version;
+  };
+})

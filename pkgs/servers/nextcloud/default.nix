@@ -1,24 +1,79 @@
-{ stdenv, fetchurl, fetchpatch }:
+{
+  lib,
+  stdenvNoCC,
+  fetchurl,
+  nixosTests,
+  nextcloud33Packages,
+  nextcloud34Packages,
+  nextcloud35Packages,
+}:
 
-stdenv.mkDerivation rec {
-  name= "nextcloud-${version}";
-  version = "13.0.4";
+let
+  generic =
+    {
+      version,
+      hash,
+      eol ? false,
+      extraVulnerabilities ? [ ],
+      packages,
+    }:
+    stdenvNoCC.mkDerivation rec {
+      pname = "nextcloud";
+      inherit version;
 
-  src = fetchurl {
-    url = "https://download.nextcloud.com/server/releases/${name}.tar.bz2";
-    sha256 = "18d514145fcddc86f48d0a5fa4a0d4b07617135a1b23107137a6ea3ed519bd54";
+      __structuredAttrs = true;
+      strictDeps = true;
+
+      src = fetchurl {
+        url = "https://download.nextcloud.com/server/releases/nextcloud-${version}.tar.bz2";
+        inherit hash;
+      };
+
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out/
+        cp -R . $out/
+        runHook postInstall
+      '';
+
+      passthru = {
+        tests = lib.filterAttrs (
+          key: _: (lib.hasSuffix (lib.versions.major version) key)
+        ) nixosTests.nextcloud;
+        inherit packages;
+      };
+
+      meta = {
+        changelog = "https://nextcloud.com/changelog/#${lib.replaceStrings [ "." ] [ "-" ] version}";
+        description = "Sharing solution for files, calendars, contacts and more";
+        homepage = "https://nextcloud.com";
+        teams = [ lib.teams.nextcloud ];
+        license = lib.licenses.agpl3Plus;
+        platforms = lib.platforms.linux;
+        knownVulnerabilities =
+          extraVulnerabilities ++ (lib.optional eol "Nextcloud version ${version} is EOL");
+      };
+    };
+in
+{
+  nextcloud33 = generic {
+    version = "33.0.9";
+    hash = "sha256-8zHBBB0CfmWIUm0qAM5CvHCpYi6rWHHAvpF3JSz3dCM=";
+    packages = nextcloud33Packages;
   };
 
-  installPhase = ''
-    mkdir -p $out/
-    cp -R . $out/
-  '';
-
-  meta = {
-    description = "Sharing solution for files, calendars, contacts and more";
-    homepage = https://nextcloud.com;
-    maintainers = with stdenv.lib.maintainers; [ schneefux bachp ];
-    license = stdenv.lib.licenses.agpl3Plus;
-    platforms = with stdenv.lib.platforms; unix;
+  nextcloud34 = generic {
+    version = "34.0.4";
+    hash = "sha256-APIm5jZPluCRirBhVxWPZmAbjO3CWvd39e5aMFb0K4M=";
+    packages = nextcloud34Packages;
   };
+
+  nextcloud35 = generic {
+    version = "35.0.1";
+    hash = "sha256-ftMF6IAZLYBLqDF5oZ3SIldnlgjWMWGmEc4/ipGNKqY=";
+    packages = nextcloud35Packages;
+  };
+
+  # tip: get the sha with:
+  # curl  "https://download.nextcloud.com/server/releases/nextcloud-${version}.tar.bz2.sha512" | grep '.tar.bz2'  | cut -f1 -d' ' | xargs nix hash convert --hash-algo sha512 --to sri
 }

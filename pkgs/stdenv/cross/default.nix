@@ -1,52 +1,132 @@
-{ lib
-, localSystem, crossSystem, config, overlays
+{
+  lib,
+  localSystem,
+  crossSystem,
+  config,
+  overlays,
+  crossOverlays,
+  bootStages,
 }:
 
-let
-  bootStages = import ../. {
-    inherit lib localSystem overlays;
-    crossSystem = null;
-    # Ignore custom stdenvs when cross compiling for compatability
-    config = builtins.removeAttrs config [ "replaceStdenv" ];
-  };
-
-in lib.init bootStages ++ [
+lib.init bootStages
+++ [
 
   # Regular native packages
-  (somePrevStage: lib.last bootStages somePrevStage // {
-    # It's OK to change the built-time dependencies
-    allowCustomOverrides = true;
-  })
+  (
+    somePrevStage:
+    lib.last bootStages somePrevStage
+    // {
+      # It's OK to change the built-time dependencies
+      allowCustomOverrides = true;
+    }
+  )
 
   # Build tool Packages
   (vanillaPackages: {
     inherit config overlays;
     selfBuild = false;
     stdenv =
-      assert vanillaPackages.hostPlatform == localSystem;
-      assert vanillaPackages.targetPlatform == localSystem;
+      assert vanillaPackages.stdenv.buildPlatform == localSystem;
+      assert vanillaPackages.stdenv.hostPlatform == localSystem;
+      assert vanillaPackages.stdenv.targetPlatform == localSystem;
       vanillaPackages.stdenv.override { targetPlatform = crossSystem; };
     # It's OK to change the built-time dependencies
     allowCustomOverrides = true;
   })
 
   # Run Packages
-  (buildPackages: {
-    inherit config overlays;
-    selfBuild = false;
-    stdenv = buildPackages.makeStdenvCross {
-      inherit (buildPackages) stdenv;
-      buildPlatform = localSystem;
-      hostPlatform = crossSystem;
-      targetPlatform = crossSystem;
-      cc = if crossSystem.useiOSPrebuilt or false
-             then buildPackages.darwin.iosSdkPkgs.clang
-           else if (crossSystem.useAndroidPrebuilt && crossSystem.is32bit)
-             then buildPackages.androidenv.androidndkPkgs_10e.gcc
-           else if (crossSystem.useAndroidPrebuilt && crossSystem.is64bit)
-             then buildPackages.androidenv.androidndkPkgs.gcc
-           else buildPackages.gcc;
-    };
-  })
+  (
+    buildPackages:
+    let
+      adaptStdenv = if crossSystem.isStatic then buildPackages.stdenvAdapters.makeStatic else lib.id;
+      stdenvNoCC = adaptStdenv (
+        buildPackages.stdenv.override (old: rec {
+          buildPlatform = localSystem;
+          hostPlatform = crossSystem;
+          targetPlatform = crossSystem;
+
+          # Prior overrides are surely not valid as packages built with this run on
+          # a different platform, and so are disabled.
+          overrides = _: _: { };
+          extraBuildInputs = [ ]; # Old ones run on wrong platform
+          allowedRequisites = null;
+
+          cc = null;
+          hasCC = false;
+
+          extraNativeBuildInputs =
+            old.extraNativeBuildInputs
+            ++ lib.optionals (hostPlatform.isLinux && !buildPlatform.isLinux) [ buildPackages.patchelf ]
+            ++ lib.optional (
+              let
+                f =
+                  p:
+                  !p.isx86
+                  || builtins.elem p.libc [
+                    "musl"
+                    "wasilibc"
+                    "relibc"
+                  ]
+                  || p.isiOS
+                  || p.isGenode;
+              in
+              f hostPlatform && !(f buildPlatform)
+            ) buildPackages.updateAutotoolsGnuConfigScriptsHook
+            ++ lib.optional (
+              hostPlatform.isCygwin && !buildPlatform.isCygwin
+            ) buildPackages.cygwin.cygwinDllLinkHook;
+        })
+      );
+    in
+    {
+      inherit config;
+      overlays = overlays ++ crossOverlays;
+      selfBuild = false;
+      inherit stdenvNoCC;
+      stdenv =
+        let
+          inherit (stdenvNoCC) hostPlatform targetPlatform;
+          baseStdenv = stdenvNoCC.override {
+            # Old ones run on wrong platform
+            extraBuildInputs = lib.optionals hostPlatform.isDarwin [
+              buildPackages.targetPackages.apple-sdk
+            ];
+
+            hasCC = !stdenvNoCC.targetPlatform.isGhcjs;
+
+            cc =
+              if crossSystem.useiOSPrebuilt or false then
+                buildPackages.darwin.iosSdkPkgs.clang
+              else if crossSystem.useAndroidPrebuilt or false then
+                buildPackages."androidndkPkgs_${crossSystem.androidNdkVersion}".clang
+              else if
+                targetPlatform.isGhcjs
+              # Need to use `throw` so tryEval for splicing works, ugh.  Using
+              # `null` or skipping the attribute would cause an eval failure
+              # `tryEval` wouldn't catch, wrecking accessing previous stages
+              # when there is a C compiler and everything should be fine.
+              then
+                throw "no C compiler provided for this platform"
+              else if crossSystem.isDarwin then
+                buildPackages.llvmPackages.systemLibcxxClang
+              else if crossSystem.useLLVM or false then
+                buildPackages.llvmPackages.clang
+              else if crossSystem.useZig or false then
+                buildPackages.zig.cc
+              else if crossSystem.useArocc or false then
+                buildPackages.arocc
+              else if crossSystem.useGccNG or false then
+                buildPackages.gccNGPackages.gcc
+              else
+                buildPackages.gcc;
+
+          };
+        in
+        if config ? replaceCrossStdenv then
+          config.replaceCrossStdenv { inherit buildPackages baseStdenv; }
+        else
+          baseStdenv;
+    }
+  )
 
 ]

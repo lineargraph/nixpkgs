@@ -1,19 +1,43 @@
-{ stdenv, kernel, fetchFromGitHub, autoreconfHook, yacc, flex, bison, p7zip }:
+{
+  lib,
+  stdenv,
+  kernel,
+  fetchFromGitHub,
+  autoreconfHook,
+  bison,
+  flex,
+  p7zip,
+  rsync,
+  nix-update-script,
+  fetchpatch2,
+}:
 
-assert kernel != null -> stdenv.lib.versionAtLeast kernel.version "4.0";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "ply";
+  version = "2.4.0";
 
-let
-  version = "1.0.beta1-9e810b1";
-in stdenv.mkDerivation {
-  name = "ply-${version}";
-  nativeBuildInputs = [ autoreconfHook flex yacc p7zip ];
+  nativeBuildInputs = [
+    autoreconfHook
+    flex
+    bison
+    p7zip
+    rsync
+  ];
 
   src = fetchFromGitHub {
     owner = "iovisor";
     repo = "ply";
-    rev = "9e810b157ba079c32c430a7d4c6034826982056e";
-    sha256 = "15cp6iczawaqlhsa0af6i37zn5iq53kh6ya8s2hzd018yd7mhg50";
+    tag = finalAttrs.version;
+    sha256 = "sha256-PJaCEiM1BRUEtInd93bK+xZNJzO9EZy+JXkp9cdPrgs=";
   };
+
+  patches = [
+    # Fix union member initialization for GCC 15.
+    (fetchpatch2 {
+      url = "https://github.com/iovisor/ply/commit/5e78db85a625cff64e5714afcf3163c882a0435a.patch?full_index=1";
+      hash = "sha256-mKPHPIZy0KztyVgHuM/kzyLytKghv8c8XvKt3pYUYDU=";
+    })
+  ];
 
   preAutoreconf = ''
     # If kernel sources are a folder (i.e. fetched from git), we just copy them in
@@ -32,10 +56,17 @@ in stdenv.mkDerivation {
     ./autogen.sh --prefix=$out
   '';
 
-  meta = with stdenv.lib; {
-    description = "dynamic Tracing in Linux";
-    homepage = https://wkz.github.io/ply/;
-    license = [ licenses.gpl2 ];
-    maintainers = with maintainers; [ mic92 mbbx6spp ];
+  passthru.updateScript = nix-update-script { };
+
+  meta = {
+    description = "Dynamic tracing in Linux";
+    mainProgram = "ply";
+    homepage = "https://wkz.github.io/ply/";
+    license = lib.licenses.gpl2Only;
+    maintainers = with lib.maintainers; [
+      mic92
+      snu
+    ];
+    platforms = lib.platforms.linux;
   };
-}
+})

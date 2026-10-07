@@ -1,20 +1,60 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  breezy,
+  build,
+  buildPythonPackage,
+  fetchFromGitHub,
+  git,
+  pep517,
+  pytestCheckHook,
+  setuptools,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "check-manifest";
-  version = "0.36";
+  version = "0.51";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "2bb906a736a0f026cc5fd6c0dab5a481793b3d7a7d70106cca6e238da5f52d84";
+  src = fetchFromGitHub {
+    owner = "mgedmin";
+    repo = "check-manifest";
+    tag = finalAttrs.version;
+    hash = "sha256-tT6xQZwqJIsyrO9BjWweIeNgYaopziewerVBk0mFVYg=";
   };
 
-  doCheck = false;
+  patches = [
+    # upstream fix for setuptools >= 83, unreleased as of 0.51
+    ./setuptools-83-ignorelist.patch
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mgedmin/check-manifest;
+  build-system = [ setuptools ];
+
+  dependencies = [
+    build
+    pep517
+    setuptools
+  ];
+
+  nativeCheckInputs = [
+    git
+    pytestCheckHook
+  ];
+
+  checkInputs = [ breezy ];
+
+  disabledTests = [
+    # Test wants to setup a venv
+    "test_build_sdist_pep517_isolated"
+  ];
+
+  pythonImportsCheck = [ "check_manifest" ];
+
+  meta = {
     description = "Check MANIFEST.in in a Python source package for completeness";
-    license = licenses.mit;
-    maintainers = with maintainers; [ lewo ];
+    homepage = "https://github.com/mgedmin/check-manifest";
+    changelog = "https://github.com/mgedmin/check-manifest/blob/${finalAttrs.version}/CHANGES.rst";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ lewo ];
+    mainProgram = "check-manifest";
   };
-}
+})

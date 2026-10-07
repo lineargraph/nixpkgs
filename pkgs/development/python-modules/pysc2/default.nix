@@ -1,31 +1,31 @@
-{ buildPythonPackage
-, lib
-, fetchFromGitHub
-, absl-py
-, enum34
-, future
-, futures
-, mock
-, mpyq
-, numpy
-, portpicker
-, protobuf
-, pygame
-, s2clientprotocol
-, six
-, websocket_client
-, sc2-headless
+{
+  buildPythonPackage,
+  lib,
+  fetchFromGitHub,
+  absl-py,
+  future,
+  mock,
+  mpyq,
+  numpy,
+  portpicker,
+  protobuf,
+  pygame,
+  s2clientprotocol,
+  six,
+  websocket-client,
+  sc2-headless,
 }:
 
 buildPythonPackage rec {
-  pname = "PySC2";
-  version = "1.2";
+  pname = "pysc2";
+  version = "4.0";
+  format = "setuptools";
 
   src = fetchFromGitHub {
     owner = "deepmind";
     repo = "pysc2";
-    rev = "39f84b01d662eb58b3d95791f59208c210afd4e7";
-    sha256 = "0dfbc2krd2rys1ji75ng2nl0ki8nhnylxljcp287bfb8qyz2m25p";
+    tag = "v${version}";
+    sha256 = "sha256-70Uqs30Dyq1u+e1CTR8mO/rzZangBvgY0ah2l7VJLhQ=";
   };
 
   patches = [
@@ -40,7 +40,6 @@ buildPythonPackage rec {
 
   propagatedBuildInputs = [
     absl-py
-    enum34
     future
     mock
     mpyq
@@ -50,15 +49,16 @@ buildPythonPackage rec {
     pygame
     s2clientprotocol
     six
-    websocket_client
+    websocket-client
     sc2-headless
   ];
 
   meta = {
-    description = "Starcraft II environment and library for training agents.";
+    changelog = "https://github.com/google-deepmind/pysc2/releases/tag/${src.tag}";
+    description = "Starcraft II environment and library for training agents";
     homepage = "https://github.com/deepmind/pysc2";
     license = lib.licenses.asl20;
     platforms = lib.platforms.linux;
-    maintainers = with lib.maintainers; [ danharaj ];
+    maintainers = [ ];
   };
 }

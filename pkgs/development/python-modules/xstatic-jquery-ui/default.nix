@@ -1,28 +1,37 @@
-{ buildPythonPackage
-, lib
-, fetchPypi
-, xstatic-jquery
+{
+  buildPythonPackage,
+  lib,
+  fetchPypi,
+  setuptools_80,
+  xstatic-jquery,
 }:
 
-buildPythonPackage rec {
-  pname = "XStatic-jquery-ui";
-  version = "1.12.0.1";
+buildPythonPackage (finalAttrs: {
+  pname = "xstatic-jquery-ui";
+  version = "1.13.0.1";
+  pyproject = true;
+
+  __structuredAttrs = true;
 
   src = fetchPypi {
-    inherit version pname;
-    sha256 = "0w7mabv6qflpd47g33j3ggp5rv17mqk0xz3bsdswcj97wqpga2l2";
+    pname = "XStatic-jquery-ui";
+    inherit (finalAttrs) version;
+    hash = "sha256-Npfl8O81W49KHHJCIVkmg8LbAxk1y7V7RiJO70dL0pQ=";
   };
+
+  build-system = [ setuptools_80 ];
 
   # no tests implemented
   doCheck = false;
 
-  propagatedBuildInputs = [ xstatic-jquery ];
+  dependencies = [ xstatic-jquery ];
 
-  meta = with lib;{
-    homepage = http://jqueryui.com/;
+  pythonImportsCheck = [ "xstatic.pkg.jquery_ui" ];
+
+  meta = {
+    homepage = "https://jqueryui.com/";
     description = "jquery-ui packaged static files for python";
-    license = licenses.mit;
-    maintainers = with maintainers; [ makefu ];
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ makefu ];
   };
-
-}
+})

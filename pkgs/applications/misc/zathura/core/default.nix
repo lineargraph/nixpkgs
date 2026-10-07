@@ -1,44 +1,122 @@
-{ stdenv, fetchurl, meson, ninja, makeWrapper, pkgconfig
-, appstream-glib, desktop-file-utils, python3
-, gtk, girara, ncurses, gettext, libxml2
-, file, sqlite, glib, texlive, libintl, libseccomp
-, gtk-mac-integration, synctexSupport ? true
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  meson,
+  ninja,
+  wrapGAppsHook3,
+  pkg-config,
+  gitUpdater,
+  appstream-glib,
+  json-glib,
+  desktop-file-utils,
+  python3,
+  gtk3,
+  girara,
+  gettext,
+  gnome,
+  libheif,
+  libjxl,
+  libxml2,
+  check,
+  sqlite,
+  glib,
+  texlive,
+  libintl,
+  libseccomp,
+  file,
+  librsvg,
+  gtk-mac-integration,
+  webp-pixbuf-loader,
+  versionCheckHook,
 }:
 
-assert synctexSupport -> texlive != null;
+stdenv.mkDerivation (finalAttrs: {
+  pname = "zathura";
+  version = "2026.05.20";
 
-with stdenv.lib;
+  strictDeps = true;
+  __structuredAttrs = true;
 
-stdenv.mkDerivation rec {
-  name = "zathura-core-${version}";
-  version = "0.4.0";
-
-  src = fetchurl {
-    url = "https://pwmt.org/projects/zathura/download/zathura-${version}.tar.xz";
-    sha256 = "1j0yah09adv3bsjhhbqra5lambal32svk8fxmf89wwmcqrcr4qma";
+  src = fetchFromGitHub {
+    owner = "pwmt";
+    repo = "zathura";
+    tag = finalAttrs.version;
+    hash = "sha256-ChrIJKPVukkW6d/grGcMJ6sZ9sctIOmyJv6TAehh1T8=";
   };
 
+  outputs = [
+    "bin"
+    "man"
+    "dev"
+    "out"
+  ];
+
+  # Flag list:
+  # https://github.com/pwmt/zathura/blob/master/meson_options.txt
+  mesonFlags = [
+    "-Dmanpages=enabled"
+    "-Dconvert-icon=enabled"
+    "-Dsynctex=enabled"
+    "-Dtests=disabled"
+    # by default, zathura searches for zathurarc under $out/etc
+    "-Dsysconfdir=/etc"
+    # Make sure tests are enabled for doCheck
+    # (lib.mesonEnable "tests" finalAttrs.finalPackage.doCheck)
+    (lib.mesonEnable "seccomp" stdenv.hostPlatform.isLinux)
+    (lib.mesonEnable "landlock" stdenv.hostPlatform.isLinux)
+  ];
+
   nativeBuildInputs = [
-    meson ninja pkgconfig appstream-glib desktop-file-utils python3.pkgs.sphinx
-    gettext makeWrapper libxml2
+    meson
+    ninja
+    pkg-config
+    desktop-file-utils
+    python3.pythonOnBuildForHost.pkgs.sphinx
+    gettext
+    wrapGAppsHook3
+    libxml2
+    appstream-glib
   ];
 
   buildInputs = [
-    file gtk girara libintl libseccomp
-    sqlite glib
-  ] ++ optional synctexSupport texlive.bin.core
-    ++ optional stdenv.isDarwin [ gtk-mac-integration ];
+    gtk3
+    girara
+    libintl
+    sqlite
+    glib
+    file
+    librsvg
+    check
+    json-glib
+    texlive.bin.core
+  ]
+  ++ lib.optional stdenv.hostPlatform.isLinux libseccomp
+  ++ lib.optional stdenv.hostPlatform.isDarwin gtk-mac-integration;
 
-  postInstall = ''
-    wrapProgram "$out/bin/zathura" \
-      --prefix PATH ":" "${makeBinPath [ file ]}"
-  '';
+  # add support for more image formats
+  env.GDK_PIXBUF_MODULE_FILE = gnome._gdkPixbufCacheBuilder_DO_NOT_USE {
+    extraLoaders = [
+      libheif.lib
+      libjxl
+      librsvg
+      webp-pixbuf-loader
+    ];
+  };
+
+  doCheck = !stdenv.hostPlatform.isDarwin;
+
+  nativeInstallCheckInputs = [ versionCheckHook ];
+  doInstallCheck = true;
+
+  passthru.updateScript = gitUpdater { };
 
   meta = {
-    homepage = https://pwmt.org/projects/zathura/;
-    description = "A core component for zathura PDF viewer";
-    license = licenses.zlib;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ garbas ];
+    homepage = "https://pwmt.org/projects/zathura";
+    description = "Core component for zathura PDF viewer";
+    license = lib.licenses.zlib;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ mithicspirit ];
+    mainProgram = "zathura";
   };
-}
+})

@@ -1,22 +1,49 @@
-{ stdenv, buildPythonPackage, fetchPypi, python }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  gitUpdater,
+  setuptools,
+  unittestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pycparser";
-  version = "2.18";
+  version = "3.00";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "99a8ca03e29851d96616ad0404b4aad7d9ee16f25c9f9708a11faf2810f7b226";
+  src = fetchFromGitHub {
+    owner = "eliben";
+    repo = "pycparser";
+    tag = "release_v${version}";
+    hash = "sha256-6eKc+p3xLyRPo3oCWP/dbMpHlkBXLy8XiGR0gTEHI2E=";
   };
 
-  checkPhase = ''
-    ${python.interpreter} -m unittest discover -s tests
-  '';
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "pycparser" ];
+
+  nativeCheckInputs = [ unittestCheckHook ];
+
+  preCheck = ''
+    substituteInPlace examples/using_gcc_E_libc.py \
+      --replace-fail "'gcc'" "'${stdenv.cc.targetPrefix}cc'"
+  '';
+  unittestFlagsArray = [
+    "-s"
+    "tests"
+  ];
+
+  passthru.updateScript = gitUpdater {
+    rev-prefix = "release_v";
+  };
+
+  meta = {
+    changelog = "https://github.com/eliben/pycparser/releases/tag/${src.tag}";
     description = "C parser in Python";
-    homepage = https://github.com/eliben/pycparser;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ domenkozar ];
+    homepage = "https://github.com/eliben/pycparser";
+    license = lib.licenses.bsd3;
+    maintainers = [ lib.maintainers.dotlambda ];
   };
 }

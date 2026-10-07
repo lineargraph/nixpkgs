@@ -1,17 +1,21 @@
 {
-  mkDerivation, lib,
+  mkDerivation,
+  cmake,
   extra-cmake-modules,
-  qtbase, qttools
+  qtbase,
+  qttools,
 }:
 
 mkDerivation {
-  name = "kwidgetsaddons";
-  meta = {
-    maintainers = [ lib.maintainers.ttuegel ];
-    broken = builtins.compareVersions qtbase.version "5.7.0" < 0;
-  };
-  nativeBuildInputs = [ extra-cmake-modules ];
+  pname = "kwidgetsaddons";
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
+  ];
   buildInputs = [ qttools ];
   propagatedBuildInputs = [ qtbase ];
-  outputs = [ "out" "dev" ];
+  outputs = [
+    "out"
+    "dev"
+  ];
 }

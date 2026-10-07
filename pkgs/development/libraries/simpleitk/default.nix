@@ -1,29 +1,48 @@
-{ stdenv, fetchurl, cmake, git, swig, lua, itk }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  cmake,
+  swig,
+  lua,
+  elastix,
+  itk,
+}:
 
-stdenv.mkDerivation rec {
-  pname    = "simpleitk";
-  version = "1.1.0";
-  name  = "${pname}-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "simpleitk";
+  version = "2.5.5";
 
-  src = fetchurl {
-    url    = "https://sourceforge.net/projects/${pname}/files/SimpleITK/${version}/Source/SimpleITK-${version}.tar.gz";
-    sha256 = "01y8s73mw4yabqir2f8qp5zc1c0y6szi18rr4zwgsxz62g4drzgm";
+  src = fetchFromGitHub {
+    owner = "SimpleITK";
+    repo = "SimpleITK";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-biCrtfewxptDGHlN6xGmsv+m4RGgWDIBu7zMfa8XIRg=";
   };
 
-  nativeBuildInputs = [ cmake git swig ];
-  buildInputs = [ lua itk ];
+  nativeBuildInputs = [
+    cmake
+    swig
+  ];
+  buildInputs = [
+    elastix
+    lua
+    itk
+  ];
 
-  cmakeFlags = [ "-DBUILD_SHARED_LIBS=ON" "-DCMAKE_CXX_FLAGS='-Wno-attributes'" ];
+  # 2.0.0: linker error building examples
+  cmakeFlags = [
+    "-DBUILD_EXAMPLES=OFF"
+    "-DBUILD_SHARED_LIBS=OFF"
+    "-DSimpleITK_USE_ELASTIX=ON"
+  ];
 
-  checkPhase = "ctest";
-
-  enableParallelBuilding = true;
-
-  meta = with stdenv.lib; {
-    homepage = http://www.simpleitk.org;
+  meta = {
+    homepage = "https://www.simpleitk.org";
     description = "Simplified interface to ITK";
-    maintainers = with maintainers; [ bcdarwin ];
-    platforms = platforms.unix;
-    license = licenses.asl20;
+    changelog = "https://github.com/SimpleITK/SimpleITK/releases/tag/v${finalAttrs.version}";
+    maintainers = with lib.maintainers; [ bcdarwin ];
+    platforms = lib.platforms.linux;
+    license = lib.licenses.asl20;
   };
-}
+})

@@ -1,29 +1,64 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, six, pytest, pythonOlder }:
+{
+  lib,
+  stdenv,
+  arrow,
+  buildPythonPackage,
+  cloudpickle,
+  cryptography,
+  fetchFromGitHub,
+  lz4,
+  numpy,
+  pytestCheckHook,
+  ruamel-yaml,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "construct";
-  version = "2.8.16";
-  name = pname + "-" + version;
+  version = "2.10.70";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "construct";
     repo = "construct";
-    rev = "v${version}";
-    sha256 = "0lzz1dy419n254qccch7yx4nkpwd0fsyjhnsnaf6ysgwzqxxv63j";
+    tag = "v${version}";
+    hash = "sha256-5otjjIyje0+z/Y/C2ivmu08PNm0oJcSSvZkQfGxHDuQ=";
   };
 
-  propagatedBuildInputs = [ six ];
+  nativeBuildInputs = [ setuptools ];
 
-  checkInputs = [ pytest ];
+  propagatedBuildInputs = [
+    # Not an explicit dependency, but it's imported by an entrypoint
+    lz4
+  ];
 
-  checkPhase = ''
-    py.test -k 'not test_numpy' tests
-  '';
+  optional-dependencies = {
+    extras = [
+      arrow
+      cloudpickle
+      cryptography
+      numpy
+      ruamel-yaml
+    ];
+  };
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    pytestCheckHook
+  ]
+  ++ lib.concatAttrValues optional-dependencies;
+
+  pythonImportsCheck = [ "construct" ];
+
+  disabledTests = [
+    "test_benchmarks"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [ "test_multiprocessing" ];
+
+  meta = {
     description = "Powerful declarative parser (and builder) for binary data";
-    homepage = http://construct.readthedocs.org/;
-    license = licenses.mit;
-    maintainers = with maintainers; [ bjornfor ];
+    homepage = "https://construct.readthedocs.org/";
+    changelog = "https://github.com/construct/construct/releases/tag/v${version}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ bjornfor ];
   };
 }

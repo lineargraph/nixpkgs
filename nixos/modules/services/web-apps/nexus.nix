@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -7,17 +12,14 @@ let
   cfg = config.services.nexus;
 
 in
-
 {
   options = {
     services.nexus = {
       enable = mkEnableOption "Sonatype Nexus3 OSS service";
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.nexus;
-        description = "Package which runs Nexus3";
-      };
+      package = lib.mkPackageOption pkgs "nexus" { };
+
+      jdkPackage = lib.mkPackageOption pkgs "openjdk8" { };
 
       user = mkOption {
         type = types.str;
@@ -44,7 +46,7 @@ in
       };
 
       listenPort = mkOption {
-        type = types.int;
+        type = types.port;
         default = 8081;
         description = "Port to listen on.";
       };
@@ -68,6 +70,28 @@ in
           -Dkaraf.data=${cfg.home}/nexus3
           -Djava.io.tmpdir=${cfg.home}/nexus3/tmp
           -Dkaraf.startLocalConsole=false
+          -Djava.endorsed.dirs=${cfg.package}/lib/endorsed
+        '';
+        defaultText = literalExpression ''
+          '''
+            -Xms1200M
+            -Xmx1200M
+            -XX:MaxDirectMemorySize=2G
+            -XX:+UnlockDiagnosticVMOptions
+            -XX:+UnsyncloadClass
+            -XX:+LogVMOutput
+            -XX:LogFile=''${home}/nexus3/log/jvm.log
+            -XX:-OmitStackTraceInFastThrow
+            -Djava.net.preferIPv4Stack=true
+            -Dkaraf.home=''${package}
+            -Dkaraf.base=''${package}
+            -Dkaraf.etc=''${package}/etc/karaf
+            -Djava.util.logging.config.file=''${package}/etc/karaf/java.util.logging.properties
+            -Dkaraf.data=''${home}/nexus3
+            -Djava.io.tmpdir=''${home}/nexus3/tmp
+            -Dkaraf.startLocalConsole=false
+            -Djava.endorsed.dirs=''${package}/lib/endorsed
+          '''
         '';
 
         description = ''
@@ -80,12 +104,13 @@ in
   };
 
   config = mkIf cfg.enable {
-    users.extraUsers."${cfg.user}" = {
+    users.users.${cfg.user} = {
       isSystemUser = true;
-      group = cfg.group;
+      inherit (cfg) group home;
+      createHome = true;
     };
 
-    users.extraGroups."${cfg.group}" = {};
+    users.groups.${cfg.group} = { };
 
     systemd.services.nexus = {
       description = "Sonatype Nexus3";
@@ -98,13 +123,12 @@ in
         NEXUS_USER = cfg.user;
         NEXUS_HOME = cfg.home;
 
+        INSTALL4J_JAVA_HOME = cfg.jdkPackage;
         VM_OPTS_FILE = pkgs.writeText "nexus.vmoptions" cfg.jvmOpts;
       };
 
       preStart = ''
         mkdir -p ${cfg.home}/nexus3/etc
-
-        chown -R ${cfg.user}:${cfg.group} ${cfg.home}
 
         if [ ! -f ${cfg.home}/nexus3/etc/nexus.properties ]; then
           echo "# Jetty section" > ${cfg.home}/nexus3/etc/nexus.properties
@@ -118,17 +142,15 @@ in
         fi
       '';
 
-      script = "${cfg.package}/bin/nexus run";
-
       serviceConfig = {
+        ExecStart = "${cfg.package}/bin/nexus run";
         User = cfg.user;
         Group = cfg.group;
         PrivateTmp = true;
-        PermissionsStartOnly = true;
         LimitNOFILE = 102642;
       };
     };
   };
 
-  meta.maintainers = with stdenv.lib.maintainers; [ ironpinguin ];
+  meta.maintainers = with lib.maintainers; [ ironpinguin ];
 }

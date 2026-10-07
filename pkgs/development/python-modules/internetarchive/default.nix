@@ -1,48 +1,68 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, pytest, six, clint, pyyaml, docopt
-, requests, jsonpatch, args, schema, responses, backports_csv }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  requests,
+  jsonpatch,
+  schema,
+  responses,
+  setuptools,
+  tqdm,
+  urllib3,
+}:
 
-buildPythonPackage rec {
-
+buildPythonPackage (finalAttrs: {
   pname = "internetarchive";
-  version = "1.7.2";
-  name = "${pname}-${version}";
+  version = "5.10.1";
+  pyproject = true;
 
-  # Can't use pypi, data files for tests missing
   src = fetchFromGitHub {
     owner = "jjjake";
     repo = "internetarchive";
-    rev = "v${version}";
-    sha256 = "1cijagy22qi8ydrvizqmi1whnc3qr94yk0910lwgpxjywcygggir";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-OVjvx7Ne2NLXl5eA1HP89HyoTttR9XAx2AJdXiWMkqY=";
   };
-    # It is hardcoded to specific versions, I don't know why.
-    preConfigure = ''
-        sed "s/schema>=.*/schema>=0.4.0',/" -i setup.py
-        sed "/backports.csv/d" -i setup.py
-    '';
 
-    #phases = [ "unpackPhase" "configurePhase" "installPhase" "fixupPhase" "installCheckPhase" ];
-    buildInputs = [ pytest responses ];
-    propagatedBuildInputs = [
-      six
-      clint
-      pyyaml
-      docopt
-      requests
-      jsonpatch
-      args
-      schema
-      backports_csv
-    ];
+  build-system = [ setuptools ];
 
-    # Tests disabled because ia binary doesn't exist when tests run
-    doCheck = false;
+  dependencies = [
+    tqdm
+    requests
+    jsonpatch
+    schema
+    urllib3
+  ];
 
-    checkPhase = "pytest tests";
+  nativeCheckInputs = [
+    responses
+    pytestCheckHook
+  ];
 
+  disabledTests = [
+    # Tests require network access
+    "test_get_item_with_kwargs"
+    "test_upload"
+    "test_upload_metadata"
+    "test_upload_queue_derive"
+    "test_upload_validate_identifie"
+    "test_upload_validate_identifier"
+  ];
 
-  meta = with stdenv.lib; {
-      description = "A python wrapper for the various Internet Archive APIs";
-    homepage = https://github.com/jjjake/internetarchive;
-    license = licenses.agpl3;
+  disabledTestPaths = [
+    # Tests require network access
+    "tests/cli/test_ia.py"
+    "tests/cli/test_ia_download.py"
+  ];
+
+  pythonImportsCheck = [ "internetarchive" ];
+
+  meta = {
+    description = "Python and Command-Line Interface to Archive.org";
+    homepage = "https://github.com/jjjake/internetarchive";
+    changelog = "https://github.com/jjjake/internetarchive/blob/${finalAttrs.src.tag}/HISTORY.rst";
+    license = lib.licenses.agpl3Plus;
+    maintainers = with lib.maintainers; [ pyrox0 ];
+    mainProgram = "ia";
   };
-}
+})

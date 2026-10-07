@@ -1,31 +1,36 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, ocamlbuild }:
+{
+  lib,
+  fetchFromGitHub,
+  menhir,
+  buildDunePackage,
+}:
+buildDunePackage (finalAttrs: {
+  pname = "wasm";
+  version = "2.0.2";
 
-if !stdenv.lib.versionAtLeast ocaml.version "4.02"
-then throw "wasm is not available for OCaml ${ocaml.version}"
-else
-
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-wasm-${version}";
-  version = "1.0";
+  minimalOCamlVersion = "4.12";
 
   src = fetchFromGitHub {
     owner = "WebAssembly";
     repo = "spec";
-    rev = "v${version}";
-    sha256 = "0r0wj31s2yg4vn4hyw2afc8wp8b0k3q130yiypwq3dlvfxrr70m6";
+    tag = "opam-${finalAttrs.version}";
+    hash = "sha256-RbVGW6laC3trP6IhtA2tLrAYVbx0Oucox9FgoEvs6LQ=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild ];
+  postUnpack = ''
+    cd "$sourceRoot/interpreter"
+    export sourceRoot=$PWD
+  '';
 
-  makeFlags = [ "-C" "interpreter" ];
-
-  createFindlibDestdir = true;
+  nativeBuildInputs = [
+    menhir
+  ];
 
   meta = {
-    description = "An OCaml library to read and write Web Assembly (wasm) files and manipulate their AST";
-    license = stdenv.lib.licenses.asl20;
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
-    inherit (src.meta) homepage;
-    inherit (ocaml.meta) platforms;
+    description = "Library to read and write WebAssembly (Wasm) files and manipulate their AST";
+    mainProgram = "wasm";
+    license = lib.licenses.asl20;
+    maintainers = [ lib.maintainers.vbgl ];
+    homepage = "https://github.com/WebAssembly/spec/tree/main/interpreter";
   };
-}
+})

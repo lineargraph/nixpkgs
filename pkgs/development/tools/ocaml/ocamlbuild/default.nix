@@ -1,35 +1,54 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib }:
-let
-  version = "0.12.0";
-in
-stdenv.mkDerivation {
-  name = "ocamlbuild-${version}";
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  ocaml,
+  findlib,
+  version ? if lib.versionAtLeast ocaml.version "4.08" then "0.16.1" else "0.14.3",
+}:
+
+stdenv.mkDerivation (finalAttrs: {
+  pname = "ocaml${ocaml.version}-ocamlbuild";
   inherit version;
 
   src = fetchFromGitHub {
     owner = "ocaml";
     repo = "ocamlbuild";
-    rev = version;
-    sha256 = "1shyim50ms0816fphc4mk0kldcx3pnba2i6m10q0cbm18m9d7chq";
+    rev = finalAttrs.version;
+    hash =
+      {
+        "0.14.3" = "sha256-dfcNu4ugOYu/M0rRQla7lXum/g1UzncdLGmpPYo0QUM=";
+        "0.16.1" = "sha256-RpHVX0o4QduN73j+omlZlycRJaGZWfwHO5kq/WsEGZE=";
+      }
+      ."${finalAttrs.version}";
   };
 
   createFindlibDestdir = true;
 
-  buildInputs = [ ocaml findlib ];
+  nativeBuildInputs = [
+    ocaml
+    findlib
+  ];
+  strictDeps = true;
 
   configurePhase = ''
-  make -f configure.make Makefile.config \
-    "OCAMLBUILD_PREFIX=$out" \
-    "OCAMLBUILD_BINDIR=$out/bin" \
-    "OCAMLBUILD_MANDIR=$out/share/man" \
-    "OCAMLBUILD_LIBDIR=$OCAMLFIND_DESTDIR"
+    runHook preConfigure
+
+    make -f configure.make Makefile.config \
+      "OCAMLBUILD_PREFIX=$out" \
+      "OCAMLBUILD_BINDIR=$out/bin" \
+      "OCAMLBUILD_MANDIR=$out/share/man" \
+      "OCAMLBUILD_LIBDIR=$OCAMLFIND_DESTDIR"
+
+    runHook postConfigure
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/ocaml/ocamlbuild/;
-    description = "A build system with builtin rules to easily build most OCaml projects";
-    license = licenses.lgpl2;
+  meta = {
+    description = "Build system with builtin rules to easily build most OCaml projects";
+    homepage = "https://github.com/ocaml/ocamlbuild/";
+    license = lib.licenses.lgpl2;
+    maintainers = with lib.maintainers; [ vbgl ];
+    mainProgram = "ocamlbuild";
     inherit (ocaml.meta) platforms;
-    maintainers = with maintainers; [ vbgl ];
   };
-}
+})

@@ -1,33 +1,76 @@
-{ fetchurl, boost, zlib, clang, ncurses, pythonPackages, lib }:
+{
+  stdenv,
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  cmake,
+  python,
+  zlib,
+  ncurses,
+  docutils,
+  pygments,
+  numpy,
+  scipy,
+  scikit-learn,
+  spdlog,
+  fmt,
+  rapidjson,
+}:
 
-pythonPackages.buildPythonPackage rec {
+buildPythonPackage rec {
   pname = "vowpalwabbit";
-  name = "${pname}-${version}";
-  version = "8.5.0";
+  version = "9.10.0";
+  format = "setuptools";
 
-  src = fetchurl{
-    url = "mirror://pypi/v/vowpalwabbit/${name}.tar.gz";
-    sha256 = "0b517371fc64f1c728a0af42a31fa93def27306e9b4d25d6e5fd01bcff1b7304";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-Yyqm3MlW6UL+bCufFfzWg9mBBQNhLxR+g++ZrQ6qM/E=";
   };
-  # vw tries to write some explicit things to home
-  # python installed: The directory '/homeless-shelter/.cache/pip/http'
-  preInstall = ''
-    export HOME=$PWD
-  '';
 
-  buildInputs = with pythonPackages; [ boost.dev zlib.dev clang ncurses pytest docutils pygments ];
-  propagatedBuildInputs = with pythonPackages; [ numpy scipy scikitlearn ];
+  nativeBuildInputs = [ cmake ];
+
+  buildInputs = [
+    docutils
+    ncurses
+    pygments
+    python.pkgs.boost
+    zlib.dev
+    spdlog
+    fmt
+    rapidjson
+  ];
+
+  # As we disable configure via cmake, pass explicit global options to enable
+  # spdlog and fmt packages
+  setupPyGlobalFlags = [ "--cmake-options=-DSPDLOG_SYS_DEP=ON;-DFMT_SYS_DEP=ON" ];
+
+  propagatedBuildInputs = [
+    numpy
+    scikit-learn
+    scipy
+  ];
+
+  # Python build script uses CMake, but we don't want CMake to do the
+  # configuration.
+  dontUseCmakeConfigure = true;
+
+  # Python ctypes.find_library uses DYLD_LIBRARY_PATH.
+  preConfigure = lib.optionalString stdenv.hostPlatform.isDarwin ''
+    export DYLD_LIBRARY_PATH="${python.pkgs.boost}/lib"
+  '';
 
   checkPhase = ''
     # check-manifest requires a git clone, not a tarball
     # check-manifest --ignore "Makefile,PACKAGE.rst,*.cc,tox.ini,tests*,examples*,src*"
-    python setup.py check -mrs
+    ${python.interpreter} setup.py check -ms
   '';
 
-  meta = with lib; {
-    description = "Vowpal Wabbit is a fast machine learning library for online learning, and this is the python wrapper for the project.";
-    homepage    = https://github.com/JohnLangford/vowpal_wabbit;
-    license     = licenses.bsd3;
-    maintainers = with maintainers; [ teh ];
+  meta = {
+    description = "Vowpal Wabbit is a fast machine learning library for online learning, and this is the python wrapper for the project";
+    homepage = "https://github.com/JohnLangford/vowpal_wabbit";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ teh ];
+    # Test again when new version is released
+    broken = stdenv.hostPlatform.isLinux;
   };
 }

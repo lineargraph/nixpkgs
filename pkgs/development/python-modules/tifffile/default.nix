@@ -1,28 +1,65 @@
-{ lib, stdenv, fetchPypi, buildPythonPackage, isPy27, pythonOlder
-, numpy, nose, enum34, futures }:
+{
+  lib,
+  buildPythonPackage,
+  dask,
+  fetchPypi,
+  fsspec,
+  lxml,
+  numpy,
+  pytestCheckHook,
+  setuptools,
+  zarr,
+}:
 
 buildPythonPackage rec {
   pname = "tifffile";
-  version = "0.14.0";
+  version = "2026.1.14";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "eff44f71782dce38c604921a1b29ddad0d007ac9871d66e9c872fd6fc311334e";
+    hash = "sha256-pCPFg+HuzZyiVWQtR/Rj76jX8jZaDhEOsBZ1cEk+DIw=";
   };
 
-  checkInputs = [ nose ];
-  checkPhase = ''
-    nosetests --exe -v --exclude="test_extension"
-  '';
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [ numpy ]
-    ++ lib.optional isPy27 futures
-    ++ lib.optional (pythonOlder "3.0") enum34;
+  dependencies = [ numpy ];
 
-  meta = with stdenv.lib; {
-    description = "Read and write image data from and to TIFF files.";
-    homepage = https://github.com/blink1073/tifffile;
-    maintainers = [ maintainers.lebastr ];
-    license = licenses.bsd2;
+  nativeCheckInputs = [
+    dask
+    fsspec
+    lxml
+    pytestCheckHook
+    zarr
+  ];
+
+  disabledTests = [
+    # Test require network access
+    "test_class_omexml"
+    "test_write_ome"
+    # Test file is missing
+    "test_write_predictor"
+    "test_issue_imagej_hyperstack_arg"
+    "test_issue_description_overwrite"
+    # AssertionError
+    "test_write_bigtiff"
+    "test_write_imagej_raw"
+    # https://github.com/cgohlke/tifffile/issues/142
+    "test_func_bitorder_decode"
+    # Test file is missing
+    "test_issue_invalid_predictor"
+  ];
+
+  pythonImportsCheck = [ "tifffile" ];
+
+  # flaky, often killed due to OOM or timeout
+  env.SKIP_LARGE = "1";
+
+  meta = {
+    description = "Read and write image data from and to TIFF files";
+    homepage = "https://github.com/cgohlke/tifffile/";
+    changelog = "https://github.com/cgohlke/tifffile/blob/v${version}/CHANGES.rst";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ lebastr ];
   };
 }

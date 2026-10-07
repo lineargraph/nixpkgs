@@ -1,21 +1,52 @@
-{ lib, buildPythonPackage, fetchPypi, python
-, mock, testrepository, testtools
-, requests, six }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  fixtures,
+  purl,
+  pytestCheckHook,
+  requests,
+  requests-futures,
+  setuptools,
+  setuptools-scm,
+  testtools,
+}:
 
 buildPythonPackage rec {
   pname = "requests-mock";
-  version = "1.4.0";
+  version = "1.12.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "2931887853c42e1d73879983d5bf03041109472991c5b4b8dba5d11ed23b9d0b";
+    hash = "sha256-6eEuMztSUVboKjyFLyIBa5FYIg0vR0VN6crop303FAE=";
   };
 
-  patchPhase = ''
-    sed -i 's@python@${python.interpreter}@' .testr.conf
+  postPatch = ''
+    substituteInPlace tests/test_mocker.py \
+      --replace-fail assertEquals assertEqual
   '';
 
-  checkInputs = [ mock testrepository testtools ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
-  propagatedBuildInputs = [ requests six ];
+  dependencies = [ requests ];
+
+  nativeCheckInputs = [
+    fixtures
+    purl
+    pytestCheckHook
+    requests-futures
+    testtools
+  ];
+
+  meta = {
+    description = "Mock out responses from the requests package";
+    homepage = "https://requests-mock.readthedocs.io";
+    changelog = "https://github.com/jamielennox/requests-mock/releases/tag/${version}";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
+  };
 }

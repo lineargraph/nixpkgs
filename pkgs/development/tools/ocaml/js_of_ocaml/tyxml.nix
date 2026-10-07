@@ -1,16 +1,21 @@
-{ stdenv, ocaml, findlib, jbuilder, js_of_ocaml-compiler
-, js_of_ocaml-ppx, ocaml-migrate-parsetree, ppx_tools_versioned
-, js_of_ocaml, reactivedata, tyxml
+{
+  buildDunePackage,
+  js_of_ocaml-ppx,
+  js_of_ocaml,
+  reactivedata,
+  tyxml,
 }:
 
-stdenv.mkDerivation rec {
-	name = "js_of_ocaml-tyxml-${version}";
+buildDunePackage {
+  pname = "js_of_ocaml-tyxml";
 
-	inherit (js_of_ocaml-compiler) version src installPhase meta;
+  inherit (js_of_ocaml) version src meta;
 
-	buildInputs = [ ocaml findlib jbuilder js_of_ocaml-ppx ocaml-migrate-parsetree ppx_tools_versioned ];
+  buildInputs = [ js_of_ocaml-ppx ];
 
-	propagatedBuildInputs = [ js_of_ocaml reactivedata tyxml ];
-
-	buildPhase = "jbuilder build -p js_of_ocaml-tyxml";
+  propagatedBuildInputs = [
+    js_of_ocaml
+    reactivedata
+    tyxml
+  ];
 }

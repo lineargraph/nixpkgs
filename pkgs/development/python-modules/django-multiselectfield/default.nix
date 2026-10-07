@@ -1,27 +1,36 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, django
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  django,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "django-multiselectfield";
-  name = "${pname}-${version}";
-  version = "0.1.8";
+  version = "1.0.1";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "52483d23aecbf6b502f9e6806e97da9288d5d7f2a3f99f736390763de68c8fd7";
+    pname = "django_multiselectfield";
+    inherit version;
+    hash = "sha256-P4tP/z4H1Kkci7S4Cbw1yusitBdptgb0ye3FO41ypmc=";
   };
 
-  propagatedBuildInputs = [ django ];
+  build-system = [ setuptools ];
+
+  dependencies = [ django ];
 
   # No tests
   doCheck = false;
 
+  pythonImportsCheck = [ "multiselectfield" ];
+
   meta = {
-    description = "django-multiselectfield";
+    description = "Multiple Choice model field for Django";
     homepage = "https://github.com/goinnn/django-multiselectfield";
-    license = lib.licenses.lgpl3;
+    changelog = "https://github.com/goinnn/django-multiselectfield/blob/master/CHANGES.rst";
+    license = lib.licenses.lgpl3Plus;
+    maintainers = [ ];
   };
 }

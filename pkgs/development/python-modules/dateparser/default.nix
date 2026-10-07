@@ -1,42 +1,88 @@
-{ lib, fetchPypi, buildPythonPackage, isPy3k
-, nose
-, parameterized
-, mock
-, glibcLocales
-, six
-, jdatetime
-, dateutil
-, umalqurra
-, pytz
-, tzlocal
-, regex
-, ruamel_yaml }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  python-dateutil,
+  pytz,
+  regex,
+  tzlocal,
+  hijridate,
+  convertdate,
+  fasttext,
+  numpy,
+  langdetect,
+  parameterized,
+  pytestCheckHook,
+  gitpython,
+  parsel,
+  requests,
+  ruamel-yaml,
+  writableTmpDirAsHomeHook,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "dateparser";
-  version = "0.7.0";
+  version = "1.4.3";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "940828183c937bcec530753211b70f673c0a9aab831e43273489b310538dff86";
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "scrapinghub";
+    repo = "dateparser";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-HaT+8aJ1qJ0irbDsv0nGn5Ln58lxfIIO6MnV+iOdEPM=";
   };
 
-  checkInputs = [ nose mock parameterized six glibcLocales ];
-  preCheck =''
-    # skip because of missing convertdate module, which is an extra requirement
-    rm tests/test_jalali.py
-  '';
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [
-    # install_requires
-    dateutil pytz regex tzlocal
-    # extra_requires
-    jdatetime ruamel_yaml umalqurra
+  dependencies = [
+    python-dateutil
+    pytz
+    regex
+    tzlocal
   ];
 
-  meta = with lib; {
-    description = "Date parsing library designed to parse dates from HTML pages";
-    homepage = https://github.com/scrapinghub/dateparser;
-    license = licenses.bsd3;
+  optional-dependencies = {
+    calendars = [
+      hijridate
+      convertdate
+    ];
+    fasttext = [
+      fasttext
+      numpy
+    ];
+    langdetect = [ langdetect ];
   };
-}
+
+  nativeCheckInputs = [
+    parameterized
+    pytestCheckHook
+    gitpython
+    parsel
+    requests
+    ruamel-yaml
+    writableTmpDirAsHomeHook
+  ]
+  ++ lib.concatAttrValues finalAttrs.passthru.optional-dependencies;
+
+  # Upstream only runs the tests in tests/ in CI, others use git clone
+  enabledTestPaths = [ "tests" ];
+
+  disabledTests = [
+    # access network
+    "test_custom_language_detect_fast_text_0"
+    "test_custom_language_detect_fast_text_1"
+  ];
+
+  pythonImportsCheck = [ "dateparser" ];
+
+  meta = {
+    changelog = "https://github.com/scrapinghub/dateparser/blob/${finalAttrs.src.tag}/HISTORY.rst";
+    description = "Date parsing library designed to parse dates from HTML pages";
+    homepage = "https://github.com/scrapinghub/dateparser";
+    license = lib.licenses.bsd3;
+    mainProgram = "dateparser-download";
+    maintainers = with lib.maintainers; [ dotlambda ];
+  };
+})

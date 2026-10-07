@@ -1,18 +1,41 @@
-{ lib, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  django,
+  python,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "django-picklefield";
-  name = "${pname}-${version}";
-  version = "1.0.0";
+  version = "3.4.0";
+  pyproject = true;
 
-  meta = {
-    description = "A pickled object field for Django";
-    homepage = https://github.com/gintas/django-picklefield;
-    license = lib.licenses.mit;
+  src = fetchFromGitHub {
+    owner = "gintas";
+    repo = "django-picklefield";
+    tag = "v${version}";
+    hash = "sha256-SvKJGOSsTZhAYJkGO+slL81EjcJtXmaFN7YWCGSX6Ac=";
   };
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "61e3ba7f6df82d8df9e6be3a8c55ef589eb3bf926c3d25d2b7949b07eae78354";
+  build-system = [ setuptools ];
+
+  dependencies = [ django ];
+
+  checkPhase = ''
+    runHook preCheck
+    ${python.interpreter} -m django test --settings=tests.settings
+    runHook postCheck
+  '';
+
+  pythonImportsCheck = [ "picklefield" ];
+
+  meta = {
+    description = "Pickled object field for Django";
+    homepage = "https://github.com/gintas/django-picklefield";
+    changelog = "https://github.com/gintas/django-picklefield/releases/tag/${src.tag}";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

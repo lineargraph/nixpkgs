@@ -1,27 +1,43 @@
-{ stdenv, buildPythonPackage, fetchPypi, termcolor, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  termcolor,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pytest-sugar";
-  version = "0.9.1";
+  version = "1.1.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "ab8cc42faf121344a4e9b13f39a51257f26f410e416c52ea11078cdd00d98a2c";
+    hash = "sha256-c7i2UWPr8Q+fZx76ue7T1W8g0spovag/pkdAqSwI9l0=";
   };
 
-  propagatedBuildInputs = [ termcolor pytest ];
-
-  checkPhase = ''
-    py.test
+  postPatch = ''
+    # pytest 9 compat
+    substituteInPlace test_sugar.py \
+      --replace-fail "startdir" "start_path"
   '';
 
-  meta = with stdenv.lib; {
-    description = "A plugin that changes the default look and feel of py.test";
-    homepage = https://github.com/Frozenball/pytest-sugar;
-    license = licenses.bsd3;
+  build-system = [
+    setuptools
+  ];
 
-    # incompatible with pytest 3.5
-    # https://github.com/Frozenball/pytest-sugar/issues/134
-    broken = true; # 2018-04-20
+  dependencies = [
+    termcolor
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = {
+    description = "Plugin that changes the default look and feel of pytest";
+    homepage = "https://github.com/Frozenball/pytest-sugar";
+    changelog = "https://github.com/Teemu/pytest-sugar/releases/tag/v${version}";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

@@ -1,33 +1,48 @@
-{ stdenv, buildPythonPackage, fetchPypi, pyyaml, pytest, pytestcov }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  pyyaml,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "python-hosts";
-  version = "0.4.1";
+  version = "1.1.2";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "4a169a4669bddb720c032ef0132203ff8a7b6646266f7e6ab349177bab02b3ba";
+    hash = "sha256-XiU6aO6EhFVgj1g7TYMdbgg7IvjkU2DFoiwYikrB13A=";
   };
 
-  # win_inet_pton is required for windows support
-  prePatch = ''
-    substituteInPlace setup.py --replace "install_requires=['win_inet_pton']," ""
-    substituteInPlace python_hosts/utils.py --replace "import win_inet_pton" ""
-  '';
+  build-system = [ setuptools ];
 
-  checkInputs = [ pyyaml pytest pytestcov ];
+  nativeCheckInputs = [
+    pyyaml
+    pytestCheckHook
+  ];
 
-  # Removing 1 test file (it requires internet connection) and keeping the other two
-  checkPhase = ''
-    pytest tests/test_hosts_entry.py
-    pytest tests/test_utils.py
-  '';
+  pythonImportsCheck = [ "python_hosts" ];
 
-  meta = with stdenv.lib; {
-    description = "A library for managing a hosts file. It enables adding and removing entries, or importing them from a file or URL";
-    homepage = https://github.com/jonhadfield/python-hosts;
-    license = licenses.mit;
-    maintainers = with maintainers; [ psyanticy ];
+  disabledTests = [
+    # Tests require network access
+    "test_import_from_url_counters_for_part_success"
+    "test_import_from_url_with_force"
+    "test_import_from_url_without_force"
+    "test_import_from_url"
+  ];
+
+  meta = {
+    description = "Library for managing a hosts file";
+    longDescription = ''
+      python-hosts is a Python library for managing a hosts file. It enables you to add
+      and remove entries, or import them from a file or URL.
+    '';
+    homepage = "https://github.com/jonhadfield/python-hosts";
+    changelog = "https://github.com/jonhadfield/python-hosts/blob/${version}/CHANGELOG.md";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ psyanticy ];
   };
 }
-

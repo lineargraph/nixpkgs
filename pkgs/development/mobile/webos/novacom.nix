@@ -1,7 +1,14 @@
-{ stdenv, fetchFromGitHub, webos, cmake, pkgconfig }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  webos,
+  cmake,
+  pkg-config,
+}:
 
 stdenv.mkDerivation rec {
-  name = "novacom-${version}";
+  pname = "novacom";
   version = "18";
 
   src = fetchFromGitHub {
@@ -11,17 +18,27 @@ stdenv.mkDerivation rec {
     sha256 = "12s6g7l20kakyjlhqpli496miv2kfsdp17lcwhdrzdxvxl6hnf4n";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig webos.cmake-modules ];
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    webos.cmake-modules
+  ];
+
+  postPatch = ''
+    substituteInPlace CMakeLists.txt \
+      --replace-fail "cmake_minimum_required(VERSION 2.8.7)" "cmake_minimum_required(VERSION 3.10)"
+  '';
 
   postInstall = ''
     install -Dm755 -t $out/bin ../scripts/novaterm
     substituteInPlace $out/bin/novaterm --replace "exec novacom" "exec $out/bin/novacom"
   '';
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Utility for communicating with WebOS devices";
-    license = licenses.asl20;
-    maintainers = with maintainers; [ dtzWill ];
-    platforms = platforms.linux;
+    homepage = "https://github.com/openwebos/novacom";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
+    platforms = lib.platforms.linux;
   };
 }

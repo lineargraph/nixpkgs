@@ -1,7 +1,9 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  options,
+  lib,
+  ...
+}:
 {
 
   ###### interface
@@ -10,7 +12,8 @@ with lib;
 
     services.mail = {
 
-      sendmailSetuidWrapper = mkOption {
+      sendmailSetuidWrapper = lib.mkOption {
+        type = lib.types.nullOr options.security.wrappers.type.nestedTypes.elemType;
         default = null;
         internal = true;
         description = ''
@@ -24,7 +27,7 @@ with lib;
 
   ###### implementation
 
-  config = mkIf (config.services.mail.sendmailSetuidWrapper != null) {
+  config = lib.mkIf (config.services.mail.sendmailSetuidWrapper != null) {
 
     security.wrappers.sendmail = config.services.mail.sendmailSetuidWrapper;
 

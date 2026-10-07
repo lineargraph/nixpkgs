@@ -1,39 +1,52 @@
-{ stdenv, buildPythonPackage, fetchPypi, flask, jinja2, itsdangerous, events
-, markupsafe, pymongo, flask-pymongo, werkzeug, simplejson, cerberus }:
+{
+  lib,
+  buildPythonPackage,
+  cerberus,
+  events,
+  fetchFromGitHub,
+  flask,
+  pymongo,
+  setuptools,
+  simplejson,
+}:
 
 buildPythonPackage rec {
-  pname = "Eve";
-  version = "0.7.9";
-  name  = "${pname}-${version}";
+  pname = "eve";
+  version = "2.3.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "e4ffa43be977997a4c6b62f5ab7996df3acf54c68824875fecd896da5af341a3";
+  src = fetchFromGitHub {
+    owner = "pyeve";
+    repo = "eve";
+    tag = "v${version}";
+    hash = "sha256-y0QfxLDoTKNZuAKcPqrLjwkZ0mRseBVq7OyflwUd+Lk=";
   };
 
-  patches = [
-    ./setup.patch
+  pythonRelaxDeps = [
+    "events"
+    "simplejson"
   ];
 
-  propagatedBuildInputs = [
+  build-system = [ setuptools ];
+
+  dependencies = [
     cerberus
     events
-    flask-pymongo
     flask
-    itsdangerous
-    jinja2
-    markupsafe
     pymongo
     simplejson
-    werkzeug
   ];
 
-  # tests call a running mongodb instance
+  pythonImportsCheck = [ "eve" ];
+
+  # Tests call a running mongodb instance
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = "http://python-eve.org/";
+  meta = {
     description = "Open source Python REST API framework designed for human beings";
-    license = licenses.bsd3;
+    homepage = "https://python-eve.org/";
+    changelog = "https://github.com/pyeve/eve/blob/${src.tag}/CHANGES.rst";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

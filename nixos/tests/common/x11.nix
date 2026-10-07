@@ -1,12 +1,29 @@
-{ services.xserver.enable = true;
+{ lib, ... }:
+
+{
+  imports = [
+    ./auto.nix
+  ];
+
+  services.xserver.enable = true;
 
   # Automatically log in.
-  services.xserver.displayManager.auto.enable = true;
+  test-support.displayManager.auto.enable = true;
 
   # Use IceWM as the window manager.
-  services.xserver.windowManager.default = "icewm";
+  # Don't use a desktop manager.
+  services.displayManager.defaultSession = lib.mkDefault "none+icewm";
   services.xserver.windowManager.icewm.enable = true;
 
-  # Don't use a desktop manager.
-  services.xserver.desktopManager.default = "none";
+  environment.etc = {
+    # Help with OCR
+    "icewm/theme".text = ''
+      Theme="gtk2/default.theme"
+    '';
+    # Remove task bar to avoid non-determinism
+    "icewm/preferences".text = ''
+      ShowTaskBar=0
+    '';
+  };
+
 }

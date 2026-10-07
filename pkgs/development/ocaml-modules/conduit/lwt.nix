@@ -1,16 +1,24 @@
-{ stdenv, ocaml, findlib, jbuilder, ppx_sexp_conv, conduit, lwt3 }:
+{
+  buildDunePackage,
+  ppx_sexp_conv,
+  conduit,
+  lwt,
+  sexplib0,
+}:
 
-if !stdenv.lib.versionAtLeast conduit.version "1.0"
-then conduit
-else
+buildDunePackage {
+  pname = "conduit-lwt";
+  inherit (conduit) version src;
 
-stdenv.mkDerivation rec {
-	name = "ocaml${ocaml.version}-conduit-lwt-${version}";
-	inherit (conduit) version src installPhase meta;
+  buildInputs = [ ppx_sexp_conv ];
 
-	buildInputs = [ ocaml findlib jbuilder ppx_sexp_conv ];
+  propagatedBuildInputs = [
+    conduit
+    lwt
+    sexplib0
+  ];
 
-	propagatedBuildInputs = [ conduit lwt3 ];
-
-	buildPhase = "jbuilder build -p conduit-lwt";
+  meta = conduit.meta // {
+    description = "Network connection establishment library for Lwt";
+  };
 }

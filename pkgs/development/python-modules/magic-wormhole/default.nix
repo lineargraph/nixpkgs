@@ -1,65 +1,132 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pythonAtLeast
-, python
-, spake2
-, pynacl
-, six
-, attrs
-, twisted
-, autobahn
-, automat
-, hkdf
-, tqdm
-, click
-, humanize
-, ipaddress
-, txtorcon
-, nettools
-, glibc
-, glibcLocales
-, mock
-, magic-wormhole-transit-relay
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  installShellFiles,
+
+  # build-system
+  setuptools,
+  versioneer,
+
+  # dependencies
+  attrs,
+  autobahn,
+  automat,
+  click,
+  cryptography,
+  humanize,
+  iterable-io,
+  pynacl,
+  qrcode,
+  spake2,
+  tqdm,
+  twisted,
+  txtorcon,
+  zipstream-ng,
+
+  # optional-dependencies
+  noiseprotocol,
+
+  # tests
+  net-tools,
+  unixtools,
+  hypothesis,
+  magic-wormhole-mailbox-server,
+  magic-wormhole-transit-relay,
+  pytestCheckHook,
+  pytest-twisted,
+
+  gitUpdater,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "magic-wormhole";
-  version = "0.10.5";
+  version = "0.24.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "9558ea1f3551e535deec3462cd5c8391cb32ebb12ecd8b40b36861dbee4917ee";
+  src = fetchFromGitHub {
+    owner = "magic-wormhole";
+    repo = "magic-wormhole";
+    tag = finalAttrs.version;
+    hash = "sha256-aY8dI5K2qroY+Nbc00R5XK0AjHpdnXFYWABgPqf8gQ8=";
   };
 
-  checkInputs = [ mock magic-wormhole-transit-relay ];
-  buildInputs = [ nettools glibcLocales ];
-  propagatedBuildInputs = [ spake2 pynacl six attrs twisted autobahn automat hkdf tqdm click humanize ipaddress txtorcon ];
+  postPatch =
+    # enable tests by fixing the location of the wormhole binary
+    ''
+      substituteInPlace src/wormhole/test/test_cli.py --replace-fail \
+        'locations = procutils.which("wormhole")' \
+        'return "${placeholder "out"}/bin/wormhole"'
+    ''
+    # fix the location of the ifconfig binary
+    + lib.optionalString stdenv.hostPlatform.isLinux ''
+      sed -i -e "s|'ifconfig'|'${net-tools}/bin/ifconfig'|" src/wormhole/ipaddrs.py
+    '';
 
-  postPatch = ''
-    sed -i -e "s|'ifconfig'|'${nettools}/bin/ifconfig'|" src/wormhole/ipaddrs.py
-    sed -i -e "s|if (os.path.dirname(os.path.abspath(wormhole))|if not os.path.abspath(wormhole).startswith('/nix/store') and (os.path.dirname(os.path.abspath(wormhole))|" src/wormhole/test/test_cli.py
+  build-system = [
+    setuptools
+    versioneer
+  ];
 
-    # magic-wormhole will attempt to find all available locales by running
-    # 'locale -a'.  If we're building on Linux, then this may result in us
-    # running the system's locale binary instead of the one from Nix, so let's
-    # ensure we patch this.
-    sed -i -e 's|getProcessOutputAndValue("locale"|getProcessOutputAndValue("${glibc}/bin/locale"|' src/wormhole/test/test_cli.py
-  '' + lib.optionalString (pythonAtLeast "3.3") ''
-    sed -i -e 's|"ipaddress",||' setup.py
+  dependencies = [
+    attrs
+    autobahn
+    automat
+    click
+    cryptography
+    humanize
+    iterable-io
+    pynacl
+    qrcode
+    spake2
+    tqdm
+    twisted
+    txtorcon
+    zipstream-ng
+  ]
+  ++ autobahn.optional-dependencies.twisted
+  ++ twisted.optional-dependencies.tls;
+
+  optional-dependencies = {
+    dilation = [ noiseprotocol ];
+  };
+
+  nativeBuildInputs = [
+    installShellFiles
+  ];
+
+  nativeCheckInputs = [
+    hypothesis
+    magic-wormhole-mailbox-server
+    magic-wormhole-transit-relay
+    pytestCheckHook
+    pytest-twisted
+  ]
+  ++ finalAttrs.finalPackage.optional-dependencies.dilation
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [ unixtools.locale ];
+
+  __darwinAllowLocalNetworking = true;
+
+  postInstall = ''
+    install -Dm644 docs/wormhole.1 $out/share/man/man1/wormhole.1
+
+    # https://github.com/magic-wormhole/magic-wormhole/issues/619
+    installShellCompletion --cmd ${finalAttrs.meta.mainProgram} \
+      --bash wormhole_complete.bash \
+      --fish wormhole_complete.fish \
+      --zsh wormhole_complete.zsh
+    rm $out/wormhole_complete.*
   '';
 
-  checkPhase = ''
-    export PATH="$PATH:$out/bin"
-    export LANG="en_US.UTF-8"
-    export LC_ALL="en_US.UTF-8"
-    ${python.interpreter} -m wormhole.test.run_trial wormhole
-  '';
+  passthru.updateScript = gitUpdater { };
 
-  meta = with lib; {
+  meta = {
+    changelog = "https://github.com/magic-wormhole/magic-wormhole/blob/${finalAttrs.src.rev}/NEWS.md";
     description = "Securely transfer data between computers";
-    homepage = https://github.com/warner/magic-wormhole;
-    license = licenses.mit;
-    maintainers = with maintainers; [ asymmetric ];
+    homepage = "https://magic-wormhole.readthedocs.io/";
+    license = lib.licenses.mit;
+    maintainers = [ lib.maintainers.mjoerg ];
+    mainProgram = "wormhole";
   };
-}
+})

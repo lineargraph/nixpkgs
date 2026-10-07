@@ -1,28 +1,78 @@
-{ lib, buildPythonPackage, fetchPypi, fetchpatch, requests, six, requests_oauthlib }:
+{
+  lib,
+  aiohttp,
+  async-lru,
+  buildPythonPackage,
+  fetchFromGitHub,
+  flit-core,
+  oauthlib,
+  pytestCheckHook,
+  requests-oauthlib,
+  requests,
+  vcrpy,
+}:
 
 buildPythonPackage rec {
   pname = "tweepy";
-  version = "3.6.0";
+  version = "4.17.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "901500666de5e265d93e611dc05066bb020481c85550d6bcbf8030212938902c";
+  src = fetchFromGitHub {
+    owner = "tweepy";
+    repo = "tweepy";
+    tag = "v${version}";
+    hash = "sha256-Jr/62vXxBIiZGQeM5bbqnHDP9GCxrbJmCF2oiYglLbE=";
   };
 
-  # Fix build with pip 10
-  # https://github.com/tweepy/tweepy/pull/1030
-  patches = fetchpatch {
-    url = "${meta.homepage}/commit/778bd7a31d2f5fae98652735e7844533589ca221.patch";
-    sha256 = "1sqmjn0ngiynhfkdkcs33qmvl49ysfp8522hvxjk8bx252y9qw2h";
+  build-system = [ flit-core ];
+
+  dependencies = [
+    oauthlib
+    requests
+    requests-oauthlib
+  ];
+
+  optional-dependencies = {
+    async = [
+      aiohttp
+      async-lru
+    ];
   };
 
-  doCheck = false;
-  propagatedBuildInputs = [ requests six requests_oauthlib ];
+  nativeCheckInputs = [
+    pytestCheckHook
+    vcrpy
+  ]
+  ++ lib.concatAttrValues optional-dependencies;
 
-  meta = with lib; {
-    homepage = https://github.com/tweepy/tweepy;
-    description = "Twitter library for python";
-    license = licenses.mit;
-    maintainers = with maintainers; [ garbas ];
+  pythonImportsCheck = [ "tweepy" ];
+
+  # The checks with streaming fail due to (seemingly) not decoding (or unexpectedly sending response in) GZIP
+  # Same issue impacted mastodon-py, see https://github.com/halcy/Mastodon.py/commit/cd86887d88bbc07de462d1e00a8fbc3d956c0151 (who just disabled these)
+  disabledTestPaths = [ "tests/test_client.py" ];
+
+  disabledTests = [
+    "test_indicate_direct_message_typing"
+    "testcachedifferentqueryparameters"
+    "testcachedresult"
+    "testcreatedestroyblock"
+    "testcreatedestroyfriendship"
+    "testcreateupdatedestroylist"
+    "testgetfollowerids"
+    "testgetfollowers"
+    "testgetfriendids"
+    "testgetfriends"
+    "testgetuser"
+    "testcursorcursoritems"
+    "testcursorcursorpages"
+    "testcursornext"
+  ];
+
+  meta = {
+    description = "Twitter library for Python";
+    homepage = "https://github.com/tweepy/tweepy";
+    changelog = "https://github.com/tweepy/tweepy/releases/tag/v${version}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ marius851000 ];
   };
 }

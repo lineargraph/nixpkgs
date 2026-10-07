@@ -1,28 +1,6 @@
-{ config, lib, ... }:
-
-with lib;
-
+{ lib, ... }:
 let
-  maintainer = mkOptionType {
-    name = "maintainer";
-    check = email: elem email (attrValues lib.maintainers);
-    merge = loc: defs: listToAttrs (singleton (nameValuePair (last defs).file (last defs).value));
-  };
-
-  listOfMaintainers = types.listOf maintainer // {
-    # Returns list of
-    #   { "module-file" = [
-    #        "maintainer1 <first@nixos.org>"
-    #        "maintainer2 <second@nixos.org>" ];
-    #   }
-    merge = loc: defs:
-      zipAttrs
-        (flatten (imap1 (n: def: imap1 (m: def':
-          maintainer.merge (loc ++ ["[${toString n}-${toString m}]"])
-            [{ inherit (def) file; value = def'; }]) def.value) defs));
-  };
-
-  docFile = types.path // {
+  docFile = lib.types.path // {
     # Returns tuples of
     #   { file = "module location"; value = <path/to/doc.xml>; }
     merge = loc: defs: defs;
@@ -30,32 +8,41 @@ let
 in
 
 {
+  imports = [ ../../../modules/generic/meta-maintainers.nix ];
+
   options = {
     meta = {
 
-      maintainers = mkOption {
-        type = listOfMaintainers;
+      doc = lib.mkOption {
+        type = docFile;
         internal = true;
-        default = [];
-        example = [ lib.maintainers.all ];
+        example = "./meta.chapter.md";
         description = ''
-          List of maintainers of each module.  This option should be defined at
-          most once per module.
+          Documentation prologue for the set of options of each module.  This
+          option should be defined at most once per module.
         '';
       };
 
-      doc = mkOption {
-        type = docFile;
+      buildDocsInSandbox = lib.mkOption {
+        type = lib.types.bool // {
+          merge = loc: defs: defs;
+        };
         internal = true;
-        example = "./meta.xml";
+        default = true;
         description = ''
-          Documentation prologe for the set of options of each module.  This
-          option should be defined at most once per module.
+          Whether to include this module in the split options doc build.
+          Disable if the module references `config`, `pkgs` or other module
+          arguments that cannot be evaluated as constants.
+
+          This option should be defined at most once per module.
         '';
       };
 
     };
   };
 
-  meta.maintainers = singleton lib.maintainers.pierron;
+  meta.maintainers = with lib.maintainers; [
+    pierron
+    roberth
+  ];
 }

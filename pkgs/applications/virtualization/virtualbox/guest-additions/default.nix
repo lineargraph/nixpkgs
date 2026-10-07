@@ -1,160 +1,202 @@
-{ stdenv, fetchurl, lib, patchelf, cdrkit, kernel, which, makeWrapper
-, xorg, dbus, virtualbox }:
-
+{
+  stdenv,
+  kernel,
+  callPackage,
+  lib,
+  dbus,
+  kmod,
+  libxt,
+  libxrandr,
+  libxmu,
+  libxfixes,
+  libxext,
+  libxcursor,
+  zlib,
+  patchelf,
+  makeWrapper,
+  wayland,
+  libx11,
+}:
 let
-  version = virtualbox.version;
-  xserverVListFunc = builtins.elemAt (stdenv.lib.splitString "." xorg.xorgserver.version);
+  virtualboxVersion = "7.2.20";
+  virtualboxSubVersion = "";
+  virtualboxSha256 = "5c2138213b72f36c129b92c2c267f2a40e9c98513f4c86a584327f09f9be706d";
 
-  # Forced to 1.18 in <nixpkgs/nixos/modules/services/x11/xserver.nix>
-  # as it even fails to build otherwise.  Still, override this even here,
-  # in case someone does just a standalone build
-  # (not via videoDrivers = ["vboxvideo"]).
-  # It's likely to work again in some future update.
-  xserverABI = let abi = xserverVListFunc 0 + xserverVListFunc 1;
-    in if abi == "119" then "118" else abi;
-in
+  platform =
+    if stdenv.hostPlatform.isAarch64 then
+      "arm64"
+    else if stdenv.hostPlatform.is32bit then
+      "x86"
+    else
+      "amd64";
 
-stdenv.mkDerivation {
-  name = "VirtualBox-GuestAdditions-${version}-${kernel.version}";
-
-  src = fetchurl {
-    url = "http://download.virtualbox.org/virtualbox/${version}/VBoxGuestAdditions_${version}.iso";
-    sha256 = "b81d283d9ef88a44e7ac8983422bead0823c825cbfe80417423bd12de91b8046";
+  virtualBoxNixGuestAdditionsBuilder = callPackage ./builder.nix {
+    inherit
+      virtualboxVersion
+      virtualboxSubVersion
+      virtualboxSha256
+      platform
+      ;
   };
 
-  KERN_DIR = "${kernel.dev}/lib/modules/${kernel.modDirVersion}/build";
-  KERN_INCL = "${kernel.dev}/lib/modules/${kernel.modDirVersion}/source/include";
-
-  patchFlags = [ "-p1" "-d" "install/src/vboxguest-${version}" ];
-
-  patches = [
-    ./fix_kerndir.patch
-    ./fix_kernincl.patch
+  # Specifies how to patch binaries to make sure that libraries loaded using
+  # dlopen are found. We grep binaries for specific library names and patch
+  # RUNPATH in matching binaries to contain the needed library paths.
+  dlopenLibs = [
+    {
+      name = "libdbus-1.so";
+      pkg = dbus;
+    }
+    {
+      name = "libXfixes.so";
+      pkg = libxfixes;
+    }
+    {
+      name = "libXrandr.so";
+      pkg = libxrandr;
+    }
+    {
+      name = "libwayland-client.so";
+      pkg = wayland;
+    }
+    {
+      name = "libX11.so";
+      pkg = libx11;
+    }
+    {
+      name = "libXt.so";
+      pkg = libxt;
+    }
   ];
+in
+stdenv.mkDerivation {
+  pname = "VirtualBox-GuestAdditions";
+  version = "${virtualboxVersion}${virtualboxSubVersion}-${kernel.version}";
+
+  src = "${virtualBoxNixGuestAdditionsBuilder}/VBoxGuestAdditions-${platform}.tar.bz2";
+  sourceRoot = ".";
 
   hardeningDisable = [ "pic" ];
 
-  NIX_CFLAGS_COMPILE = "-Wno-error=incompatible-pointer-types -Wno-error=implicit-function-declaration";
+  env = {
+    NIX_CFLAGS_COMPILE = toString [
+      "-Wno-error=incompatible-pointer-types"
+      "-Wno-error=implicit-function-declaration"
+    ];
 
-  buildInputs = [ patchelf cdrkit makeWrapper dbus ] ++ kernel.moduleBuildDependencies;
+    KERN_DIR = "${kernel.dev}/lib/modules/${kernel.modDirVersion}/build";
+    KERN_INCL = "${kernel.dev}/lib/modules/${kernel.modDirVersion}/source/include";
+  };
 
-  installPhase = ''
-    mkdir -p $out
-    cp -r install/* $out
+  nativeBuildInputs = [
+    patchelf
+    makeWrapper
+    virtualBoxNixGuestAdditionsBuilder
+    kmod
+  ]
+  ++ kernel.moduleBuildDependencies;
+
+  # https://github.com/VirtualBox/virtualbox/issues/812
+  postPatch = ''
+    substituteInPlace ./src/vboxguest-${virtualboxVersion}_NixOS/vboxvideo/vbox_fb.c \
+      --replace-fail "RTLNX_VER_MIN(6,19,0) || RTLNX_VER_RANGE(6,12,103, 6,13,0)" \
+      "RTLNX_VER_MIN(6,19,0) || RTLNX_VER_RANGE(6,12,103, 6,13,0) || RTLNX_VER_RANGE(6,6,152, 6,6,999) || RTLNX_VER_RANGE(6,18,44, 6,18,999)"
+
+    sed -i '0,/RTLNX_VER_MIN(6,19,0)/s//RTLNX_VER_MIN(6,19,0) || RTLNX_VER_RANGE(6,12,112, 6,12,999) || RTLNX_VER_RANGE(6,18,55, 6,18,999)/' ./src/vboxguest-${virtualboxVersion}_NixOS/vboxvideo/vbox_main.c
   '';
 
-  buildCommand = with xorg; ''
-    ${if stdenv.system == "i686-linux" || stdenv.system == "x86_64-linux" then ''
-        isoinfo -J -i $src -x /VBoxLinuxAdditions.run > ./VBoxLinuxAdditions.run
-        chmod 755 ./VBoxLinuxAdditions.run
-        ./VBoxLinuxAdditions.run --noexec --keep
-      ''
-      else throw ("Architecture: "+stdenv.system+" not supported for VirtualBox guest additions")
-    }
+  buildPhase = ''
+    runHook preBuild
 
-    # Unpack files
-    cd install
-    ${if stdenv.system == "i686-linux" then ''
-        tar xfvj VBoxGuestAdditions-x86.tar.bz2
-      ''
-      else if stdenv.system == "x86_64-linux" then ''
-        tar xfvj VBoxGuestAdditions-amd64.tar.bz2
-      ''
-      else throw ("Architecture: "+stdenv.system+" not supported for VirtualBox guest additions")
-    }
-
-    cd ../
-    patchPhase
-    cd install/src
-
-    # Build kernel modules
-    export INSTALL_MOD_PATH=$out
-
-    find . -type f | xargs sed 's/depmod -a/true/' -i
-
-    cd vboxguest-${version}
-
+    # Build kernel modules.
+    cd src/vboxguest-${virtualboxVersion}_NixOS
+    # Run just make first. If we only did make install, we get symbol warnings during build.
     make
-
     cd ../..
 
     # Change the interpreter for various binaries
-    for i in sbin/VBoxService bin/{VBoxClient,VBoxControl} other/mount.vboxsf
-    do
-        ${if stdenv.system == "i686-linux" then ''
-          patchelf --set-interpreter ${stdenv.glibc.out}/lib/ld-linux.so.2 $i
-        ''
-        else if stdenv.system == "x86_64-linux" then ''
-          patchelf --set-interpreter ${stdenv.glibc.out}/lib/ld-linux-x86-64.so.2 $i
-        ''
-        else throw ("Architecture: "+stdenv.system+" not supported for VirtualBox guest additions")
-        }
-        patchelf --set-rpath ${lib.makeLibraryPath [ stdenv.cc.cc dbus libX11 libXt libXext libXmu libXfixes libXrandr libXcursor ]} $i
+    for i in sbin/VBoxService bin/{VBoxClient,VBoxControl,VBoxDRMClient} other/mount.vboxsf; do
+        patchelf --set-interpreter ${stdenv.cc.bintools.dynamicLinker} $i
+        patchelf --set-rpath ${
+          lib.makeLibraryPath [
+            stdenv.cc.cc
+            stdenv.cc.libc
+            zlib
+            libx11
+            libxt
+            libxext
+            libxmu
+            libxfixes
+            libxcursor
+          ]
+        } $i
     done
 
-    for i in lib/VBoxOGL*.so
-    do
-        patchelf --set-rpath ${lib.makeLibraryPath [ "$out" dbus libXcomposite libXdamage libXext libXfixes ]} $i
-    done
+    runHook postBuild
+  '';
 
-    # FIXME: Virtualbox 4.3.22 moved VBoxClient-all (required by Guest Additions
-    # NixOS module) to 98vboxadd-xclient. For now, just work around it:
-    mv other/98vboxadd-xclient bin/VBoxClient-all
+  installPhase = ''
+    runHook preInstall
 
-    # Remove references to /usr from various scripts and files
-    sed -i -e "s|/usr/bin|$out/bin|" other/vboxclient.desktop
-    sed -i -e "s|/usr/bin|$out/bin|" bin/VBoxClient-all
+    mkdir -p $out/bin
+
+    # Install kernel modules.
+    cd src/vboxguest-${virtualboxVersion}_NixOS
+    make install INSTALL_MOD_PATH=$out KBUILD_EXTRA_SYMBOLS=$PWD/vboxsf/Module.symvers
+    cd ../..
 
     # Install binaries
     install -D -m 755 other/mount.vboxsf $out/bin/mount.vboxsf
     install -D -m 755 sbin/VBoxService $out/bin/VBoxService
 
-    mkdir -p $out/bin
     install -m 755 bin/VBoxClient $out/bin
     install -m 755 bin/VBoxControl $out/bin
-    install -m 755 bin/VBoxClient-all $out/bin
+    install -m 755 bin/VBoxDRMClient $out/bin
 
-    wrapProgram $out/bin/VBoxClient-all \
-            --prefix PATH : "${which}/bin"
 
-    # Install OpenGL libraries
-    mkdir -p $out/lib
-    cp -v lib/VBoxOGL*.so $out/lib
-    mkdir -p $out/lib/dri
-    ln -s $out/lib/VBoxOGL.so $out/lib/dri/vboxvideo_dri.so
+    # Don't install VBoxOGL for now
+    # It seems to be broken upstream too, and fixing it is far down the priority list:
+    # https://www.virtualbox.org/pipermail/vbox-dev/2017-June/014561.html
+    # Additionally, 3d support seems to rely on VBoxOGL.so being symlinked from
+    # libGL.so (which we can't), and Oracle doesn't plan on supporting libglvnd
+    # either. (#18457)
 
-    # Install desktop file
-    mkdir -p $out/share/autostart
-    cp -v other/vboxclient.desktop $out/share/autostart
-
-    # Install Xorg drivers
-    mkdir -p $out/lib/xorg/modules/{drivers,input}
-    install -m 644 other/vboxvideo_drv_${xserverABI}.so $out/lib/xorg/modules/drivers/vboxvideo_drv.so
-
-    # Install kernel modules
-    cd src
-
-    for i in *
-    do
-        cd $i
-        kernelVersion=$(cd ${kernel.dev}/lib/modules; ls)
-        export MODULE_DIR=$out/lib/modules/$kernelVersion/misc
-        find . -type f | xargs sed -i -e "s|-o root||g" \
-                                      -e "s|-g root||g"
-        make install
-        cd ..
+    mkdir -p $out/etc/depmod.d
+    for mod in $out/lib/modules/*/misc/*; do
+      echo "override $(modinfo -F name "$mod") * misc" >> $out/etc/depmod.d/vbox.conf
     done
-  ''; # */
+
+    runHook postInstall
+  '';
+
+  # Stripping breaks these binaries for some reason.
+  dontStrip = true;
+
+  # Patch RUNPATH according to dlopenLibs (see the comment there).
+  postFixup = lib.concatMapStrings (library: ''
+    for i in $(grep -F ${lib.escapeShellArg library.name} -l -r $out/{lib,bin}); do
+      origRpath=$(patchelf --print-rpath "$i")
+      patchelf --set-rpath "$origRpath:${lib.makeLibraryPath [ library.pkg ]}" "$i"
+    done
+  '') dlopenLibs;
 
   meta = {
     description = "Guest additions for VirtualBox";
     longDescription = ''
       Various add-ons which makes NixOS work better as guest OS inside VirtualBox.
-      This add-on provides support for dynamic resizing of the X Display, shared
-      host/guest clipboard support and guest OpenGL support.
+      This add-on provides support for dynamic resizing of the virtual display, shared
+      host/guest clipboard support.
     '';
-    license = "GPL";
-    maintainers = [ lib.maintainers.sander ];
-    platforms = lib.platforms.linux;
+    sourceProvenance = with lib.sourceTypes; [ fromSource ];
+    license = lib.licenses.gpl3Only;
+    maintainers = [
+      lib.maintainers.friedrichaltheide
+    ];
+    platforms = [
+      "i686-linux"
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    broken = stdenv.hostPlatform.is32bit && (kernel.kernelAtLeast "5.10");
   };
 }

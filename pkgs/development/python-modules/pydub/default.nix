@@ -1,24 +1,63 @@
-{ stdenv, buildPythonPackage, fetchPypi, scipy, ffmpeg-full }:
+{
+  lib,
+  audioop-lts,
+  buildPythonPackage,
+  fetchFromGitHub,
+  fetchpatch,
+  ffmpeg,
+  pytestCheckHook,
+  setuptools,
+  replaceVars,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "pydub";
-  version = "0.21.0";
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "27acc5977b0f5220682175d44fda737bbf818143b0832c0c3863b5dde38e197a";
+  version = "0.25.1";
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "jiaaro";
+    repo = "pydub";
+    tag = "v${version}";
+    hash = "sha256-FTEMT47wPXK5i4ZGjTVAhI/NjJio3F2dbBZzYzClU3c=";
   };
 
   patches = [
-    ./pyaudioop-python3.patch
+    # Fix test assertions, https://github.com/jiaaro/pydub/pull/769
+    (fetchpatch {
+      name = "fix-assertions.patch";
+      url = "https://github.com/jiaaro/pydub/commit/66c1bf7813ae8621a71484fdcdf609734c0d8efd.patch";
+      hash = "sha256-3OIzvTgGK3r4/s5y7izHvouB4uJEmjO6cgKvegtTf7A=";
+    })
+    # Fix paths to ffmpeg, ffplay and ffprobe
+    (replaceVars ./ffmpeg-fix-path.patch {
+      ffmpeg = lib.getExe ffmpeg;
+      ffplay = lib.getExe' ffmpeg "ffplay";
+      ffprobe = lib.getExe' ffmpeg "ffprobe";
+    })
   ];
 
-  checkInputs = [ scipy ffmpeg-full ];
+  nativeBuildInputs = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "Manipulate audio with a simple and easy high level interface.";
-    homepage    = "http://pydub.com/";
-    license     = licenses.mit;
-    platforms   = platforms.all;
+  dependencies = [ audioop-lts ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ];
+
+  pythonImportsCheck = [
+    "pydub"
+    "pydub.audio_segment"
+    "pydub.playback"
+  ];
+
+  enabledTestPaths = [ "test/test.py" ];
+
+  meta = {
+    description = "Manipulate audio with a simple and easy high level interface";
+    homepage = "http://pydub.com";
+    changelog = "https://github.com/jiaaro/pydub/blob/v${version}/CHANGELOG.md";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

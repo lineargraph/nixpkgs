@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -6,7 +11,8 @@ let
 
   cfg = config.services.colord;
 
-in {
+in
+{
 
   options = {
 
@@ -18,21 +24,23 @@ in {
 
   config = mkIf cfg.enable {
 
+    environment.systemPackages = [ pkgs.colord ];
+
     services.dbus.packages = [ pkgs.colord ];
 
     services.udev.packages = [ pkgs.colord ];
 
-    environment.systemPackages = [ pkgs.colord ];
+    systemd.packages = [ pkgs.colord ];
 
-    systemd.services.colord = {
-      description = "Manage, Install and Generate Color Profiles";
-      serviceConfig = {
-        Type = "dbus";
-        BusName = "org.freedesktop.ColorManager";
-        ExecStart = "${pkgs.colord}/libexec/colord";
-        PrivateTmp = true;
-      };
+    systemd.tmpfiles.packages = [ pkgs.colord ];
+
+    users.users.colord = {
+      isSystemUser = true;
+      home = "/var/lib/colord";
+      group = "colord";
     };
+
+    users.groups.colord = { };
 
   };
 

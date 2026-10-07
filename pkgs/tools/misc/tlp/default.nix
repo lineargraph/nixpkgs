@@ -1,69 +1,162 @@
-{ stdenv, lib, fetchFromGitHub, perl, makeWrapper, file, systemd, iw, rfkill
-, hdparm, ethtool, inetutils , kmod, pciutils, smartmontools
-, x86_energy_perf_policy, gawk, gnugrep, coreutils, utillinux
-, enableRDW ? false, networkmanager
+{
+  stdenv,
+  lib,
+  checkbashisms,
+  coreutils,
+  ethtool,
+  fetchFromGitHub,
+  gawk,
+  gnugrep,
+  gnused,
+  hdparm,
+  iw,
+  kmod,
+  makeWrapper,
+  pciutils,
+  perl,
+  perlcritic,
+  shellcheck,
+  smartmontools,
+  systemd,
+  udevCheckHook,
+  usbutils,
+  util-linux,
+  glib,
+  x86_energy_perf_policy,
+  # RDW only works with NetworkManager, and thus is optional with default off
+  enableRDW ? false,
+  networkmanager,
+  tlp-pd,
 }:
-
-let
-  paths = lib.makeBinPath
-          ([ iw rfkill hdparm ethtool inetutils systemd kmod pciutils smartmontools
-             x86_energy_perf_policy gawk gnugrep coreutils utillinux
-           ]
-           ++ lib.optional enableRDW networkmanager
-          );
-
-in stdenv.mkDerivation rec {
-  name = "tlp-${version}";
-  version = "1.1";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "tlp";
+  version = "1.10.2";
 
   src = fetchFromGitHub {
-        owner = "linrunner";
-        repo = "TLP";
-        rev = "${version}";
-        sha256 = "01bhb9hdsck1g2s5jvafr3ywml9k2qz7x2cf42a3z8g5d23pdfpy";
-      };
+    owner = "linrunner";
+    repo = "TLP";
+    tag = finalAttrs.version;
+    hash = "sha256-/xTg53eJ+AKrlG++nQGLsosaWzg1JrwGIGB2+h0MZDI=";
+  };
 
-  makeFlags = [ "DESTDIR=$(out)"
-                "TLP_SBIN=$(out)/bin"
-                "TLP_BIN=$(out)/bin"
-                "TLP_TLIB=$(out)/share/tlp-pm"
-                "TLP_PLIB=$(out)/lib/pm-utils"
-                "TLP_ULIB=$(out)/lib/udev"
-                "TLP_NMDSP=$(out)/etc/NetworkManager/dispatcher.d"
-                "TLP_SHCPL=$(out)/share/bash-completion/completions"
-                "TLP_MAN=$(out)/share/man"
+  # XXX: See patch files for relevant explanations.
+  patches = [
+    ./patches/0001-makefile-correctly-sed-paths.patch
+    ./patches/0002-reintroduce-tlp-sleep-service.patch
+  ];
 
-                "TLP_NO_INIT=1"
-                "TLP_NO_PMUTILS=1"
-              ];
-
-  nativeBuildInputs = [ makeWrapper file ];
-
-  buildInputs = [ perl ];
-
-  installTargets = [ "install-tlp" "install-man" ] ++ stdenv.lib.optional enableRDW "install-rdw";
-
-  postInstall = ''
-    cp -r $out/$out/* $out
-    rm -rf $out/$(echo "$NIX_STORE" | cut -d "/" -f2)
-
-    for i in $out/bin/* $out/lib/udev/tlp-* ${lib.optionalString enableRDW "$out/etc/NetworkManager/dispatcher.d/*"}; do
-      if file "$i" | grep -q Perl; then
-        # Perl script; use wrapProgram
-        wrapProgram "$i" \
-          --prefix PATH : "${paths}"
-      else
-        # Bash script
-        sed -i '2iexport PATH=${paths}:$PATH' "$i"
-      fi
-    done
+  postPatch = ''
+    substituteInPlace Makefile --replace-fail ' ?= /usr/' ' ?= /'
   '';
 
-  meta = with stdenv.lib; {
-    description = "Advanced Power Management for Linux";
-    homepage = http://linrunner.de/en/tlp/docs/tlp-linux-advanced-power-management.html;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ abbradar ];
-    license = licenses.gpl2Plus;
+  buildInputs = [ perl ];
+  nativeBuildInputs = [
+    makeWrapper
+    udevCheckHook
+  ];
+
+  # XXX: While [1] states that DESTDIR should not be used, and that the correct
+  # variable to set is, in fact, PREFIX, tlp thinks otherwise. The Makefile for
+  # tlp concerns itself only with DESTDIR [2] (possibly incorrectly) and so we set
+  # that as opposed to PREFIX, despite what [1] says.
+  #
+  # [1]: https://github.com/NixOS/nixpkgs/issues/65718
+  # [2]: https://github.com/linrunner/TLP/blob/ab788abf4936dfb44fbb408afc34af834230a64d/Makefile#L4-L46
+  makeFlags = [
+    "TLP_NO_INIT=1"
+    "TLP_WITH_ELOGIND=0"
+    "TLP_WITH_SYSTEMD=1"
+
+    "DESTDIR=${placeholder "out"}"
+  ];
+
+  installTargets = [
+    "install-tlp"
+    "install-man"
+  ]
+  ++ lib.optionals enableRDW [
+    "install-rdw"
+    "install-man-rdw"
+  ];
+
+  doCheck = true;
+  nativeCheckInputs = [
+    checkbashisms
+    perlcritic
+    shellcheck
+  ];
+  checkTarget = [ "checkall" ];
+
+  doInstallCheck = true;
+
+  # TODO: Consider using resholve here
+  postInstall =
+    let
+      paths = lib.makeBinPath (
+        [
+          coreutils
+          ethtool
+          gawk
+          gnugrep
+          gnused
+          hdparm
+          iw
+          kmod
+          pciutils
+          perl
+          smartmontools
+          systemd
+          usbutils
+          util-linux
+          glib # gdbus
+        ]
+        ++ lib.optional enableRDW networkmanager
+        ++ lib.optional (lib.meta.availableOn stdenv.hostPlatform x86_energy_perf_policy) x86_energy_perf_policy
+      );
+    in
+    ''
+      fixup_perl=(
+        $out/share/tlp/tlp-pcilist
+        $out/share/tlp/tlp-readconfs
+        $out/share/tlp/tlp-usblist
+      )
+      for f in "''${fixup_perl[@]}"; do
+        wrapProgram "$f" --prefix PATH : "${paths}"
+      done
+
+      fixup_bash=(
+        $out/bin/*
+        $out/etc/NetworkManager/dispatcher.d/*
+        $out/lib/udev/tlp-*
+        $out/sbin/*
+        $out/share/tlp/bat.d/*
+        $out/share/tlp/func.d/*
+        $out/share/tlp/tlp-func-base
+      )
+      for f in "''${fixup_bash[@]}"; do
+        sed -i '2iexport PATH=${paths}:$PATH' "$f"
+      done
+
+      rm -rf $out/var
+      rm -rf $out/share/metainfo
+    '';
+
+  strictDeps = true;
+  __structuredAttrs = true;
+
+  passthru.tests = {
+    inherit tlp-pd;
   };
-}
+
+  meta = {
+    description = "Advanced Power Management for Linux";
+    homepage = "https://linrunner.de/en/tlp/docs/tlp-linux-advanced-power-management.html";
+    changelog = "https://github.com/linrunner/TLP/releases/tag/${finalAttrs.src.tag}";
+    platforms = lib.platforms.linux;
+    mainProgram = "tlp";
+    maintainers = with lib.maintainers; [
+      lovesegfault
+    ];
+    license = lib.licenses.gpl2Plus;
+  };
+})

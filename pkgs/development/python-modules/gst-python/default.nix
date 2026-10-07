@@ -1,46 +1,107 @@
-{ fetchurl, stdenv, meson, ninja, pkgconfig, python, pygobject3
-, gst-plugins-base, ncurses
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchurl,
+  fetchpatch,
+  meson,
+  ninja,
+  # TODO: We can get rid of this once `buildPythonPackage` accepts `finalAttrs`.
+  # See: https://github.com/NixOS/nixpkgs/pull/271387
+  gst-python,
+
+  pkg-config,
+  python,
+  pygobject3,
+  gobject-introspection,
+  gst_all_1,
+  isPy3k,
+  directoryListingUpdater,
 }:
 
-stdenv.mkDerivation rec {
+buildPythonPackage rec {
   pname = "gst-python";
-  version = "1.14.0";
-  name = "${pname}-${version}";
+  version = "1.28.6";
 
-  src = fetchurl {
-    urls = [
-      "${meta.homepage}/src/gst-python/${name}.tar.xz"
-      "mirror://gentoo/distfiles/${name}.tar.xz"
-      ];
-    sha256 = "1rlr6gl4lg97ng4jxh3gb2ldmywm15vwsa72nvggr8qa2l8q3fg0";
-  };
+  pyproject = false;
 
-  outputs = [ "out" "dev" ];
-
-  nativeBuildInputs = [ meson ninja pkgconfig python ];
-
-  # XXX: in the Libs.private field of python3.pc
-  buildInputs = [ ncurses ];
-
-  mesonFlags = [
-    "-Dpygi-overrides-dir=${python.sitePackages}/gi/overrides"
+  outputs = [
+    "out"
+    "dev"
   ];
 
-  postPatch = ''
-    chmod +x scripts/pythondetector # patchShebangs requires executable file
-    patchShebangs scripts/pythondetector
+  src = fetchurl {
+    url = "https://gstreamer.freedesktop.org/src/gst-python/gst-python-${version}.tar.xz";
+    hash = "sha256-NNWEQMU7VJWhI9Ckt7ervG6XkqWyGVTbhqB5Gxb24BI=";
+  };
+
+  patches = [
+    # https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/9918#note_3530752
+    ./fix-test-plugin-imports.patch
+  ];
+
+  # Python 2.x is not supported.
+  disabled = !isPy3k;
+
+  depsBuildBuild = [ pkg-config ];
+
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gobject-introspection
+    gst_all_1.gst-plugins-base
+  ];
+
+  buildInputs = [
+    # for gstreamer-analytics-1.0
+    gst_all_1.gst-plugins-bad
+  ];
+
+  propagatedBuildInputs = [
+    gst_all_1.gst-plugins-base
+    pygobject3
+  ];
+
+  checkInputs = [
+    gst_all_1.gst-rtsp-server
+  ];
+
+  mesonFlags = [
+    "-Dpygi-overrides-dir=${placeholder "out"}/${python.sitePackages}/gi/overrides"
+    # Exec format error during configure
+    "-Dpython-exe=${python.pythonOnBuildForHost.interpreter}"
+    # This is needed to prevent the project from looking for `gst-rtsp-server`
+    # from `checkInputs`.
+    #
+    # TODO: This should probably be moved at least partially into the Meson hook.
+    #
+    # NB: We need to use `doInstallCheck` here because `buildPythonPackage`
+    # renames `doCheck` to `doInstallCheck`.
+    (lib.mesonEnable "tests" gst-python.doInstallCheck)
+  ];
+
+  # `buildPythonPackage` uses `installCheckPhase` and leaves `checkPhase`
+  # empty. It renames `doCheck` from its arguments, but not `checkPhase`.
+  # See: https://github.com/NixOS/nixpkgs/issues/47390
+  installCheckPhase = ''
+    runHook preCheck
+    mesonCheckPhase
+    runHook postCheck
   '';
 
-  propagatedBuildInputs = [ gst-plugins-base pygobject3 ];
+  preCheck = lib.optionalString stdenv.hostPlatform.isDarwin ''
+    export DYLD_LIBRARY_PATH="${gst_all_1.gst-plugins-base}/lib"
+  '';
 
-  # Needed for python.buildEnv
-  passthru.pythonPath = [];
+  passthru = {
+    updateScript = directoryListingUpdater { odd-unstable = true; };
+  };
 
   meta = {
-    homepage = https://gstreamer.freedesktop.org;
-
+    homepage = "https://gstreamer.freedesktop.org";
     description = "Python bindings for GStreamer";
-
-    license = stdenv.lib.licenses.lgpl2Plus;
+    license = lib.licenses.lgpl2Plus;
+    maintainers = with lib.maintainers; [ tmarkus ];
   };
 }

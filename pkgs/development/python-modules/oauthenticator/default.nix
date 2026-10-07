@@ -1,46 +1,85 @@
-{ lib
-, buildPythonPackage
-, jupyterhub
-, globus-sdk
-, mwoauth
-, codecov
-, flake8
-, pyjwt
-, pytest
-, pytestcov
-, pytest-tornado
-, requests-mock
-, pythonOlder
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  google-api-python-client,
+  google-auth-oauthlib,
+  jsonschema,
+  jupyterhub,
+  mwoauth,
+  pyjwt,
+  pytest-asyncio,
+  pytest-cov-stub,
+  pytestCheckHook,
+  requests,
+  requests-mock,
+  ruamel-yaml,
+  setuptools,
+  tornado,
+  traitlets,
 }:
 
 buildPythonPackage rec {
   pname = "oauthenticator";
-  version = "0.7.3";
+  version = "17.3.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "cb0b2564e46db28350693bc3e6457333c4ee21af5066ac743730e3f3173ea7ed";
+    hash = "sha256-5dkMskEf/z3G/MFjNGgjPA4OAjlCLAh8dzTRaFBVuPM=";
   };
 
-  checkPhase = ''
-    py.test oauthenticator/tests
-  '';
+  build-system = [ setuptools ];
 
-  # No tests in archive
-  doCheck = false;
-   
-  checkInputs = [  globus-sdk mwoauth codecov flake8 pytest
-    pytestcov pytest-tornado requests-mock pyjwt ];
-  
-  propagatedBuildInputs = [ jupyterhub ];
+  dependencies = [
+    jsonschema
+    jupyterhub
+    pyjwt
+    requests
+    ruamel-yaml
+    tornado
+    traitlets
+  ];
 
-  disabled = pythonOlder "3.4";
+  optional-dependencies = {
+    googlegroups = [
+      google-api-python-client
+      google-auth-oauthlib
+    ];
+    mediawiki = [ mwoauth ];
+  };
 
-  meta = with lib; {
-    description = "Authenticate JupyterHub users with common OAuth providers, including GitHub, Bitbucket, and more.";
-    homepage =  https://github.com/jupyterhub/oauthenticator;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ ixxie ];
+  nativeCheckInputs = [
+    pytest-asyncio
+    pytest-cov-stub
+    pytestCheckHook
+    requests-mock
+  ]
+  ++ lib.concatAttrValues optional-dependencies;
+
+  disabledTests = [
+    # Tests are outdated, https://github.com/jupyterhub/oauthenticator/issues/432
+    "test_azuread"
+    "test_mediawiki"
+    # Tests require network access
+    "test_allowed"
+    "test_auth0"
+    "test_bitbucket"
+    "test_cilogon"
+    "test_github"
+    "test_gitlab"
+    "test_globus"
+    "test_google"
+    "test_openshift"
+  ];
+
+  pythonImportsCheck = [ "oauthenticator" ];
+
+  meta = {
+    description = "Authenticate JupyterHub users with common OAuth providers";
+    homepage = "https://github.com/jupyterhub/oauthenticator";
+    changelog = "https://github.com/jupyterhub/oauthenticator/blob/${version}/docs/source/reference/changelog.md";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

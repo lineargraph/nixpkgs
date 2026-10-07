@@ -1,46 +1,42 @@
-{ lib
-, stdenv
-, buildPythonPackage
-, fetchPypi
-, fetchFromGitHub
-, nose
-, can
-, canmatrix }:
+{
+  lib,
+  buildPythonPackage,
+  canmatrix,
+  fetchPypi,
+  pytestCheckHook,
+  python-can,
+  setuptools-scm,
+}:
 
 buildPythonPackage rec {
   pname = "canopen";
-  version = "0.5.1";
+  version = "2.4.1";
+  pyproject = true;
 
-  # use fetchFromGitHub until version containing test/sample.eds
-  # is available on PyPi
-  # https://github.com/christiansandberg/canopen/pull/57
-
-  src = fetchFromGitHub {
-    owner = "christiansandberg";
-    repo = "canopen";
-    rev = "b20575d84c3aef790fe7c38c5fc77601bade0ea4";
-    sha256 = "1qg47qrkyvyxiwi13sickrkk89jp9s91sly2y90bz0jhws2bxh64";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-IKhLxJizTa3XnOzkZ9O74ZWRwcAqjzkzG8xgZcTYsus=";
   };
 
-  #src = fetchPypi {
-  #  inherit pname version;
-  #  sha256 = "0806cykarpjb9ili3mf82hsd9gdydbks8532nxgz93qzg4zdbv2g";
-  #};
+  __darwinAllowLocalNetworking = true;
 
-  # test_pdo failure https://github.com/christiansandberg/canopen/issues/58
-  doCheck = false;
+  build-system = [ setuptools-scm ];
 
-  propagatedBuildInputs =
-    [ can
-      canmatrix
-    ];
+  dependencies = [ python-can ];
 
-  checkInputs = [ nose ];
+  optional-dependencies = {
+    db_export = [ canmatrix ];
+  };
 
-  meta = with lib; {
-    homepage = https://github.com/christiansandberg/canopen/;
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "canopen" ];
+
+  meta = {
     description = "CANopen stack implementation";
-    license = licenses.lgpl3;
-    maintainers = with maintainers; [ sorki ];
+    homepage = "https://github.com/christiansandberg/canopen/";
+    changelog = "https://github.com/christiansandberg/canopen/releases/tag/v${version}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ sorki ];
   };
 }

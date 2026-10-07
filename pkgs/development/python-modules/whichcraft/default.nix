@@ -1,23 +1,33 @@
-{ lib, buildPythonPackage, fetchPypi, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  pytest,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "whichcraft";
-  version = "0.4.1";
+  version = "0.6.1";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "9e0d51c9387cb7e9f28b7edb549e6a03da758f7784f991eb4397d7f7808c57fd";
+    inherit (finalAttrs) pname version;
+    sha256 = "11yfkzyplizdgndy34vyd5qlmr1n5mxis3a3svxmx8fnccdvknxc";
   };
 
-  checkInputs = [ pytest ];
+  build-system = [ setuptools ];
+
+  nativeCheckInputs = [ pytest ];
 
   checkPhase = ''
     py.test
   '';
 
-  meta = with lib; {
-    homepage = https://github.com/pydanny/whichcraft;
+  meta = {
+    homepage = "https://github.com/pydanny/whichcraft";
     description = "Cross-platform cross-python shutil.which functionality";
-    license = licenses.bsd3;
+    changelog = "https://github.com/cookiecutter/whichcraft/blob/${finalAttrs.version}/HISTORY.rst";
+    license = lib.licenses.bsd3;
   };
-}
+})

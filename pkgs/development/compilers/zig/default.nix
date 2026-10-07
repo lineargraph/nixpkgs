@@ -1,35 +1,49 @@
-{ stdenv, fetchFromGitHub, cmake, llvmPackages, libxml2 }:
+{
+  lib,
+  callPackage,
+  llvmPackages_18,
+  llvmPackages_19,
+  llvmPackages_20,
+  llvmPackages_21,
+  llvmPackages_22,
+  zigVersions ? { },
+}:
+let
+  versions = {
+    "0.13.0" = {
+      llvmPackages = llvmPackages_18;
+      hash = "sha256-5qSiTq+UWGOwjDVZMIrAt2cDKHkyNPBSAEjpRQUByFM=";
+    };
+    "0.14.1" = {
+      llvmPackages = llvmPackages_19;
+      hash = "sha256-DhVJIY/z12PJZdb5j4dnCRb7k1CmeQVOnayYRP8azDI=";
+    };
+    "0.15.2" = {
+      llvmPackages = llvmPackages_20;
+      hash = "sha256-u3pEMcYN71d83MJh14vtzU4DJXnMHu/Jw86d9XvwKE8=";
+    };
+    "0.16.0" = {
+      llvmPackages = llvmPackages_21;
+      hash = "sha256-2sTMhaasyrKoBnyH/hQrNCbi0Vh6HekIrpE4XkyQulQ=";
+    };
+    "0.17.0" = {
+      llvmPackages = llvmPackages_22;
+      hash = "sha256-dXy3DrGQHDpXCnr+Wi/1tPEktPm9bBDJQiQ/0VyiMaM=";
+    };
+  }
+  // zigVersions;
 
-stdenv.mkDerivation rec {
-  version = "0.2.0";
-  name = "zig-${version}";
+  mkPackage =
+    {
+      version,
+      hash,
+      llvmPackages,
+    }@args:
+    callPackage ./generic.nix args;
 
-  src = fetchFromGitHub {
-    owner = "zig-lang";
-    repo = "zig";
-    rev = "${version}";
-    sha256 = "0lym28z9mj6hfiq78x1fsd8y89h8xyfc1jgqyazi1g9r72427n07";
-  };
-
-  nativeBuildInputs = [ cmake ];
-  buildInputs = [ llvmPackages.clang-unwrapped llvmPackages.llvm libxml2 ];
-
-  cmakeFlags = [
-    "-DZIG_LIBC_INCLUDE_DIR=${stdenv.cc.libc_dev}/include"
-    "-DZIG_LIBC_LIB_DIR=${stdenv.cc.libc}/lib"
-    "-DCMAKE_BUILD_TYPE=Release"
-    "-DZIG_EACH_LIB_RPATH=On"
-  ];
-
-  preConfigure = ''
-    cmakeFlags="$cmakeFlags -DZIG_LIBC_STATIC_LIB_DIR=$(dirname $(cc -print-file-name=crtbegin.o)) -DZIG_DYNAMIC_LINKER=$(cc -print-file-name=ld-linux-x86-64.so.2)"
-  '';
-
-  meta = with stdenv.lib; {
-    description = "Programming languaged designed for robustness, optimality, and clarity";
-    homepage = https://ziglang.org/;
-    license = licenses.mit;
-    platforms = platforms.unix;
-    maintainers = [ maintainers.andrewrk ];
-  };
-}
+  zigPackages = lib.mapAttrs' (
+    version: args:
+    lib.nameValuePair (lib.versions.majorMinor version) (mkPackage (args // { inherit version; }))
+  ) versions;
+in
+zigPackages

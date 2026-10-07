@@ -1,24 +1,30 @@
-{ stdenv, fetchzip, ocaml, findlib, ocamlbuild, ocaml_pcre }:
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+}:
 
-let version = "1.4"; in
+buildDunePackage (finalAttrs: {
+  pname = "benchmark";
+  version = "1.7";
 
-stdenv.mkDerivation {
-  name = "ocaml${ocaml.version}-benchmark-${version}";
+  minimalOCamlVersion = "4.03";
 
-  src = fetchzip {
-    url = "https://github.com/Chris00/ocaml-benchmark/releases/download/${version}/benchmark-${version}.tar.gz";
-    sha256 = "16wi8ld7c3mq77ylpgbnj8qqqqimyzwxs47v06vyrwpma5pab5xa";
+  src = fetchurl {
+    url = "https://github.com/Chris00/ocaml-benchmark/releases/download/v${finalAttrs.version}/benchmark-${finalAttrs.version}.tbz";
+    hash = "sha256-Aij7vJzamNWQfjLeGgENlIp6Il8+Wc9hsahr4eDGs68=";
   };
-
-  buildInputs = [ ocaml findlib ocamlbuild ocaml_pcre ];
-
-  createFindlibDestdir = true;
 
   meta = {
-    homepage = http://ocaml-benchmark.forge.ocamlcore.org/;
-    platforms = ocaml.meta.platforms or [];
+    homepage = "https://github.com/Chris00/ocaml-benchmark";
     description = "Benchmark running times of code";
-    license = stdenv.lib.licenses.lgpl21;
-    maintainers = with stdenv.lib.maintainers; [ volth ];
+    longDescription = ''
+      This module provides a set of tools to measure the running times of
+      your functions and to easily compare the results.  A statistical test
+      is used to determine whether the results truly differ.
+    '';
+    changelog = "https://raw.githubusercontent.com/Chris00/ocaml-benchmark/refs/tags/v${finalAttrs.version}/CHANGES.md";
+    license = lib.licenses.lgpl3;
+    maintainers = [ ];
   };
-}
+})

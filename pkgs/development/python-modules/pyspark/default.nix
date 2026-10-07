@@ -1,12 +1,33 @@
-{ buildPythonPackage, fetchPypi, stdenv, py4j }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
 
-buildPythonPackage rec {
+  # build-system
+  setuptools,
+
+  # dependencies
+  py4j,
+
+  # optional-dependencies
+  googleapis-common-protos,
+  graphviz,
+  grpcio-status,
+  grpcio,
+  numpy,
+  pandas,
+  pyarrow,
+  zstandard,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "pyspark";
-  version = "2.3.0";
+  version = "4.1.2";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "0vlq07yqy6c7ayg401i0qynnliqz405bmw1r8alkck0m1s8kcd8b";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-+l1hWfcA0JkKB/T2LfG3RJQB3M7pzX1dbfiVdTCEFgI=";
   };
 
   # pypandoc is broken with pandoc2, so we just lose docs.
@@ -14,15 +35,61 @@ buildPythonPackage rec {
     sed -i "s/'pypandoc'//" setup.py
   '';
 
-  propagatedBuildInputs = [ py4j ];
+  build-system = [ setuptools ];
 
-  # Tests assume running spark...
+  postFixup = ''
+    # find_python_home.py has been wrapped as a shell script
+    substituteInPlace $out/bin/find-spark-home \
+        --replace 'export SPARK_HOME=$($PYSPARK_DRIVER_PYTHON "$FIND_SPARK_HOME_PYTHON_SCRIPT")' \
+                  'export SPARK_HOME=$("$FIND_SPARK_HOME_PYTHON_SCRIPT")'
+    # patch PYTHONPATH in pyspark so that it properly looks at SPARK_HOME
+    substituteInPlace $out/bin/pyspark \
+        --replace 'export PYTHONPATH="''${SPARK_HOME}/python/:$PYTHONPATH"' \
+                  'export PYTHONPATH="''${SPARK_HOME}/..:''${SPARK_HOME}/python/:$PYTHONPATH"'
+  '';
+
+  dependencies = [ py4j ];
+
+  optional-dependencies = {
+    connect = [
+      pandas
+      pyarrow
+      grpcio
+      grpcio-status
+      googleapis-common-protos
+      zstandard
+      graphviz
+    ];
+    ml = [ numpy ];
+    mllib = [ numpy ];
+    pandas_on_spark = [
+      pandas
+      pyarrow
+    ];
+    pipelines =
+      finalAttrs.passthru.optional-dependencies.connect ++ finalAttrs.passthru.optional-dependencies.sql;
+    sql = [
+      pandas
+      pyarrow
+    ];
+  };
+
+  # Tests assume running spark instance
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "Apache Spark";
-    homepage = https://github.com/apache/spark/tree/master/python;
-    license = licenses.asl20;
-    maintainers = [ maintainers.shlevy ];
+  pythonImportsCheck = [ "pyspark" ];
+
+  meta = {
+    description = "Python bindings for Apache Spark";
+    homepage = "https://github.com/apache/spark/tree/master/python";
+    sourceProvenance = with lib.sourceTypes; [
+      fromSource
+      binaryBytecode
+    ];
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [
+      sarahec
+      shlevy
+    ];
   };
-}
+})

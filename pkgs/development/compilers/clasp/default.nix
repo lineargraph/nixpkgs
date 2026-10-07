@@ -1,74 +1,101 @@
-{stdenv, fetchFromGitHub
-  , llvmPackages
-  , cmake, boehmgc, gmp, zlib, ncurses, boost
-  , waf, python, git, sbcl
+{
+  lib,
+  llvmPackages_22,
+  fetchzip,
+  ninja,
+  sbcl,
+  pkg-config,
+  writableTmpDirAsHomeHook,
+  boost,
+  fmt,
+  gmpxx,
+  libelf,
 }:
-stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
-  pname = "clasp";
-  version = "0.4.99.20170801";
 
-  src = fetchFromGitHub {
-    owner = "drmeister";
-    repo = "clasp";
-    rev = "525ce1cffff39311e3e7df6d0b71fa267779bdf5";
-    sha256 = "1jqya04wybgxnski341p5sycy2gysxad0s5q8d59z0f6ckj3v8k1";
-    fetchSubmodules = true;
+let
+  inherit (llvmPackages_22)
+    stdenv
+    llvm
+    libclang
+    libunwind
+    ;
+in
+
+stdenv.mkDerivation (finalAttrs: {
+  pname = "clasp";
+  version = "3.0.1";
+
+  src = fetchzip {
+    url = "https://github.com/clasp-developers/clasp/releases/download/${finalAttrs.version}/clasp-${finalAttrs.version}.tar.gz";
+    hash = "sha256-C6FwbLz/kjBcuI3225TczWaInkbQ3chtDhWCYh+a/2E=";
   };
 
-  nativeBuildInputs = [ cmake python git sbcl ];
+  __structuredAttrs = true;
+  strictDeps = true;
 
-  buildInputs = with llvmPackages; (
-    builtins.map (x: stdenv.lib.overrideDerivation x
-         (x: {NIX_CFLAGS_COMPILE= (x.NIX_CFLAGS_COMPILE or "") + " -frtti"; }))
-      [ llvm clang clang-unwrapped clang ]) ++
-  [
-    gmp zlib ncurses
-    boost boehmgc
-    (boost.override {enableStatic = true; enableShared = false;})
-    (stdenv.lib.overrideDerivation boehmgc
-      (x: {configureFlags = (x.configureFlags or []) ++ ["--enable-static"];}))
+  patches = [
+    ./remove-unused-command-line-argument.patch
   ];
 
-  NIX_CFLAGS_COMPILE = " -frtti ";
+  # Workaround for https://github.com/clasp-developers/clasp/issues/1590
+  postPatch = ''
+    echo '(defmethod configure-unit (c (u (eql :git))))' >> src/koga/units.lisp
+  '';
+
+  nativeBuildInputs = [
+    llvm.dev
+    ninja
+    pkg-config
+    sbcl
+    writableTmpDirAsHomeHook
+  ];
+
+  buildInputs = [
+    boost
+    fmt
+    gmpxx
+    libclang
+    libelf
+    libunwind
+    llvm
+  ];
+
+  ninjaFlags = [
+    "-C"
+    "build"
+  ];
 
   configurePhase = ''
     runHook preConfigure
-
-    export CXX=clang++
-    export CC=clang
-
-    echo "
-      INSTALL_PATH_PREFIX = '$out'
-    " | sed -e 's/^ *//' > wscript.config
-
-    python ./waf configure update_submodules
-
+    export SOURCE_DATE_EPOCH=1
+    sbcl --script koga \
+      --skip-sync \
+      --cc=$NIX_CC/bin/cc \
+      --cxx=$NIX_CC/bin/c++ \
+      --jobs=$NIX_BUILD_CORES \
+      --reproducible-build \
+      --package-path=/ \
+      --bin-path=$out/bin \
+      --lib-path=$out/lib \
+      --dylib-path=$out/lib \
+      --share-path=$out/share \
+      --pkgconfig-path=$out/lib/pkgconfig
     runHook postConfigure
   '';
 
-  buildPhase = ''
-    runHook preBuild
-
-    python ./waf build_cboehm
-
-    runHook postBuild
-  '';
-
-  installPhase = ''
-    runHook preInstall
-
-    python ./waf install_cboehm
-
-    runHook postInstall
+  postInstall = ''
+    # --dylib-path not honored. Fix it in post.
+    mv $out/libclasp* $out/lib/
   '';
 
   meta = {
-    inherit version;
-    description = ''A Common Lisp implementation based on LLVM with C++ integration'';
-    license = stdenv.lib.licenses.lgpl21Plus ;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
-    homepage = "https://github.com/drmeister/clasp";
+    description = "Common Lisp implementation based on LLVM with C++ integration";
+    license = lib.licenses.lgpl21Plus;
+    teams = [ lib.teams.lisp ];
+    platforms = [
+      "x86_64-linux"
+    ];
+    homepage = "https://github.com/clasp-developers/clasp";
+    mainProgram = "clasp";
   };
-}
+})

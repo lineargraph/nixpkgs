@@ -1,37 +1,64 @@
-{ stdenv, fetchFromGitHub, rustPlatform, makeWrapper, llvmPackages }:
-
-# Future work: Automatically communicate NIX_CFLAGS_COMPILE to bindgen's tests and the bindgen executable itself.
-
-rustPlatform.buildRustPackage rec {
-  name = "rust-bindgen-${version}";
-  version = "0.37.0";
-
-  src = fetchFromGitHub {
-    owner = "rust-lang-nursery";
-    repo = "rust-bindgen";
-    rev = "v${version}";
-    sha256 = "0cqjr7qspjrfgqcp4nqxljmhhbqyijb2jpw3lajgjj48y6wrnw93";
-  };
-
-  nativeBuildInputs = [ makeWrapper ];
-  buildInputs = [ llvmPackages.clang-unwrapped.lib ];
-
-  configurePhase = ''
-    export LIBCLANG_PATH="${llvmPackages.clang-unwrapped.lib}/lib"
-  '';
-
-  postInstall = ''
-    wrapProgram $out/bin/bindgen --set LIBCLANG_PATH "${llvmPackages.clang-unwrapped.lib}/lib"
-  '';
-
-  cargoSha256 = "0b8v6c7q1abibzygrigldpd31lyd5ngmj4vq5d7zni96m20mm85w";
-
-  doCheck = false; # A test fails because it can't find standard headers in NixOS
-
-  meta = with stdenv.lib; {
-    description = "C and C++ binding generator";
-    homepage = https://github.com/rust-lang-nursery/rust-bindgen;
-    license = with licenses; [ bsd3 ];
-    maintainers = [ maintainers.ralith ];
-  };
-}
+{
+  rust-bindgen-unwrapped,
+  zlib,
+  bash,
+  lib,
+  runCommand,
+  runCommandCC,
+  stdenv,
+}:
+let
+  clang = rust-bindgen-unwrapped.clang;
+  targetFlag =
+    if (!lib.systems.equals stdenv.targetPlatform stdenv.hostPlatform) then
+      "--target=${stdenv.targetPlatform.config}"
+    else
+      "";
+  self =
+    runCommand "rust-bindgen-${rust-bindgen-unwrapped.version}"
+      {
+        pname = "rust-bindgen";
+        inherit (rust-bindgen-unwrapped) version;
+        meta = rust-bindgen-unwrapped.meta // {
+          longDescription = rust-bindgen-unwrapped.meta.longDescription + ''
+            This version of bindgen is wrapped with the required compiler flags
+            required to find the c and c++ standard library, as well as the libraries
+            specified in the buildInputs of your derivation.
+          '';
+        };
+        passthru.tests = {
+          simple-c = runCommandCC "simple-c-bindgen-tests" { } ''
+            echo '#include <stdlib.h>' > a.c
+            ${self}/bin/bindgen a.c --allowlist-function atoi | tee output
+            grep atoi output
+            touch $out
+          '';
+          simple-cpp = runCommandCC "simple-cpp-bindgen-tests" { } ''
+            echo '#include <cmath>' > a.cpp
+            ${self}/bin/bindgen a.cpp --allowlist-function erf -- -xc++ | tee output
+            grep erf output
+            touch $out
+          '';
+          with-lib = runCommandCC "zlib-bindgen-tests" { buildInputs = [ zlib ]; } ''
+            echo '#include <zlib.h>' > a.c
+            ${self}/bin/bindgen a.c --allowlist-function compress | tee output
+            grep compress output
+            touch $out
+          '';
+        };
+      }
+      # if you modify the logic to find the right clang flags, also modify rustPlatform.bindgenHook
+      ''
+        mkdir -p $out/bin
+        cincludes="$(< ${clang}/nix-support/cc-cflags) $(< ${clang}/nix-support/libc-cflags)"
+        cxxincludes="$(< ${clang}/nix-support/libcxx-cxxflags)"
+        substitute ${./wrapper.sh} $out/bin/bindgen \
+          --replace-fail "@bash@" "${bash}" \
+          --replace-fail "@cxxincludes@" "$cxxincludes" \
+          --replace-fail "@cincludes@" "$cincludes" \
+          --replace-fail "@targetFlag@" "${targetFlag}" \
+          --replace-fail "@unwrapped@" "${rust-bindgen-unwrapped}"
+        chmod +x $out/bin/bindgen
+      '';
+in
+self

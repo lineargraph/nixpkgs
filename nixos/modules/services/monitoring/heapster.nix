@@ -1,47 +1,44 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.services.heapster;
-in {
+in
+{
   options.services.heapster = {
-    enable = mkOption {
-      description = "Whether to enable heapster monitoring";
-      default = false;
-      type = types.bool;
-    };
+    enable = lib.mkEnableOption "Heapster monitoring";
 
-    source = mkOption {
+    source = lib.mkOption {
       description = "Heapster metric source";
       example = "kubernetes:https://kubernetes.default";
-      type = types.string;
+      type = lib.types.str;
     };
 
-    sink = mkOption {
+    sink = lib.mkOption {
       description = "Heapster metic sink";
       example = "influxdb:http://localhost:8086";
-      type = types.string;
+      type = lib.types.str;
     };
 
-    extraOpts = mkOption {
+    extraOpts = lib.mkOption {
       description = "Heapster extra options";
       default = "";
-      type = types.string;
+      type = lib.types.separatedString " ";
     };
 
-    package = mkOption {
-      description = "Package to use by heapster";
-      default = pkgs.heapster;
-      defaultText = "pkgs.heapster";
-      type = types.package;
-    };
+    package = lib.mkPackageOption pkgs "heapster" { };
   };
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     systemd.services.heapster = {
-      wantedBy = ["multi-user.target"];
-      after = ["cadvisor.service" "kube-apiserver.service"];
+      wantedBy = [ "multi-user.target" ];
+      after = [
+        "cadvisor.service"
+        "kube-apiserver.service"
+      ];
 
       serviceConfig = {
         ExecStart = "${cfg.package}/bin/heapster --source=${cfg.source} --sink=${cfg.sink} ${cfg.extraOpts}";
@@ -49,10 +46,11 @@ in {
       };
     };
 
-    users.extraUsers = singleton {
-      name = "heapster";
-      uid = config.ids.uids.heapster;
+    users.users.heapster = {
+      isSystemUser = true;
+      group = "heapster";
       description = "Heapster user";
     };
+    users.groups.heapster = { };
   };
 }

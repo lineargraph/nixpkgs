@@ -1,29 +1,51 @@
-{ stdenv, fetchurl, buildPythonPackage, swig, pcsclite, PCSC }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pcsclite,
+  pkg-config,
+  pytestCheckHook,
+  setuptools,
+  stdenv,
+  swig,
+}:
 
 buildPythonPackage rec {
-  version = "1.9.6";
   pname = "pyscard";
-  name = "${pname}-${version}";
+  version = "2.3.1";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/p/pyscard/${name}.tar.gz";
-    sha256 = "6e28143c623e2b34200d2fa9178dbc80a39b9c068b693b2e6527cdae784c6c12";
+  src = fetchFromGitHub {
+    owner = "LudovicRousseau";
+    repo = "pyscard";
+    tag = version;
+    hash = "sha256-MW/Cg7Ta/LdY/pOomsEecVIt62rc5qSAGjpJl4m+ruM=";
   };
 
-  patchPhase = ''
-    sed -e 's!"libpcsclite\.so\.1"!"${pcsclite}/lib/libpcsclite.so.1"!' \
-        -i smartcard/scard/winscarddll.c
+  build-system = [ setuptools ];
+
+  nativeBuildInputs = [ swig ] ++ lib.optionals (!stdenv.hostPlatform.isDarwin) [ pkg-config ];
+
+  buildInputs = lib.optionals (!stdenv.hostPlatform.isDarwin) [ pcsclite ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace-fail 'requires = ["setuptools","swig"]' 'requires = ["setuptools"]'
+  ''
+  + lib.optionalString (!stdenv.hostPlatform.isDarwin) ''
+    substituteInPlace setup.py --replace-fail "pkg-config" "$PKG_CONFIG"
+    substituteInPlace src/smartcard/scard/winscarddll.c \
+      --replace-fail "libpcsclite.so.1" \
+                "${lib.getLib pcsclite}/lib/libpcsclite${stdenv.hostPlatform.extensions.sharedLibrary}"
   '';
 
-  NIX_CFLAGS_COMPILE = "-isystem ${pcsclite}/include/PCSC/";
-
-  propagatedBuildInputs = [ pcsclite ];
-  buildInputs = [ swig ] ++ stdenv.lib.optional stdenv.isDarwin PCSC;
-
   meta = {
-    homepage = https://pyscard.sourceforge.io/;
     description = "Smartcard library for python";
-    license = stdenv.lib.licenses.lgpl21;
-    maintainers = with stdenv.lib.maintainers; [ layus ];
+    homepage = "https://pyscard.sourceforge.io/";
+    changelog = "https://github.com/LudovicRousseau/pyscard/releases/tag/${src.tag}";
+    license = lib.licenses.lgpl21Plus;
+    maintainers = with lib.maintainers; [ layus ];
   };
 }

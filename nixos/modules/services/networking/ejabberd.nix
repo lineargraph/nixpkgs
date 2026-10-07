@@ -1,7 +1,9 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.ejabberd;
@@ -11,11 +13,14 @@ let
     ${cfg.ctlConfig}
   '';
 
-  ectl = ''${cfg.package}/bin/ejabberdctl ${if cfg.configFile == null then "" else "--config ${cfg.configFile}"} --ctl-config "${ctlcfg}" --spool "${cfg.spoolDir}" --logs "${cfg.logsDir}"'';
+  ectl = ''${cfg.package}/bin/ejabberdctl ${
+    lib.optionalString (cfg.configFile != null) "--config ${cfg.configFile}"
+  } --ctl-config "${ctlcfg}" --spool "${cfg.spoolDir}" --logs "${cfg.logsDir}"'';
 
   dumps = lib.escapeShellArgs cfg.loadDumps;
 
-in {
+in
+{
 
   ###### interface
 
@@ -23,64 +28,59 @@ in {
 
     services.ejabberd = {
 
-      enable = mkOption {
-        type = types.bool;
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = "Whether to enable ejabberd server";
       };
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.ejabberd;
-        defaultText = "pkgs.ejabberd";
-        description = "ejabberd server package to use";
-      };
+      package = lib.mkPackageOption pkgs "ejabberd" { };
 
-      user = mkOption {
-        type = types.str;
+      user = lib.mkOption {
+        type = lib.types.str;
         default = "ejabberd";
         description = "User under which ejabberd is ran";
       };
 
-      group = mkOption {
-        type = types.str;
+      group = lib.mkOption {
+        type = lib.types.str;
         default = "ejabberd";
         description = "Group under which ejabberd is ran";
       };
 
-      spoolDir = mkOption {
-        type = types.path;
+      spoolDir = lib.mkOption {
+        type = lib.types.path;
         default = "/var/lib/ejabberd";
         description = "Location of the spooldir of ejabberd";
       };
 
-      logsDir = mkOption {
-        type = types.path;
+      logsDir = lib.mkOption {
+        type = lib.types.path;
         default = "/var/log/ejabberd";
         description = "Location of the logfile directory of ejabberd";
       };
 
-      configFile = mkOption {
-        type = types.nullOr types.path;
+      configFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
         description = "Configuration file for ejabberd in YAML format";
         default = null;
       };
 
-      ctlConfig = mkOption {
-        type = types.lines;
+      ctlConfig = lib.mkOption {
+        type = lib.types.lines;
         default = "";
         description = "Configuration of ejabberdctl";
       };
 
-      loadDumps = mkOption {
-        type = types.listOf types.path;
-        default = [];
+      loadDumps = lib.mkOption {
+        type = lib.types.listOf lib.types.path;
+        default = [ ];
         description = "Configuration dumps that should be loaded on the first startup";
-        example = literalExample "[ ./myejabberd.dump ]";
+        example = lib.literalExpression "[ ./myejabberd.dump ]";
       };
 
-      imagemagick = mkOption {
-        type = types.bool;
+      imagemagick = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = "Add ImageMagick to server's path; allows for image thumbnailing";
       };
@@ -88,53 +88,57 @@ in {
 
   };
 
-
   ###### implementation
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
 
-    users.extraUsers = optionalAttrs (cfg.user == "ejabberd") (singleton
-      { name = "ejabberd";
+    services.epmd.enable = true;
+
+    users.users = lib.optionalAttrs (cfg.user == "ejabberd") {
+      ejabberd = {
         group = cfg.group;
         home = cfg.spoolDir;
         createHome = true;
         uid = config.ids.uids.ejabberd;
-      });
+      };
+    };
 
-    users.extraGroups = optionalAttrs (cfg.group == "ejabberd") (singleton
-      { name = "ejabberd";
-        gid = config.ids.gids.ejabberd;
-      });
+    users.groups = lib.optionalAttrs (cfg.group == "ejabberd") {
+      ejabberd.gid = config.ids.gids.ejabberd;
+    };
 
     systemd.services.ejabberd = {
       description = "ejabberd server";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
-      path = [ pkgs.findutils pkgs.coreutils pkgs.runit ] ++ lib.optional cfg.imagemagick pkgs.imagemagick;
+      after = [
+        "network.target"
+        "epmd.socket"
+      ];
+      wants = [ "epmd.socket" ];
+      path = [
+        pkgs.findutils
+        pkgs.coreutils
+      ]
+      ++ lib.optional cfg.imagemagick pkgs.imagemagick;
 
       serviceConfig = {
-        ExecStart = ''${ectl} foreground'';
-        # FIXME: runit is used for `chpst` -- can we get rid of this?
-        ExecStop = ''${pkgs.runit}/bin/chpst -u "${cfg.user}:${cfg.group}" ${ectl} stop'';
-        ExecReload = ''${pkgs.runit}/bin/chpst -u "${cfg.user}:${cfg.group}" ${ectl} reload_config'';
         User = cfg.user;
         Group = cfg.group;
-        PermissionsStartOnly = true;
+        ExecStart = "${ectl} foreground";
+        ExecStop = "${ectl} stop";
+        ExecReload = "${ectl} reload_config";
       };
 
       preStart = ''
-        mkdir -p -m750 "${cfg.logsDir}"
-        chown "${cfg.user}:${cfg.group}" "${cfg.logsDir}"
-
-        mkdir -p -m750 "/var/lock/ejabberdctl"
-        chown "${cfg.user}:${cfg.group}" "/var/lock/ejabberdctl"
-
-        mkdir -p -m750 "${cfg.spoolDir}"
-        chown -R "${cfg.user}:${cfg.group}" "${cfg.spoolDir}"
-
         if [ -z "$(ls -A '${cfg.spoolDir}')" ]; then
           touch "${cfg.spoolDir}/.firstRun"
+        fi
+
+        if ! test -e ${cfg.spoolDir}/.erlang.cookie; then
+          touch ${cfg.spoolDir}/.erlang.cookie
+          chmod 600 ${cfg.spoolDir}/.erlang.cookie
+          dd if=/dev/random bs=16 count=1 | base64 > ${cfg.spoolDir}/.erlang.cookie
         fi
       '';
 
@@ -149,14 +153,19 @@ in {
           for src in ${dumps}; do
             find "$src" -type f | while read dump; do
               echo "Loading configuration dump at $dump"
-              chpst -u "${cfg.user}:${cfg.group}" ${ectl} load "$dump"
+              ${ectl} load "$dump"
             done
           done
         fi
       '';
     };
 
-    security.pam.services.ejabberd = {};
+    systemd.tmpfiles.rules = [
+      "d '${cfg.logsDir}' 0750 ${cfg.user} ${cfg.group} -"
+      "d '${cfg.spoolDir}' 0700 ${cfg.user} ${cfg.group} -"
+    ];
+
+    security.pam.services.ejabberd = { };
 
   };
 

@@ -1,21 +1,45 @@
-{ lib, buildPythonPackage, fetchPypi
-, click, jinja2, terminaltables }:
+{
+  lib,
+  buildPythonPackage,
+  click,
+  fetchPypi,
+  jinja2,
+  pytestCheckHook,
+  poetry-core,
+  terminaltables,
+}:
 
 buildPythonPackage rec {
   pname = "envs";
-  version = "1.2.6";
+  version = "1.4";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "5fe059d6df1ae01c422d32b10ec7f539baad0e7d339f4c8b2de4ad8cbb07c8ba";
+    hash = "sha256-nYQ1xphdHN1oKZ4ExY4r24rmz2ayWWqAeeb5qT8qA5g=";
   };
 
-  checkInputs = [ click jinja2 terminaltables ];
+  build-system = [ poetry-core ];
 
-  meta = with lib; {
+  dependencies = [
+    click
+    jinja2
+    terminaltables
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  enabledTestPaths = [ "envs/tests.py" ];
+
+  disabledTests = [ "test_list_envs" ];
+
+  pythonImportsCheck = [ "envs" ];
+
+  meta = {
     description = "Easy access to environment variables from Python";
-    homepage = https://github.com/capless/envs;
-    license = licenses.asl20;
-    maintainers = with maintainers; [ peterhoeg ];
+    mainProgram = "envs";
+    homepage = "https://github.com/capless/envs";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ peterhoeg ];
   };
 }

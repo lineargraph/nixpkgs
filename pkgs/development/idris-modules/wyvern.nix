@@ -1,16 +1,18 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, contrib
-, effects
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  contrib,
+  effects,
+  lib,
 }:
-build-idris-package  {
-  name = "wyvern";
+build-idris-package {
+  pname = "wyvern";
   version = "2017-06-26";
 
-  idrisDeps = [ prelude contrib effects ];
+  idrisDeps = [
+    contrib
+    effects
+  ];
 
   src = fetchFromGitHub {
     owner = "ericqweinstein";
@@ -25,9 +27,8 @@ build-idris-package  {
 
   meta = {
     description = "Little web server written in Idris";
-    homepage = https://github.com/ericqweinstein/wyvern;
+    homepage = "https://github.com/ericqweinstein/wyvern";
     license = lib.licenses.mit;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

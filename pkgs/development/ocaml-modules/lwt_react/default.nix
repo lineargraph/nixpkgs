@@ -1,21 +1,31 @@
-{ stdenv, fetchzip, ocaml, findlib, ocamlbuild, lwt, react }:
+{
+  buildDunePackage,
+  fetchFromGitHub,
+  cppo,
+  lwt,
+  react,
+}:
 
-stdenv.mkDerivation rec {
-	version = "1.0.1";
-	name = "ocaml${ocaml.version}-lwt_react-${version}";
-	src = fetchzip {
-		url = https://github.com/ocsigen/lwt/releases/download/3.0.0/lwt_react-1.0.1.tar.gz;
-		sha256 = "1bbz7brvdskf4angzn3q2s2s6qdnx7x8m8syayysh23gwv4c7v31";
-	};
+buildDunePackage {
+  pname = "lwt_react";
+  version = "1.2.0";
 
-	buildInputs = [ ocaml findlib ocamlbuild ];
+  src = fetchFromGitHub {
+    owner = "ocsigen";
+    repo = "lwt";
+    tag = "5.6.0";
+    hash = "sha256-DLQupCkZ14kOuSQatbb7j07I+jvvDCKpdlaR3rijT4s=";
+  };
 
-	propagatedBuildInputs = [ lwt react ];
+  nativeBuildInputs = [ cppo ];
 
-	createFindlibDestdir = true;
+  propagatedBuildInputs = [
+    lwt
+    react
+  ];
 
-	meta = {
-		description = "Helpers for using React with Lwt";
-		inherit (lwt.meta) homepage license maintainers platforms;
-	};
+  meta = {
+    description = "Helpers for using React with Lwt";
+    inherit (lwt.meta) homepage license maintainers;
+  };
 }

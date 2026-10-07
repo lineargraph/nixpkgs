@@ -1,35 +1,52 @@
-{ lib, buildPythonPackage, pytest, requests, requests_oauthlib, six
-, fetchFromGitHub, responses, stdenv
+{
+  lib,
+  buildPythonPackage,
+  certifi,
+  fetchFromGitHub,
+  pytestCheckHook,
+  python-dateutil,
+  python-dotenv,
+  setuptools,
+  six,
+  urllib3,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "asana";
-  version = "0.7.0";
-  name = "${pname}-${version}";
+  version = "5.2.4";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "asana";
     repo = "python-asana";
-    rev = "v${version}";
-    sha256 = "0786y3wxqxxhsb0kkpx4bfzif3dhvv3dmm6vnq58iyj94862kpxf";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-Bfq3FKJoZE8edAAFVNYYrLJ8vp44QYboEVsCGsI5WMY=";
   };
 
-  checkInputs = [ pytest responses ];
-  propagatedBuildInputs = [ requests requests_oauthlib six ];
+  build-system = [ setuptools ];
 
-  patchPhase = ''
-    echo > requirements.txt
-    sed -i "s/requests~=2.9.1/requests >=2.9.1/" setup.py
-    sed -i "s/requests_oauthlib~=0.6.1/requests_oauthlib >=0.6.1/" setup.py
-  '';
+  dependencies = [
+    certifi
+    six
+    python-dateutil
+    python-dotenv
+    urllib3
+  ];
 
-  checkPhase = ''
-    py.test tests
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "asana" ];
+
+  disabledTestPaths = [
+    # Tests require network access
+    "build_tests/"
+  ];
+
+  meta = {
     description = "Python client library for Asana";
-    homepage = https://github.com/asana/python-asana;
-    license = licenses.mit;
+    homepage = "https://github.com/asana/python-asana";
+    changelog = "https://github.com/Asana/python-asana/releases/tag/${finalAttrs.src.tag}";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
-}
+})

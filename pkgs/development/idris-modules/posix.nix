@@ -1,15 +1,11 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, base
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  lib,
 }:
-build-idris-package  {
-  name = "posix";
+build-idris-package {
+  pname = "posix";
   version = "2017-11-18";
-
-  idrisDeps = [ prelude base ];
 
   src = fetchFromGitHub {
     owner = "idris-hackers";
@@ -22,9 +18,8 @@ build-idris-package  {
   doCheck = false;
 
   meta = {
-    description = "System POSIX bindings for Idris.";
-    homepage = https://github.com/idris-hackers/idris-posix;
+    description = "System POSIX bindings for Idris";
+    homepage = "https://github.com/idris-hackers/idris-posix";
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

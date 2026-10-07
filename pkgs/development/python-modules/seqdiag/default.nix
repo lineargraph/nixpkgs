@@ -1,31 +1,42 @@
-{ stdenv, fetchurl, buildPythonPackage, pep8, nose, unittest2, docutils
-, blockdiag
+{
+  lib,
+  blockdiag,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "seqdiag";
-  version = "0.9.5";
-  name = pname + "-" + version;
+  version = "3.0.0";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/s/seqdiag/${name}.tar.gz";
-    sha256 = "994402cb19fef77ee113d18810aa397a7290553cda5f900be2bb44e2c7742657";
+  src = fetchFromGitHub {
+    owner = "blockdiag";
+    repo = "seqdiag";
+    tag = version;
+    hash = "sha256-Dh9JMx50Nexi0q39rYr9MpkKmQRAfT7lzsNOXoTuphg=";
   };
 
-  buildInputs = [ pep8 nose unittest2 docutils ];
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [ blockdiag ];
+  dependencies = [ blockdiag ];
 
-  # Tests fail:
-  #   ...
-  #   ERROR: Failure: OSError ([Errno 2] No such file or directory: '/tmp/nix-build-python2.7-seqdiag-0.9.0.drv-0/seqdiag-0.9.0/src/seqdiag/tests/diagrams/')
-  doCheck = false;
+  patches = [ ./fix_test_generate.patch ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+  enabledTestPaths = [ "src/seqdiag/tests/" ];
+
+  pythonImportsCheck = [ "seqdiag" ];
+
+  meta = {
     description = "Generate sequence-diagram image from spec-text file (similar to Graphviz)";
-    homepage = http://blockdiag.com/;
-    license = licenses.asl20;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ bjornfor ];
+    homepage = "http://blockdiag.com/";
+    changelog = "https://github.com/blockdiag/seqdiag/blob/${version}/CHANGES.rst";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ bjornfor ];
+    mainProgram = "seqdiag";
+    platforms = lib.platforms.unix;
   };
 }

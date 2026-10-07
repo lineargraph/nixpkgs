@@ -1,25 +1,74 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub
-, pyjwt, pysocks, pytz, requests, six, nose, mock }:
+{
+  lib,
+  aiohttp-retry,
+  aiohttp,
+  buildPythonPackage,
+  cryptography,
+  django,
+  fetchFromGitHub,
+  mock,
+  multidict,
+  pyjwt,
+  pyngrok,
+  pytestCheckHook,
+  pytz,
+  requests,
+  setuptools,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "twilio";
-  version = "6.8.0";
-  # tests not included in PyPi, so fetch from github instead
+  version = "9.11.2";
+  pyproject = true;
+
   src = fetchFromGitHub {
     owner = "twilio";
     repo = "twilio-python";
-    rev = version;
-    sha256 = "1vi3m6kvbmv643jbz95q59rcn871y0sss48kw2nqziyr5iswfx8c";
+    tag = finalAttrs.version;
+    hash = "sha256-RbamHPCGYGZgkipYf8Wz0D7cOB7AsGhxPRJC/BXR1qE=";
   };
 
-  buildInputs = [ nose mock ];
+  # https://github.com/twilio/twilio-python/pull/919
+  patches = [ ./remove-aiounittest.patch ];
 
-  propagatedBuildInputs = [ pyjwt pysocks pytz six requests ];
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
+  dependencies = [
+    aiohttp
+    aiohttp-retry
+    pyjwt
+    pyngrok
+    pytz
+    requests
+  ];
+
+  nativeCheckInputs = [
+    cryptography
+    django
+    mock
+    multidict
+    pytestCheckHook
+  ];
+
+  disabledTests = [
+    # Tests require network access
+    "test_set_default_user_agent"
+    "test_set_user_agent_extensions"
+  ];
+
+  disabledTestPaths = [
+    # Tests require API token
+    "tests/cluster/test_webhook.py"
+    "tests/cluster/test_cluster.py"
+  ];
+
+  pythonImportsCheck = [ "twilio" ];
+
+  meta = {
     description = "Twilio API client and TwiML generator";
-    homepage = https://github.com/twilio/twilio-python/;
-    license = licenses.mit;
-    maintainers = with maintainers; [ flokli ];
+    homepage = "https://github.com/twilio/twilio-python/";
+    changelog = "https://github.com/twilio/twilio-python/blob/${finalAttrs.src.tag}/CHANGES.md";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ fab ];
   };
-}
+})

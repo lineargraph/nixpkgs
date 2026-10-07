@@ -1,7 +1,9 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.serviio;
@@ -10,7 +12,7 @@ let
     #!${pkgs.bash}/bin/sh
 
     SERVIIO_HOME=${pkgs.serviio}
-    
+
     # Setup the classpath
     SERVIIO_CLASS_PATH="$SERVIIO_HOME/lib/*:$SERVIIO_HOME/config"
 
@@ -21,23 +23,32 @@ let
     # Execute the JVM in the foreground
     exec ${pkgs.jre}/bin/java -Xmx512M -Xms20M -XX:+UseG1GC -XX:GCTimeRatio=1 -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20 $JAVA_OPTS -classpath "$SERVIIO_CLASS_PATH" org.serviio.MediaServer "$@"
   '';
-  
-in {
+
+in
+{
 
   ###### interface
   options = {
     services.serviio = {
-      
-      enable = mkOption {
-        type = types.bool;
+
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = ''
           Whether to enable the Serviio Media Server.
         '';
       };
 
-      dataDir = mkOption {
-        type = types.path;
+      openFirewall = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Open ports in the firewall for the Serviio Media Server.
+        '';
+      };
+
+      dataDir = lib.mkOption {
+        type = lib.types.path;
         default = "/var/lib/serviio";
         description = ''
           The directory where serviio stores its state, data, etc.
@@ -49,10 +60,10 @@ in {
 
   ###### implementation
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     systemd.services.serviio = {
       description = "Serviio Media Server";
-      after = [ "local-fs.target" "network.target" ];
+      after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
       path = [ pkgs.serviio ];
       serviceConfig = {
@@ -63,29 +74,24 @@ in {
       };
     };
 
-    users.extraUsers = [
-      { 
-        name = "serviio";
-        group = "serviio";
-        home = cfg.dataDir;
-        description = "Serviio Media Server User";
-        createHome = true;
-        isSystemUser = true;
-      }
-    ];
+    users.users.serviio = {
+      group = "serviio";
+      home = cfg.dataDir;
+      description = "Serviio Media Server User";
+      createHome = true;
+      isSystemUser = true;
+    };
 
-    users.extraGroups = [
-      { name = "serviio";} 
-    ];
+    users.groups.serviio = { };
 
-    networking.firewall = {
-      allowedTCPPorts = [ 
-        8895  # serve UPnP responses
+    networking.firewall = lib.mkIf cfg.openFirewall {
+      allowedTCPPorts = [
+        8895 # serve UPnP responses
         23423 # console
         23424 # mediabrowser
       ];
-      allowedUDPPorts = [ 
-        1900 # UPnP service discovey
+      allowedUDPPorts = [
+        1900 # UPnP service discovery
       ];
     };
   };

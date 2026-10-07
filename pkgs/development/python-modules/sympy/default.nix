@@ -1,34 +1,64 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, glibcLocales
-, mpmath
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  mpmath,
+
+  # tests
+  glibcLocales,
+
+  # Reverse dependency
+  sage,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "sympy";
-  version = "1.1.1";
+  version = "1.14.0";
+  pyproject = true;
+  __structuredAttrs = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "ac5b57691bc43919dcc21167660a57cc51797c28a4301a6144eff07b751216a4";
+  src = fetchFromGitHub {
+    owner = "sympy";
+    repo = "sympy";
+    tag = "sympy-${finalAttrs.version}";
+    hash = "sha256-aSMQ/H5agjsa+Lp7o15/irLSTLtmF/VEqMCBGbXbvmM=";
   };
 
-  checkInputs = [ glibcLocales ];
+  build-system = [
+    setuptools
+  ];
 
-  propagatedBuildInputs = [ mpmath ];
+  pythonRelaxDeps = [
+    "mpmath"
+  ];
+  dependencies = [
+    mpmath
+  ];
 
-  # Bunch of failures including transients.
+  # tests take ~1h
   doCheck = false;
+  nativeCheckInputs = [ glibcLocales ];
+  pythonImportsCheck = [ "sympy" ];
 
-  preCheck = ''
-    export LANG="en_US.UTF-8"
-  '';
+  passthru.tests = {
+    inherit sage;
+  };
 
   meta = {
-    description = "A Python library for symbolic mathematics";
-    homepage    = http://www.sympy.org/;
-    license     = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ lovek323 ];
+    description = "Python library for symbolic mathematics";
+    mainProgram = "isympy";
+    homepage = "https://www.sympy.org/";
+    downloadPage = "https://github.com/sympy/sympy";
+    changelog = "https://github.com/sympy/sympy/wiki/Release-Notes-for-${finalAttrs.version}";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [
+      GaetanLepage
+    ];
+    teams = [ lib.teams.sage ];
   };
-}
+})

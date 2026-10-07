@@ -1,42 +1,61 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub
-, requests
-, testfixtures, mock, requests_toolbelt
-, betamax, betamax-serializers, betamax-matchers
+{
+  lib,
+  betamax,
+  betamax-matchers,
+  betamax-serializers,
+  buildPythonPackage,
+  fetchFromGitHub,
+  flit-core,
+  mock,
+  pytestCheckHook,
+  requests,
+  requests-toolbelt,
+  testfixtures,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "prawcore";
-  version = "0.15.0";
+  version = "2.4.0";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "praw-dev";
     repo = "prawcore";
-    rev = "v${version}";
-    sha256 = "0v16n6bzf483i00bn0qykrg3wvw9dbnfdl512pw8n635ld1g7cb8";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-tECZRx6VgyiJDKHvj4Rf1sknFqUhz3sDFEsAMOeB7/g=";
   };
 
-  postPatch = ''
-    sed -i "s/'testfixtures >4.13.2, <6'/'testfixtures >4.13.2'/g" setup.py
-  '';
+  nativeBuildInputs = [ flit-core ];
 
-  propagatedBuildInputs = [
-    requests
-  ];
+  propagatedBuildInputs = [ requests ];
 
-  checkInputs = [
+  nativeCheckInputs = [
     testfixtures
     mock
     betamax
     betamax-serializers
     betamax-matchers
-    requests_toolbelt
+    requests-toolbelt
+    pytestCheckHook
   ];
 
-  meta = with stdenv.lib; {
+  disabledTests = [
+    # fixture out of date
+    "test_request__session_timeout_default"
+  ];
+
+  disabledTestPaths = [
+    # tests requiring network
+    "tests/integration"
+  ];
+
+  pythonImportsCheck = [ "prawcore" ];
+
+  meta = {
     description = "Low-level communication layer for PRAW";
-    homepage = http://praw.readthedocs.org/;
-    license = licenses.gpl3;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ jgeerds ];
+    homepage = "https://praw.readthedocs.org/";
+    changelog = "https://github.com/praw-dev/prawcore/blob/${finalAttrs.src.tag}/CHANGES.rst";
+    license = lib.licenses.bsd2;
+    maintainers = with lib.maintainers; [ fab ];
   };
-}
+})

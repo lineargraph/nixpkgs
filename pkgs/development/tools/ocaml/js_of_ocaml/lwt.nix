@@ -1,16 +1,23 @@
-{ stdenv, ocaml, findlib, jbuilder, js_of_ocaml-compiler, js_of_ocaml-ppx
-, ocaml-migrate-parsetree, ppx_tools_versioned
-, js_of_ocaml, ocaml_lwt
+{
+  lib,
+  buildDunePackage,
+  js_of_ocaml-ppx,
+  js_of_ocaml,
+  lwt,
+  lwt_log,
+  loggerSupport ? !lib.versionAtLeast lwt.version "6.0.0",
 }:
 
-stdenv.mkDerivation rec {
-	name = "js_of_ocaml-lwt-${version}"; 
+buildDunePackage {
+  pname = "js_of_ocaml-lwt";
 
-	inherit (js_of_ocaml-compiler) version src installPhase meta;
+  inherit (js_of_ocaml) version src meta;
 
-	buildInputs = [ ocaml findlib jbuilder js_of_ocaml-ppx ocaml-migrate-parsetree ppx_tools_versioned ];
+  buildInputs = [ js_of_ocaml-ppx ];
 
-	propagatedBuildInputs = [ js_of_ocaml ocaml_lwt ];
-
-	buildPhase = "jbuilder build -p js_of_ocaml-lwt";
+  propagatedBuildInputs = [
+    js_of_ocaml
+    lwt
+  ]
+  ++ lib.optional loggerSupport lwt_log;
 }

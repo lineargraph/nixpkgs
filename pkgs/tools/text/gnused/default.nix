@@ -1,24 +1,42 @@
-{ stdenv, fetchurl, perl }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  updateAutotoolsGnuConfigScriptsHook,
+  perl,
+}:
 
-stdenv.mkDerivation rec {
-  name = "gnused-${version}";
-  version = "4.5";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "gnused";
+  version = "4.10";
 
   src = fetchurl {
-    url = "mirror://gnu/sed/sed-${version}.tar.xz";
-    sha256 = "0h3b2jfj57wmz680vkbyavlsrkak556qhvs7m7fdlawwhg477bbs";
+    url = "mirror://gnu/sed/sed-${finalAttrs.version}.tar.xz";
+    hash = "sha256-uOchgrLslqNXTimYxHt6qmTMIM4ADY6awxPMB87PKMc=";
   };
 
-  outputs = [ "out" "info" ];
+  outputs = [
+    "out"
+    "info"
+  ];
 
-  nativeBuildInputs = [ perl ];
+  nativeBuildInputs = [
+    updateAutotoolsGnuConfigScriptsHook
+    perl
+  ];
+
+  strictDeps = true;
+  __structuredAttrs = true;
+
   preConfigure = "patchShebangs ./build-aux/help2man";
 
   # Prevents attempts of running 'help2man' on cross-built binaries.
-  PERL = if stdenv.hostPlatform == stdenv.buildPlatform then null else "missing";
+  env = lib.optionalAttrs (stdenv.hostPlatform != stdenv.buildPlatform) {
+    PERL = "missing";
+  };
 
   meta = {
-    homepage = http://www.gnu.org/software/sed/;
+    homepage = "https://www.gnu.org/software/sed/";
     description = "GNU sed, a batch stream editor";
 
     longDescription = ''
@@ -30,9 +48,10 @@ stdenv.mkDerivation rec {
       multiple occurrences of a string within a file.
     '';
 
-    license = stdenv.lib.licenses.gpl3Plus;
+    license = lib.licenses.gpl3Plus;
 
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ ];
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ mic92 ];
+    mainProgram = "sed";
   };
-}
+})

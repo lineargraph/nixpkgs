@@ -1,30 +1,43 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib
-, ocamlbuild, topkg
-, uri, xmlm, omd, ezjsonm }:
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+  alcotest,
+  uri,
+  xmlm,
+  omd,
+  ezjsonm,
+}:
 
-stdenv.mkDerivation rec {
-  version = "2.2.0";
-  name = "ocaml-cow-${version}";
+buildDunePackage (finalAttrs: {
+  version = "2.5.0";
+  pname = "cow";
 
-  src = fetchFromGitHub {
-    owner  = "mirage";
-    repo   = "ocaml-cow";
-    rev    = "v${version}";
-    sha256 = "0snhabg7rfrrcq2ksr3qghiawd61cw3y4kp6rl7vs87j4cnk3kr2";
+  minimalOCamlVersion = "4.03";
+
+  src = fetchurl {
+    url = "https://github.com/mirage/ocaml-cow/releases/download/v${finalAttrs.version}/cow-${finalAttrs.version}.tbz";
+    hash = "sha256-8rNK+5oWUbi91gXvdz/66YQu5+iXp0Co8wk0Isv6b9Y=";
   };
 
-  buildInputs = [ ocaml ocamlbuild findlib topkg ];
-  propagatedBuildInputs = [ xmlm uri ezjsonm omd ];
+  propagatedBuildInputs = [
+    xmlm
+    uri
+    ezjsonm
+    omd
+  ];
+  checkInputs = [ alcotest ];
+  doCheck = true;
 
-  inherit (topkg) buildPhase installPhase;
-
-  meta = with stdenv.lib; {
+  meta = {
     description = "Caml on the Web";
     longDescription = ''
-      Caml on the Web (COW) is a set of parsers and syntax extensions to let you manipulate HTML, CSS, XML, JSON and Markdown directly from OCaml code.
+      Writing web-applications requires a lot of skills: HTML, XML, JSON and
+      Markdown, to name but a few! This library provides OCaml combinators
+      for these web formats.
     '';
-    license = licenses.isc;
-    maintainers = [ maintainers.sternenseemann ];
-    inherit (ocaml.meta) platforms;
+    homepage = "https://mirage.github.io/ocaml-cow/";
+    license = lib.licenses.isc;
+    maintainers = with lib.maintainers; [ sternenseemann ];
   };
-}
+})

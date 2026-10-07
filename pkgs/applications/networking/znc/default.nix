@@ -1,39 +1,83 @@
-{ stdenv, fetchurl, openssl, pkgconfig
-, withPerl ? false, perl
-, withPython ? false, python3
-, withTcl ? false, tcl
-, withCyrus ? true, cyrus_sasl
+{
+  lib,
+  stdenv,
+  fetchurl,
+  cmake,
+  openssl,
+  pkg-config,
+  withPerl ? false,
+  perl,
+  withPython ? false,
+  python3,
+  withTcl ? false,
+  tcl,
+  withCyrus ? true,
+  cyrus_sasl,
+  withUnicode ? true,
+  icu,
+  withZlib ? true,
+  zlib,
+  withIPv6 ? true,
+  withDebug ? false,
+  testers,
 }:
 
-with stdenv.lib;
-
-stdenv.mkDerivation rec {
-  name = "znc-${version}";
-  version = "1.7.0";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "znc";
+  version = "1.10.3";
 
   src = fetchurl {
-    url = "http://znc.in/releases/archive/${name}.tar.gz";
-    sha256 = "0vxra50418bsjfdpf8vl70fijv8syvasjqdxfyjliff6k91k2zn0";
+    url = "https://znc.in/releases/archive/znc-${finalAttrs.version}.tar.gz";
+    hash = "sha256-aPP2ZBtIDAQQEMVZbhI0BD4FyRN+2gYjOEUBdgMJX1s=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  postPatch = ''
+    substituteInPlace znc.pc.cmake.in \
+      --replace-fail 'bindir=''${exec_prefix}/@CMAKE_INSTALL_BINDIR@' "bindir=@CMAKE_INSTALL_FULL_BINDIR@" \
+      --replace-fail 'libdir=''${prefix}/@CMAKE_INSTALL_LIBDIR@' "libdir=@CMAKE_INSTALL_FULL_LIBDIR@" \
+      --replace-fail 'datadir=''${prefix}/@CMAKE_INSTALL_DATADIR@' "datadir=@CMAKE_INSTALL_FULL_DATADIR@" \
+      --replace-fail 'includedir=''${prefix}/@CMAKE_INSTALL_INCLUDEDIR@' "includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@" \
+      --replace-fail 'datarootdir=''${prefix}/@CMAKE_INSTALL_DATAROOTDIR@' "datarootdir=@CMAKE_INSTALL_FULL_DATAROOTDIR@"
+  '';
 
-  buildInputs = [ openssl ]
-    ++ optional withPerl perl
-    ++ optional withPython python3
-    ++ optional withTcl tcl
-    ++ optional withCyrus cyrus_sasl;
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+  ];
 
-  configureFlags = optionalString withPerl "--enable-perl "
-    + optionalString withPython "--enable-python "
-    + optionalString withTcl "--enable-tcl --with-tcl=${tcl}/lib "
-    + optionalString withCyrus "--enable-cyrus ";
+  buildInputs = [
+    openssl
+  ]
+  ++ lib.optional withPerl perl
+  ++ lib.optional withPython python3
+  ++ lib.optional withTcl tcl
+  ++ lib.optional withCyrus cyrus_sasl
+  ++ lib.optional withUnicode icu
+  ++ lib.optional withZlib zlib;
 
-  meta = with stdenv.lib; {
+  configureFlags = [
+    (lib.enableFeature withPerl "perl")
+    (lib.enableFeature withPython "python")
+    (lib.enableFeature withTcl "tcl")
+    (lib.withFeatureAs withTcl "tcl" "${tcl}/lib")
+    (lib.enableFeature withCyrus "cyrus")
+  ]
+  ++ lib.optionals (!withIPv6) [ "--disable-ipv6" ]
+  ++ lib.optionals withDebug [ "--enable-debug" ];
+
+  enableParallelBuilding = true;
+
+  passthru = {
+    tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
+  };
+
+  meta = {
     description = "Advanced IRC bouncer";
-    homepage = http://wiki.znc.in/ZNC;
-    maintainers = with maintainers; [ viric schneefux lnl7 ];
-    license = licenses.asl20;
-    platforms = platforms.unix;
+    homepage = "https://wiki.znc.in/ZNC";
+    maintainers = [
+    ];
+    license = lib.licenses.asl20;
+    platforms = lib.platforms.unix;
+    pkgConfigModules = [ "znc" ];
   };
-}
+})

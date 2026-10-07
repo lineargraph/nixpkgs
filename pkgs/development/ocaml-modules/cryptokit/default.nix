@@ -1,43 +1,47 @@
-{ stdenv, fetchurl, zlib, ocaml, findlib, ocamlbuild, zarith, ncurses }:
+{
+  lib,
+  buildDunePackage,
+  ocaml,
+  fetchFromGitHub,
+  zlib,
+  dune-configurator,
+  zarith,
+  version ? if lib.versionAtLeast ocaml.version "4.13" then "1.21.1" else "1.20.1",
+}:
 
-assert stdenv.lib.versionAtLeast ocaml.version "3.12";
+buildDunePackage (finalAttrs: {
+  pname = "cryptokit";
+  inherit version;
 
-let param =
-  if stdenv.lib.versionAtLeast ocaml.version "4.02"
-  then {
-    version = "1.13";
-    url = https://github.com/xavierleroy/cryptokit/archive/release113.tar.gz;
-    sha256 = "1f4jjnp2a911nqw0hbijyv9vygkk6kw5zx75qs49hfm3by6ij8rq";
-    inherit zarith;
-  } else {
-    version = "1.10";
-    url = http://forge.ocamlcore.org/frs/download.php/1493/cryptokit-1.10.tar.gz;
-    sha256 = "1k2f2ixm7jcsgrzn9lz1hm9qqgq71lk9lxy3v3cwsd8xdrj3jrnv";
-    zarith = null;
+  src = fetchFromGitHub {
+    owner = "xavierleroy";
+    repo = "cryptokit";
+    tag = "release${lib.replaceStrings [ "." ] [ "" ] finalAttrs.version}";
+    hash =
+      {
+        "1.21.1" = "sha256-9JU9grZpTTrYYO9gai2UPq119HfenI1JAY+EyoR6x7Q=";
+        "1.20.1" = "sha256-VFY10jGctQfIUVv7dK06KP8zLZHLXTxvLyTCObS+W+E=";
+      }
+      ."${finalAttrs.version}";
   };
-in
 
-stdenv.mkDerivation rec {
-  name = "cryptokit-${version}";
-  inherit (param) version;
+  # dont do autotools configuration, but do trigger findlib's preConfigure hook
+  configurePhase = ''
+    runHook preConfigure
+    runHook postConfigure
+  '';
 
-  src = fetchurl {
-    inherit (param) url sha256;
-  };
+  buildInputs = [ dune-configurator ];
+  propagatedBuildInputs = [
+    zarith
+    zlib
+  ];
 
-  buildInputs = [ zlib ocaml findlib ocamlbuild ncurses ];
-  propagatedBuildInputs = [ param.zarith ];
-
-  buildFlags = "setup.data build";
-
-  preBuild = "mkdir -p $out/lib/ocaml/${ocaml.version}/site-lib/cryptokit";
+  doCheck = true;
 
   meta = {
-    homepage = http://pauillac.inria.fr/~xleroy/software.html;
-    description = "A library of cryptographic primitives for OCaml";
-    platforms = ocaml.meta.platforms or [];
-    maintainers = [
-      stdenv.lib.maintainers.z77z
-    ];
+    homepage = "http://pauillac.inria.fr/~xleroy/software.html";
+    description = "Library of cryptographic primitives for OCaml";
+    license = lib.licenses.lgpl2Only;
   };
-}
+})

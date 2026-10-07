@@ -1,51 +1,53 @@
-{ stdenv, fetchurl, openssl, makeWrapper, buildPythonApplication
-, pytest, dnspython }:
+{
+  lib,
+  fetchPypi,
+  openssl,
+  buildPythonPackage,
+  setuptools,
+  pytestCheckHook,
+  dnspython,
+  pynacl,
+  authres,
+}:
 
-buildPythonApplication rec {
-  name = "${pname}-${version}";
+buildPythonPackage (finalAttrs: {
   pname = "dkimpy";
-  majorversion = "0.6";
-  minorversion = "2";
-  version = "${majorversion}.${minorversion}";
+  version = "1.1.8";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "https://launchpad.net/${pname}/${majorversion}/${majorversion}.${minorversion}/+download/${name}.tar.gz";
-    sha256 = "1hagz8qk0v4ijfbcdq4z28bpgr2mkpr498z76i1vam2d50chmakl";
+  src = fetchPypi {
+    inherit (finalAttrs) pname version;
+    hash = "sha256-tfYPtHu/XY12LxNLzqDDiOumtJg0KmgqIfFoZUUJS3c=";
   };
 
-  buildInputs = [ pytest ];
-  propagatedBuildInputs =  [ openssl dnspython ];
+  build-system = [ setuptools ];
 
-  patchPhase = ''
-    substituteInPlace dknewkey.py --replace \
-      /usr/bin/openssl ${openssl}/bin/openssl
+  dependencies = [
+    openssl
+    dnspython
+    pynacl
+    authres
+  ];
+
+  postPatch = ''
+    substituteInPlace dkim/dknewkey.py --replace-fail \
+      /usr/bin/openssl ${lib.getExe openssl}
   '';
 
-  checkPhase = ''
-    python ./test.py
-  '';
+  pythonImportsCheck = [ "dkim" ];
 
-  postInstall = ''
-    mkdir -p $out/bin $out/libexec
-    mv $out/bin/*.py $out/libexec
-    makeWrapper "$out/libexec/dkimverify.py" $out/bin/dkimverify
-    makeWrapper "$out/libexec/dkimsign.py" $out/bin/dkimsign
-    makeWrapper "$out/libexec/arcverify.py" $out/bin/arcverify
-    makeWrapper "$out/libexec/arcsign.py" $out/bin/arcsign
-    makeWrapper "$out/libexec/dknewkey.py" $out/bin/dknewkey
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "DKIM + ARC email signing/verification tools + Python module";
     longDescription = ''
       Python module that implements DKIM (DomainKeys Identified Mail) email
-      signing and verification. It also provides a number of convєnient tools
+      signing and verification. It also provides a number of convenient tools
       for command line signing and verification, as well as generating new DKIM
       records. This version also supports the experimental Authenticated
       Received Chain (ARC) protocol.
     '';
-    homepage = https://launchpad.net/dkimpy;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ leenaars ];
+    homepage = "https://launchpad.net/dkimpy";
+    license = lib.licenses.bsd3;
   };
-}
+})

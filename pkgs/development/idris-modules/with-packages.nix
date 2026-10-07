@@ -1,20 +1,27 @@
 # Build a version of idris with a set of packages visible
 # packages: The packages visible to idris
-{ stdenv, idris, symlinkJoin, makeWrapper }: packages:
+{
+  lib,
+  idris,
+  symlinkJoin,
+  makeWrapper,
+}:
+packages:
 
-let paths = stdenv.lib.closePropagation packages;
+let
+  paths = lib.closePropagation packages;
 in
-stdenv.lib.appendToName "with-packages" (symlinkJoin {
+lib.appendToName "with-packages" (symlinkJoin {
 
-  inherit (idris) name;
+  inherit (idris) pname version;
 
-  paths = paths ++ [idris] ;
+  paths = paths ++ [ idris ];
 
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
 
   postBuild = ''
     wrapProgram $out/bin/idris \
       --set IDRIS_LIBRARY_PATH $out/libs
-      '';
+  '';
 
 })

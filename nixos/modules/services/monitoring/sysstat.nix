@@ -1,26 +1,27 @@
-{ config, lib, pkgs, ... }:
-with lib;
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.services.sysstat;
-in {
+in
+{
   options = {
     services.sysstat = {
-      enable = mkOption {
-        type = types.bool;
-        default = false;
-        description = ''
-          Whether to enable sar system activity collection.
-        '';
-      };
+      enable = lib.mkEnableOption "sar system activity collection";
 
-      collect-frequency = mkOption {
+      collect-frequency = lib.mkOption {
+        type = lib.types.str;
         default = "*:00/10";
         description = ''
           OnCalendar specification for sysstat-collect
         '';
       };
 
-      collect-args = mkOption {
+      collect-args = lib.mkOption {
+        type = lib.types.str;
         default = "1 1";
         description = ''
           Arguments to pass sa1 when collecting statistics
@@ -29,17 +30,17 @@ in {
     };
   };
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     systemd.services.sysstat = {
       description = "Resets System Activity Logs";
       wantedBy = [ "multi-user.target" ];
-      preStart = "test -d /var/log/sa || mkdir -p /var/log/sa";
 
       serviceConfig = {
         User = "root";
         RemainAfterExit = true;
         Type = "oneshot";
         ExecStart = "${pkgs.sysstat}/lib/sa/sa1 --boot";
+        LogsDirectory = "sa";
       };
     };
 

@@ -1,11 +1,17 @@
 # This file was generated and will be overwritten by ./generate.sh
 
-{ stdenv, fetchurl, lib }:
+{
+  stdenv,
+  fetchurl,
+  lib,
+}:
 
-stdenv.mkDerivation rec {
-  name = "pythonMAJORMINOR-docs-TYPE-VERSION";
+stdenv.mkDerivation {
+  pname = "pythonMAJORMINOR-docs-TYPE";
+  version = "VERSION";
+
   src = fetchurl {
-    url = URL;
+    url = "URL";
     sha256 = "SHA";
   };
   installPhase = ''
@@ -13,6 +19,8 @@ stdenv.mkDerivation rec {
     cp -R ./ $out/share/doc/pythonMAJORMINOR/TYPE
   '';
   meta = {
-    maintainers = [ lib.maintainers.chaoflow ];
+    maintainers = with lib.maintainers; [
+      panicgh
+    ];
   };
 }

@@ -1,31 +1,83 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, six, nose, mock, dill, pycodestyle }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  fontconfig,
+  graphviz,
+  mock,
+  pycodestyle,
+  pygraphviz,
+  pytestCheckHook,
+  setuptools,
+  six,
+}:
 
 buildPythonPackage rec {
   pname = "transitions";
-  version = "0.6.8";
+  version = "0.9.3";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "155de243bd935959ae66cdab5c4c1a92f2bbf48555c6f994365935a0a9fffc1b";
+    hash = "sha256-iB+3W7FlTtVdhgYLsGfyxxb44VX1e7c/1ETlNxOq/sg=";
   };
 
-  postPatch = ''
-    substituteInPlace setup.py --replace "dill<0.2.7" dill
+  build-system = [ setuptools ];
+
+  dependencies = [
+    six
+    pygraphviz # optional
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    mock
+    graphviz
+    pycodestyle
+  ];
+
+  preCheck = ''
+    export FONTCONFIG_FILE=${fontconfig.out}/etc/fonts/fonts.conf
+    export HOME=$TMPDIR
   '';
 
-  propagatedBuildInputs = [ six ];
+  disabledTestPaths = [
+    # crashes in pygraphviz/graphviz
+    "tests/test_pygraphviz.py::PygraphvizTest::test_binary_stream"
+    "tests/test_pygraphviz.py::TestPygraphvizNested::test_binary_stream"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    # sleep is not accurate on Darwin
+    "tests/test_async.py"
+  ];
 
-  checkInputs = [ nose mock dill pycodestyle ];
+  disabledTests = [
+    "test_diagram"
+    "test_ordered_with_graph"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    # Upstream issue https://github.com/pygraphviz/pygraphviz/issues/441
+    "test_binary_stream"
 
-  checkPhase = ''
-    nosetests
-  '';
+    # sleep is not accurate on Darwin
+    "test_timeout"
+    "test_timeout_callbacks"
+    "test_timeout_transitioning"
+    "test_thread_access"
+    "test_parallel_access"
+    "test_parallel_deep"
+    "test_conditional_access"
+    "test_pickle"
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/pytransitions/transitions;
-    description = "A lightweight, object-oriented finite state machine implementation in Python";
-    license = licenses.mit;
-    maintainers = with maintainers; [ dotlambda ];
+  pythonImportsCheck = [ "transitions" ];
+
+  meta = {
+    homepage = "https://github.com/pytransitions/transitions";
+    description = "Lightweight, object-oriented finite state machine implementation in Python";
+    changelog = "https://github.com/pytransitions/transitions/releases/tag/${version}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

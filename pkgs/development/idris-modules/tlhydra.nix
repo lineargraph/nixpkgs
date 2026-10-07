@@ -1,18 +1,20 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, effects
-, contrib
-, lightyear
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  effects,
+  contrib,
+  lightyear,
+  lib,
 }:
-
-build-idris-package  {
-  name = "tlhydra";
+build-idris-package {
+  pname = "tlhydra";
   version = "2017-13-26";
 
-  idrisDeps = [ prelude effects contrib lightyear ];
+  idrisDeps = [
+    effects
+    contrib
+    lightyear
+  ];
 
   src = fetchFromGitHub {
     owner = "Termina1";
@@ -23,8 +25,7 @@ build-idris-package  {
 
   meta = {
     description = "Idris parser and serializer/deserealizer for TL language";
-    homepage = https://github.com/Termina1/tlhydra;
+    homepage = "https://github.com/Termina1/tlhydra";
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

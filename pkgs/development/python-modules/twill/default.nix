@@ -1,25 +1,54 @@
-{ stdenv, buildPythonPackage, fetchurl, isPy3k, pythonPackages }:
-buildPythonPackage rec {
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  flask,
+  httpx,
+  lxml,
+  pyparsing,
+  pytestCheckHook,
+  quixote,
+  setuptools,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "twill";
-  version = "1.8.0";
-  name = "${pname}-${version}";
+  version = "3.3.1";
+  pyproject = true;
 
-  disabled = isPy3k;
-
-  src = fetchurl {
-    url    = "mirror://pypi/t/twill/${name}.tar.gz";
-    sha256 = "d63e8b09aa4f6645571c70cd3ba47a911abbae4d7baa4b38fc7eb72f6cfda188";
+  src = fetchPypi {
+    inherit (finalAttrs) pname version;
+    hash = "sha256-/ZT5ntn7YMafrD9/rWaOvROKo+CGFKSldG9jjH/eR0Q=";
   };
 
-  propagatedBuildInputs = with pythonPackages; [ nose ];
+  pythonRelaxDeps = [ "lxml" ];
 
-  doCheck = false; # pypi package comes without tests, other homepage does not provide all verisons
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    homepage = http://twill.idyll.org/;
-    description = "a simple scripting language for Web browsing";
-    license     = licenses.mit;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ mic92 ];
+  dependencies = [
+    httpx
+    lxml
+    pyparsing
+  ];
+
+  nativeCheckInputs = [
+    flask
+    pytestCheckHook
+    quixote
+  ];
+
+  disabledTestPaths = [
+    # pytidylib is abandoned
+    "tests/test_tidy.py"
+  ];
+
+  pythonImportsCheck = [ "twill" ];
+
+  meta = {
+    description = "Simple scripting language for Web browsing";
+    homepage = "https://twill-tools.github.io/twill/";
+    changelog = "https://github.com/twill-tools/twill/releases/tag/v${finalAttrs.version}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ mic92 ];
   };
-}
+})

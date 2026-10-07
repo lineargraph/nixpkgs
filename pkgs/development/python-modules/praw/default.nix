@@ -1,48 +1,70 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub
-, requests, decorator, flake8, mock, six, update_checker, pytestrunner, prawcore
-, pytest, betamax, betamax-serializers, betamax-matchers, requests_toolbelt
+{
+  lib,
+  betamax-matchers,
+  betamax-serializers,
+  betamax,
+  buildPythonPackage,
+  fetchFromGitHub,
+  fetchpatch,
+  flit-core,
+  mock,
+  prawcore,
+  pytestCheckHook,
+  requests-toolbelt,
+  update-checker,
+  websocket-client,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "praw";
-  version = "5.4.0";
+  version = "7.8.2";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "praw-dev";
     repo = "praw";
-    rev = "v${version}";
-    sha256 = "13vbh2r952ai2m6sc79psfwaj5fc8cssdg2pqpizg2mwd0l1s6lb";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-mAXRLo8xBTigtXYRbc6qxjjoRJ0+v0DZeLEwLISh2PE=";
   };
 
-  postPatch = ''
-    # drop upper bound of prawcore requirement
-    sed -ri "s/'(prawcore >=.+), <.+'/'\1'/" setup.py
-  '';
-
-  propagatedBuildInputs = [
-    requests
-    decorator
-    flake8
-    mock
-    six
-    update_checker
-    pytestrunner
-    prawcore
+  patches = [
+    # fix tests under python 3.14
+    (fetchpatch {
+      url = "https://github.com/praw-dev/praw/commit/9edc0bfa62c1878c395d8bc225edfe87e4fc4cd4.patch";
+      includes = [ "tests/unit/test_reddit.py" ];
+      hash = "sha256-QozdHz8WPCsuBgFgx1j0NwFsPFBmq9KhKiW7B5/QmfE=";
+    })
   ];
 
-  checkInputs = [
-    pytest
+  build-system = [ flit-core ];
+
+  dependencies = [
+    mock
+    prawcore
+    update-checker
+    websocket-client
+  ];
+
+  nativeCheckInputs = [
     betamax
     betamax-serializers
     betamax-matchers
-    requests_toolbelt
+    pytestCheckHook
+    requests-toolbelt
   ];
 
-  meta = with stdenv.lib; {
+  disabledTestPaths = [
+    # tests requiring network
+    "tests/integration"
+  ];
+
+  pythonImportsCheck = [ "praw" ];
+
+  meta = {
     description = "Python Reddit API wrapper";
-    homepage = http://praw.readthedocs.org/;
-    license = licenses.gpl3;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ jgeerds ];
+    homepage = "https://praw.readthedocs.org/";
+    changelog = "https://github.com/praw-dev/praw/blob/${finalAttrs.src.tag}/CHANGES.rst";
+    license = lib.licenses.bsd2;
+    maintainers = with lib.maintainers; [ fab ];
   };
-}
+})

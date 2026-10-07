@@ -1,51 +1,86 @@
-{ stdenv, fetchurl, iproute, lzo, openssl, pam, pkgconfig
-, useSystemd ? stdenv.isLinux, systemd ? null
-, pkcs11Support ? false, pkcs11helper ? null,
+{
+  lib,
+  stdenv,
+  fetchurl,
+  pkg-config,
+  libcap_ng,
+  libnl,
+  lz4,
+  lzo,
+  openssl,
+  pam,
+  useSystemd ? lib.meta.availableOn stdenv.hostPlatform systemdLibs,
+  systemdLibs,
+  update-systemd-resolved,
+  pkcs11Support ? false,
+  pkcs11helper,
+  nixosTests,
+  unixtools,
 }:
 
-assert useSystemd -> (systemd != null);
-assert pkcs11Support -> (pkcs11helper != null);
-
-with stdenv.lib;
-
-stdenv.mkDerivation rec {
-  name = "openvpn-${version}";
-  version = "2.4.6";
+let
+  inherit (lib) optional optionals optionalString;
+in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "openvpn";
+  version = "2.6.23";
 
   src = fetchurl {
-    url = "https://swupdate.openvpn.net/community/releases/${name}.tar.xz";
-    sha256 = "09lck4wmkas3iyrzaspin9gn3wiclqb1m9sf8diy7j8wakx38r2g";
+    url = "https://swupdate.openvpn.net/community/releases/openvpn-${finalAttrs.version}.tar.gz";
+    hash = "sha256-QEHHCRYr7BMlq/WqjPJ6JVzEd8Y0sV7jEEEccB/ECpY=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ lzo openssl ]
-                  ++ optionals stdenv.isLinux [ pam iproute ]
-                  ++ optional useSystemd systemd
-                  ++ optional pkcs11Support pkcs11helper;
+  nativeBuildInputs = [
+    pkg-config
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    unixtools.route
+    unixtools.ifconfig
+  ];
 
-  configureFlags = optionals stdenv.isLinux [
-    "--enable-iproute2"
-    "IPROUTE=${iproute}/sbin/ip" ]
-    ++ optional useSystemd "--enable-systemd"
+  buildInputs = [
+    lz4
+    lzo
+    openssl
+  ]
+  ++ optionals stdenv.hostPlatform.isLinux [
+    libcap_ng
+    libnl
+    pam
+  ]
+  ++ optional useSystemd systemdLibs
+  ++ optional pkcs11Support pkcs11helper;
+
+  configureFlags =
+    optional useSystemd "--enable-systemd"
     ++ optional pkcs11Support "--enable-pkcs11"
-    ++ optional stdenv.isDarwin "--disable-plugin-auth-pam";
+    ++ optional stdenv.hostPlatform.isDarwin "--disable-plugin-auth-pam";
 
+  # We used to vendor the update-systemd-resolved script inside libexec,
+  # but a separate package was made, that uses libexec/openvpn. Copy it
+  # into libexec in case any consumers expect it to be there even though
+  # they should use the update-systemd-resolved package instead.
   postInstall = ''
     mkdir -p $out/share/doc/openvpn/examples
-    cp -r sample/sample-config-files/ $out/share/doc/openvpn/examples
-    cp -r sample/sample-keys/ $out/share/doc/openvpn/examples
-    cp -r sample/sample-scripts/ $out/share/doc/openvpn/examples
+    cp -r sample/sample-{config-files,keys,scripts}/ $out/share/doc/openvpn/examples
+  ''
+  + optionalString useSystemd ''
+    install -Dm555 -t $out/libexec ${update-systemd-resolved}/libexec/openvpn/*
   '';
 
   enableParallelBuilding = true;
 
-  meta = {
-    description = "A robust and highly flexible tunneling application";
-    homepage = https://openvpn.net/;
-    downloadPage = "https://openvpn.net/index.php/open-source/downloads.html";
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.viric ];
-    platforms = stdenv.lib.platforms.unix;
-    updateWalker = true;
+  passthru.tests = {
+    inherit (nixosTests) initrd-network-openvpn systemd-initrd-networkd-openvpn;
   };
-}
+
+  meta = {
+    description = "Robust and highly flexible tunneling application";
+    downloadPage = "https://openvpn.net/community-downloads/";
+    homepage = "https://openvpn.net/";
+    license = lib.licenses.gpl2Only;
+    maintainers = with lib.maintainers; [ peterhoeg ];
+    platforms = lib.platforms.unix;
+    mainProgram = "openvpn";
+  };
+})

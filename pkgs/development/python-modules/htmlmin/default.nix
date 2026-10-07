@@ -1,20 +1,37 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  standard-cgi,
+}:
+
 buildPythonPackage rec {
   pname = "htmlmin";
   version = "0.1.12";
-  name = "${pname}-${version}";
+  pyproject = true;
+
   src = fetchPypi {
     inherit pname version;
-    sha256 = "50c1ef4630374a5d723900096a961cff426dff46b48f34d194a81bbe14eca178";
+    hash = "sha256-UMHvRjA3Sl1yOQAJapYc/0Jt/0a0jzTRlKgbvhTsoXg=";
   };
 
-  # Tests run fine in a normal source checkout, but not when being built by nix.
+  build-system = [
+    setuptools
+  ];
+
+  dependencies = [
+    standard-cgi
+  ];
+
+  # pypi tarball does not contain tests
   doCheck = false;
 
   meta = {
-    description = "A configurable HTML Minifier with safety features";
-    homepage = https://pypi.python.org/pypi/htmlmin;
-    license = stdenv.lib.licenses.bsd3;
-    maintainers = [stdenv.lib.maintainers.ahmedtd];
+    description = "Configurable HTML Minifier with safety features";
+    mainProgram = "htmlmin";
+    homepage = "https://github.com/mankyd/htmlmin";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ nickcao ];
   };
 }

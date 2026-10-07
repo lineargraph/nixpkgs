@@ -1,14 +1,21 @@
-{ callPackage, pkgs }:
-rec {
-  #### CORE EFL
-  efl = callPackage ./efl.nix { openjpeg = pkgs.openjpeg_1; };
+{ lib, pkgs }:
 
-  #### WINDOW MANAGER
-  enlightenment = callPackage ./enlightenment.nix { };
+lib.makeScope pkgs.newScope (
+  self: with self; {
 
-  #### APPLICATIONS
-  econnman = callPackage ./econnman.nix { };
-  terminology = callPackage ./terminology.nix { };
-  rage = callPackage ./rage.nix { };
-  ephoto = callPackage ./ephoto.nix { };
-}
+    #### CORE EFL
+    efl = callPackage ./efl { };
+
+    #### WINDOW MANAGER
+    enlightenment = callPackage ./enlightenment { };
+
+    #### APPLICATIONS
+    econnman = callPackage ./econnman { };
+    ecrire = callPackage ./ecrire { };
+    ephoto = callPackage ./ephoto { };
+    evisum = callPackage ./evisum { };
+    rage = callPackage ./rage { };
+    terminology = callPackage ./terminology { };
+
+  }
+)

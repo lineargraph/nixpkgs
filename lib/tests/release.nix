@@ -1,31 +1,43 @@
-{ pkgs ? import ((import ../.).cleanSource ../..) {} }:
+{
+  # The pkgs used for dependencies for the testing itself
+  # Don't test properties of pkgs.lib, but rather the lib in the parent directory
+  system ? builtins.currentSystem,
+  pkgs ? import ../.. { inherit system; } // {
+    lib = throw "pkgs.lib accessed, but the lib tests should use nixpkgs' lib path directly!";
+  },
+  # For testing someone may edit impure.nix to return cross pkgs, use `pkgsBuildBuild` directly so everything here works.
+  pkgsBB ? pkgs.pkgsBuildBuild,
+  nix ? pkgs-nixVersions.stable,
+  nixVersions ? [
+    nix
+    pkgs-nixVersions.latest
+  ],
+  pkgs-nixVersions ? import ./nix-for-tests.nix { pkgs = pkgsBB; },
+}:
 
-pkgs.stdenv.mkDerivation {
+let
+  lib = import ../.;
+  testWithNix =
+    nix:
+    import ./test-with-nix.nix {
+      inherit lib nix;
+      pkgs = pkgsBB;
+    };
+
+in
+pkgsBB.symlinkJoin {
   name = "nixpkgs-lib-tests";
-  buildInputs = [ pkgs.nix ];
-  NIX_PATH="nixpkgs=${pkgs.path}";
-
-  buildCommand = ''
-    datadir="${pkgs.nix}/share"
-    export TEST_ROOT=$(pwd)/test-tmp
-    export NIX_BUILD_HOOK=
-    export NIX_CONF_DIR=$TEST_ROOT/etc
-    export NIX_DB_DIR=$TEST_ROOT/db
-    export NIX_LOCALSTATE_DIR=$TEST_ROOT/var
-    export NIX_LOG_DIR=$TEST_ROOT/var/log/nix
-    export NIX_STATE_DIR=$TEST_ROOT/var/nix
-    export NIX_STORE_DIR=$TEST_ROOT/store
-    export PAGER=cat
-    cacheDir=$TEST_ROOT/binary-cache
-    nix-store --init
-
-    cd ${pkgs.path}/lib/tests
-    bash ./modules.sh
-
-    [[ "$(nix-instantiate --eval --strict misc.nix)" == "[ ]" ]]
-
-    [[ "$(nix-instantiate --eval --strict systems.nix)" == "[ ]" ]]
-
-    touch $out
-  '';
+  paths = map testWithNix nixVersions ++ [
+    (import ./nix-unit.nix {
+      inherit pkgs;
+    })
+    (import ./maintainers.nix {
+      inherit pkgs;
+      lib = import ../.;
+    })
+    (import ./teams.nix {
+      inherit pkgs;
+      lib = import ../.;
+    })
+  ];
 }

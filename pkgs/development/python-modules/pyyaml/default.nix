@@ -1,20 +1,41 @@
-{ lib, buildPythonPackage, fetchPypi, libyaml }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  cython,
+  setuptools,
+  libyaml,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
-  pname = "PyYAML";
-  version = "3.12";
+  pname = "pyyaml";
+  version = "6.0.3";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "592766c6303207a20efc445587778322d7f73b161bd994f227adaa341ba212ab";
+  src = fetchFromGitHub {
+    owner = "yaml";
+    repo = "pyyaml";
+    tag = version;
+    hash = "sha256-jUooIBp80cLxvdU/zLF0X8Yjrf0Yp9peYeiFjuV8AHA=";
   };
 
-  propagatedBuildInputs = [ libyaml ];
+  build-system = [
+    cython
+    setuptools
+  ];
 
-  meta = with lib; {
-    description = "The next generation YAML parser and emitter for Python";
-    homepage = https://github.com/yaml/pyyaml;
-    license = licenses.mit;
-    maintainers = with maintainers; [ dotlambda ];
+  buildInputs = [ libyaml ];
+
+  pythonImportsCheck = [ "yaml" ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = {
+    changelog = "https://github.com/yaml/pyyaml/blob/${src.rev}/CHANGES";
+    description = "Next generation YAML parser and emitter for Python";
+    homepage = "https://github.com/yaml/pyyaml";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

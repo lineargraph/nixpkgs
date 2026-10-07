@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -8,18 +13,14 @@ let
   ldmcfg = dmcfg.lightdm;
   cfg = ldmcfg.greeters.mini;
 
-  xgreeters = pkgs.linkFarm "lightdm-mini-greeter-xgreeters" [{
-    path = "${pkgs.lightdm-mini-greeter}/share/xgreeters/lightdm-mini-greeter.desktop";
-    name = "lightdm-mini-greeter.desktop";
-  }];
-
-  miniGreeterConf = pkgs.writeText "lightdm-mini-greeter.conf"
-    ''
+  miniGreeterConf = pkgs.writeText "lightdm-mini-greeter.conf" ''
     [greeter]
     user = ${cfg.user}
     show-password-label = true
     password-label-text = Password:
+    invalid-password-text = Invalid Password
     show-input-cursor = true
+    password-alignment = right
 
     [greeter-hotkeys]
     mod-key = meta
@@ -31,6 +32,8 @@ let
     [greeter-theme]
     font = Sans
     font-size = 1em
+    font-weight = bold
+    font-style = normal
     text-color = "#080800"
     error-color = "#F8F8F0"
     background-image = "${ldmcfg.background}"
@@ -41,9 +44,11 @@ let
     layout-space = 15
     password-color = "#F8F8F0"
     password-background-color = "#1B1D1E"
+    password-border-color = "#080800"
+    password-border-width = 2px
 
     ${cfg.extraConfig}
-    '';
+  '';
 
 in
 {
@@ -58,9 +63,8 @@ in
           Whether to enable lightdm-mini-greeter as the lightdm greeter.
 
           Note that this greeter starts only the default X session.
-          You can configure the default X session by
-          <option>services.xserver.desktopManager.default</option> and
-          <option>services.xserver.windowManager.default</option>.
+          You can configure the default X session using
+          [](#opt-services.displayManager.defaultSession).
         '';
       };
 
@@ -90,7 +94,7 @@ in
     services.xserver.displayManager.lightdm.greeters.gtk.enable = false;
 
     services.xserver.displayManager.lightdm.greeter = mkDefault {
-      package = xgreeters;
+      package = pkgs.lightdm-mini-greeter.xgreeters;
       name = "lightdm-mini-greeter";
     };
 

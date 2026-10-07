@@ -1,26 +1,87 @@
-{ stdenv, fetchurl, makeWrapper, xkbcomp, xorgserver, getopt
-, xauth, utillinux, which, fontsConf, gawk, coreutils }:
-let
-  xvfb_run = fetchurl {
-    url = https://projects.archlinux.org/svntogit/packages.git/plain/trunk/xvfb-run?h=packages/xorg-server;
-    sha256 = "1f9mrhqy0l72i3674n98bqlq9a10h0rh9qfjiwvivz3hjhq5c0gz";
+{
+  lib,
+  stdenvNoCC,
+  fetchFromGitHub,
+  makeWrapper,
+  xvfb,
+  getopt,
+  xauth,
+  util-linux,
+  which,
+  fontsConf,
+  gawk,
+  coreutils,
+  installShellFiles,
+  xterm,
+  bashNonInteractive,
+}:
+stdenvNoCC.mkDerivation {
+  pname = "xvfb-run";
+  version = "1+g87f6705";
+
+  src = fetchFromGitHub {
+    owner = "archlinux";
+    repo = "svntogit-packages";
+    rev = "87f67054c49b32511893acd22be94c47ecd44b4a";
+    sha256 = "sha256-KEg92RYgJd7naHFDKbdXEy075bt6NLcmX8VhQROHVPs=";
   };
-in
-stdenv.mkDerivation {
-  name = "xvfb-run";
-  buildInputs = [makeWrapper];
-  buildCommand = ''
+
+  nativeBuildInputs = [
+    makeWrapper
+    installShellFiles
+  ];
+
+  buildInputs = [
+    bashNonInteractive
+  ];
+
+  strictDeps = true;
+
+  dontUnpack = true;
+  dontBuild = true;
+  dontConfigure = true;
+
+  installPhase = ''
     mkdir -p $out/bin
-    cp ${xvfb_run} $out/bin/xvfb-run
+    cp $src/trunk/xvfb-run $out/bin/xvfb-run
+    installManPage $src/trunk/xvfb-run.1
 
     chmod a+x $out/bin/xvfb-run
     patchShebangs $out/bin/xvfb-run
     wrapProgram $out/bin/xvfb-run \
-      --set FONTCONFIG_FILE "${fontsConf}" \
-      --prefix PATH : ${stdenv.lib.makeBinPath [ getopt xorgserver xauth which utillinux gawk coreutils ]}
+      --set-default FONTCONFIG_FILE "${fontsConf}" \
+      --prefix PATH : ${
+        lib.makeBinPath [
+          getopt
+          xvfb
+          xauth
+          which
+          util-linux
+          gawk
+          coreutils
+        ]
+      }
   '';
 
+  doInstallCheck = true;
+  installCheckPhase = ''
+    (
+      unset PATH
+      echo "running xterm with xvfb-run"
+      $out/bin/xvfb-run ${lib.getBin xterm}/bin/xterm -e true
+    )
+  '';
+
+  passthru = {
+    updateScript = ./update.sh;
+  };
+
   meta = {
-    platforms = stdenv.lib.platforms.linux;
+    description = "Convenience script to run a virtualized X-Server";
+    homepage = "https://github.com/archlinux/svntogit-packages";
+    platforms = lib.platforms.linux ++ lib.platforms.darwin;
+    license = lib.licenses.gpl2Only;
+    maintainers = [ lib.maintainers.artturin ];
+    mainProgram = "xvfb-run";
   };
 }

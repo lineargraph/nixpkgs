@@ -1,21 +1,29 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+}:
+
 buildPythonPackage rec {
   pname = "rcssmin";
-  version = "1.0.6";
-  name = "${pname}-${version}";
+  version = "1.2.2";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0w42l4dhxghcz7pj3q7hkxp015mvb8z2cq9sfxbl31npsfavd1ya";
+    hash = "sha256-gGmG6vdBRUXtwoodKVI+lWDknhUf9KM32dHwJx1uHMQ=";
   };
 
-  # The package does not ship tests, and the setup machinary confuses
+  # The package does not ship tests, and the setup machinery confuses
   # tests auto-discovery
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = http://opensource.perlig.de/rcssmin/;
-    license = licenses.asl20;
+  pythonImportsCheck = [ "rcssmin" ];
+
+  meta = {
     description = "CSS minifier written in pure python";
+    homepage = "http://opensource.perlig.de/rcssmin/";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
   };
 }

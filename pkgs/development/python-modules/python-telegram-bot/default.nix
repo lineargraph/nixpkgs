@@ -1,31 +1,142 @@
-{ stdenv, fetchPypi, buildPythonPackage, certifi, future, urllib3 }:
+{
+  lib,
+  aiolimiter,
+  apscheduler,
+  beautifulsoup4,
+  buildPythonPackage,
+  cachetools,
+  cffi,
+  cryptography,
+  fetchFromGitHub,
+  flaky,
+  hatchling,
+  httpx,
+  pytest-asyncio,
+  pytest-timeout,
+  pytest-xdist,
+  pytestCheckHook,
+  pythonAtLeast,
+  pytz,
+  setuptools,
+  tornado,
+}:
 
 buildPythonPackage rec {
   pname = "python-telegram-bot";
-  version = "9.0.0";
+  version = "22.7";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0a5b4wfc6ms7kblynw2h3ygpww98kyz5n8iibqbdyykwx8xj7hzm";
+  src = fetchFromGitHub {
+    owner = "python-telegram-bot";
+    repo = "python-telegram-bot";
+    tag = "v${version}";
+    hash = "sha256-+mbVN1XFChUMYReHMjQd1tx5gYpP1CWGNtuZCoY9TMo=";
   };
 
-  prePatch = ''
-    rm -rf telegram/vendor
-    substituteInPlace telegram/utils/request.py \
-      --replace "import telegram.vendor.ptb_urllib3.urllib3 as urllib3" "import urllib3 as urllib3" \
-      --replace "import telegram.vendor.ptb_urllib3.urllib3.contrib.appengine as appengine" "import urllib3.contrib.appengine as appengine" \
-      --replace "from telegram.vendor.ptb_urllib3.urllib3.connection import HTTPConnection" "from urllib3.connection import HTTPConnection" \
-      --replace "from telegram.vendor.ptb_urllib3.urllib3.util.timeout import Timeout" "from urllib3.util.timeout import Timeout"
-  '';
+  build-system = [
+    setuptools
+    hatchling
+  ];
 
-  propagatedBuildInputs = [ certifi future urllib3 ];
+  dependencies = [ httpx ];
 
-  doCheck = false;
+  optional-dependencies = rec {
+    all = ext ++ http2 ++ passport ++ socks;
+    callback-data = [ cachetools ];
+    ext = callback-data ++ job-queue ++ rate-limiter ++ webhooks;
+    http2 = httpx.optional-dependencies.http2;
+    job-queue = [
+      apscheduler
+      pytz
+    ];
+    passport = [ cryptography ] ++ lib.optionals (pythonAtLeast "3.13") [ cffi ];
+    rate-limiter = [ aiolimiter ];
+    socks = httpx.optional-dependencies.socks;
+    webhooks = [ tornado ];
+  };
 
-  meta = with stdenv.lib; {
-    description = "This library provides a pure Python interface for the Telegram Bot API.";
-    homepage = https://python-telegram-bot.org;
-    license = licenses.lgpl3;
-    maintainers = with maintainers; [ veprbl ];
+  nativeCheckInputs = [
+    beautifulsoup4
+    flaky
+    pytest-asyncio
+    pytest-timeout
+    pytest-xdist
+    pytestCheckHook
+  ]
+  ++ optional-dependencies.all;
+
+  pythonImportsCheck = [ "telegram" ];
+
+  disabledTests = [
+    # Tests require network access
+    "TestAIO"
+    "TestAnimation"
+    "TestApplication"
+    "TestAudio"
+    "TestBase"
+    "TestBot"
+    "TestCallback"
+    "TestChat"
+    "TestChosenInlineResult"
+    "TestCommandHandler"
+    "TestConstants"
+    "TestContact"
+    "TestConversationHandler"
+    "TestDice"
+    "TestDict"
+    "TestDocument"
+    "TestFile"
+    "TestForceReply"
+    "TestForum"
+    "TestGame"
+    "TestGet"
+    "TestGiftsWithRequest"
+    "TestHTTP"
+    "TestInline"
+    "TestInput"
+    "TestInvoice"
+    "TestJob"
+    "TestKeyboard"
+    "TestLocation"
+    "TestMask"
+    "TestMenu"
+    "TestMessage"
+    "TestMeta"
+    "TestOrder"
+    "TestPassport"
+    "TestPhoto"
+    "TestPickle"
+    "TestPoll"
+    "TestPre"
+    "TestPrefix"
+    "TestProximity"
+    "TestReply"
+    "TestRequest"
+    "TestSend"
+    "TestSent"
+    "TestShipping"
+    "TestSlot"
+    "TestSticker"
+    "TestString"
+    "TestSuccess"
+    "TestTelegram"
+    "TestType"
+    "TestUpdate"
+    "TestUser"
+    "TestVenue"
+    "TestVideo"
+    "TestVoice"
+    "TestWeb"
+  ];
+
+  meta = {
+    description = "Python library to interface with the Telegram Bot API";
+    homepage = "https://python-telegram-bot.org";
+    changelog = "https://github.com/python-telegram-bot/python-telegram-bot/blob/${src.tag}/CHANGES.rst";
+    license = lib.licenses.lgpl3Only;
+    maintainers = with lib.maintainers; [
+      veprbl
+      pingiun
+    ];
   };
 }

@@ -1,30 +1,59 @@
-{ stdenv, libusb1, udev, fetchPypi, buildPythonPackage, cython }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  pkg-config,
+  xcbuild,
+  cython,
+  setuptools,
+  hidapi,
+  libusb1,
+  udev,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "hidapi";
-  version = "0.7.99.post21";
+  version = "0.15.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "e0be1aa6566979266a8fc845ab0e18613f4918cf2c977fe67050f5dc7e2a9a97";
+    hash = "sha256-7LwmXL6Le4h1X0IeC6JfCECR7FUMK5D/no3dT81UAxE=";
   };
 
-  propagatedBuildInputs = [ libusb1 udev cython ];
+  build-system = [
+    cython
+    setuptools
+  ];
 
-  # Fix the USB backend library lookup
-  postPatch = ''
-    libusb=${libusb1.dev}/include/libusb-1.0
-    test -d $libusb || { echo "ERROR: $libusb doesn't exist, please update/fix this build expression."; exit 1; }
-    sed -i -e "s|/usr/include/libusb-1.0|$libusb|" setup.py
-  '';
+  nativeBuildInputs = [ pkg-config ] ++ lib.optionals stdenv.hostPlatform.isDarwin [ xcbuild ];
 
-  meta = with stdenv.lib; {
-    description = "A Cython interface to the hidapi from https://github.com/signal11/hidapi";
-    homepage = https://github.com/trezor/cython-hidapi;
+  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [
+    hidapi
+    libusb1
+  ];
+
+  env = lib.optionalAttrs stdenv.hostPlatform.isLinux {
+    HIDAPI_SYSTEM_HIDAPI = true;
+  };
+
+  propagatedBuildInputs = lib.optionals stdenv.hostPlatform.isLinux [ udev ];
+
+  pythonImportsCheck = [ "hid" ];
+
+  meta = {
+    description = "Cython interface to the hidapi from https://github.com/libusb/hidapi";
+    homepage = "https://github.com/trezor/cython-hidapi";
     # license can actually be either bsd3 or gpl3
     # see https://github.com/trezor/cython-hidapi/blob/master/LICENSE-orig.txt
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ np ];
+    license = with lib.licenses; [
+      bsd3
+      gpl3Only
+    ];
+    maintainers = with lib.maintainers; [
+      np
+      prusnak
+    ];
   };
 }

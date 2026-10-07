@@ -1,27 +1,46 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, async-timeout, pytest, pytest-asyncio }:
-buildPythonPackage rec {
-  version = "2.2.0";
-  pname = "asgiref";
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytest-asyncio,
+  pytestCheckHook,
+  setuptools,
+  typing-extensions,
+}:
 
-  # PyPI tarball doesn't include tests directory
+buildPythonPackage (finalAttrs: {
+  version = "3.11.1";
+  pname = "asgiref";
+  pyproject = true;
+
   src = fetchFromGitHub {
     owner = "django";
-    repo = pname;
-    rev = version;
-    sha256 = "0jsdkgwzswm1jbfm6d100yfvfzpic8v6ysydcnn798bbpwclj8ip";
+    repo = "asgiref";
+    tag = finalAttrs.version;
+    hash = "sha256-Mhnaowgv5a+O2hN0ZSdtdhCBQx8HoKSwtRC3gHodgKY=";
   };
 
-  propagatedBuildInputs = [ async-timeout ];
+  build-system = [ setuptools ];
 
-  checkInputs = [ pytest pytest-asyncio ];
+  dependencies = [ typing-extensions ];
 
-  checkPhase = ''
-    py.test
-  '';
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-asyncio
+  ];
 
-  meta = with stdenv.lib; {
+  disabledTests = lib.optionals stdenv.hostPlatform.isDarwin [ "test_multiprocessing" ];
+
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [ "asgiref" ];
+
+  meta = {
+    changelog = "https://github.com/django/asgiref/blob/${finalAttrs.src.tag}/CHANGELOG.txt";
     description = "Reference ASGI adapters and channel layers";
-    license = licenses.bsd3;
-    homepage = https://github.com/django/asgiref;
+    homepage = "https://github.com/django/asgiref";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ miniharinn ];
   };
-}
+})

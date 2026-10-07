@@ -1,22 +1,26 @@
-{ stdenv, buildPythonPackage, fetchPypi, requests }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  requests,
+}:
 
 buildPythonPackage rec {
   pname = "openidc-client";
-  version = "0.5.0";
-  name = "${pname}-${version}";
+  version = "0.6.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "59d59d6fbfd26c5b57c53e582bdf2379274602f96133a163e7ff1ef39c363353";
+    sha256 = "680e969cae18c30adbddd6a087ed09f6a296b4937b4c8bc69be813bdbbfa9847";
   };
   propagatedBuildInputs = [ requests ];
 
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "A CLI python OpenID Connect client with token caching and management";
-    homepage = https://github.com/puiterwijk;
-    license = licenses.mit;
-    maintainers = with maintainers; [ disassembler ];
+  meta = {
+    description = "CLI python OpenID Connect client with token caching and management";
+    homepage = "https://github.com/puiterwijk";
+    license = lib.licenses.mit;
   };
 }

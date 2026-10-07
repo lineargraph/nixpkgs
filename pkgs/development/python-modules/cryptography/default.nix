@@ -1,67 +1,99 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, openssl
-, cryptography_vectors
-, darwin
-, idna
-, asn1crypto
-, packaging
-, six
-, pythonOlder
-, enum34
-, ipaddress
-, isPyPy
-, cffi
-, pytest
-, pretend
-, iso8601
-, pytz
-, hypothesis
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  callPackage,
+  setuptools,
+  bcrypt,
+  certifi,
+  cffi,
+  cryptography-vectors ? (callPackage ./vectors.nix { }),
+  fetchFromGitHub,
+  isPyPy,
+  libiconv,
+  openssl,
+  pkg-config,
+  pretend,
+  pytest-xdist,
+  pytestCheckHook,
+  rustPlatform,
 }:
 
-let
-  version = "2.2.2";
-in assert version == cryptography_vectors.version; buildPythonPackage rec {
-  # also bump cryptography_vectors
+buildPythonPackage rec {
   pname = "cryptography";
-  inherit version;
+  version = "50.0.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "9fc295bf69130a342e7a19a39d7bbeb15c0bcaabc7382ec33ef3b2b7d18d2f63";
+  src = fetchFromGitHub {
+    owner = "pyca";
+    repo = "cryptography";
+    tag = version;
+    hash = "sha256-KHxEVSYr8yrODSVsGNgZowI/YnhG3qnFgae9877H+VE=";
   };
 
-  outputs = [ "out" "dev" ];
+  cargoDeps = rustPlatform.fetchCargoVendor {
+    inherit pname version src;
+    hash = "sha256-heJGLh0MgDPpksWyPLaIkZ5gVEWx8UnaJKv4GvclpmI=";
+  };
 
-  buildInputs = [ openssl cryptography_vectors ]
-             ++ stdenv.lib.optional stdenv.isDarwin darwin.apple_sdk.frameworks.Security;
-  propagatedBuildInputs = [
-    idna
-    asn1crypto
-    packaging
-    six
-  ] ++ stdenv.lib.optional (pythonOlder "3.4") enum34
-  ++ stdenv.lib.optional (pythonOlder "3.3") ipaddress
-  ++ stdenv.lib.optional (!isPyPy) cffi;
-
-  checkInputs = [
-    pytest
-    pretend
-    iso8601
-    pytz
-    hypothesis
-  ];
-
-  # The test assumes that if we're on Sierra or higher, that we use `getentropy`, but for binary
-  # compatibility with pre-Sierra for binary caches, we hide that symbol so the library doesn't
-  # use it. This boils down to them checking compatibility with `getentropy` in two different places,
-  # so let's neuter the second test.
   postPatch = ''
-    substituteInPlace ./tests/hazmat/backends/test_openssl.py --replace '"16.0"' '"99.0"'
+    substituteInPlace pyproject.toml \
+      --replace-fail "--benchmark-disable" ""
   '';
 
-  # IOKit's dependencies are inconsistent between OSX versions, so this is the best we
-  # can do until nix 1.11's release
-  __impureHostDeps = [ "/usr/lib" ];
+  build-system = [
+    rustPlatform.cargoSetupHook
+    rustPlatform.maturinBuildHook
+    pkg-config
+    setuptools
+  ]
+  ++ lib.optionals (!isPyPy) [ cffi ];
+
+  buildInputs = [
+    openssl
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    libiconv
+  ];
+
+  dependencies = lib.optionals (!isPyPy) [ cffi ];
+
+  optional-dependencies.ssh = [ bcrypt ];
+
+  nativeCheckInputs = [
+    certifi
+    cryptography-vectors
+    pretend
+    pytestCheckHook
+    pytest-xdist
+  ]
+  ++ optional-dependencies.ssh;
+
+  pytestFlags = [ "--disable-pytest-warnings" ];
+
+  disabledTestPaths = [
+    # save compute time by not running benchmarks
+    "tests/bench"
+  ];
+
+  passthru = {
+    vectors = cryptography-vectors;
+  };
+
+  meta = {
+    description = "Package which provides cryptographic recipes and primitives";
+    longDescription = ''
+      Cryptography includes both high level recipes and low level interfaces to
+      common cryptographic algorithms such as symmetric ciphers, message
+      digests, and key derivation functions.
+    '';
+    homepage = "https://github.com/pyca/cryptography";
+    changelog = "https://cryptography.io/en/latest/changelog/#v" + lib.replaceString "." "-" version;
+    license = with lib.licenses; [
+      asl20
+      bsd3
+      psfl
+    ];
+    maintainers = with lib.maintainers; [ mdaniels5757 ];
+  };
 }

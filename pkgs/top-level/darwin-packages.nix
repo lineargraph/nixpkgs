@@ -1,82 +1,217 @@
-{ buildPackages, pkgs, targetPackages
-, darwin, stdenv, callPackage, callPackages, newScope
+let
+  autoCalledPackages = import ./by-name-overlay.nix ../os-specific/darwin/by-name;
+in
+
+{
+  lib,
+  buildEnv,
+  cctools,
+  generateSplicesForMkScope,
+  libc,
+  llvmPackages,
+  makeScopeWithSplicing',
+  nixosTests,
+  pkgs,
+  preLibcHeaders,
+  stdenv,
+  targetPackages,
+  wrapBintoolsWith,
+  config,
 }:
 
 let
-  apple-source-releases = callPackage ../os-specific/darwin/apple-source-releases { };
+  aliases =
+    final: prev:
+    lib.optionalAttrs config.allowAliases (import ../top-level/darwin-aliases.nix lib final prev pkgs);
+
+  autoCalledPackagesWithAliases = lib.composeManyExtensions [
+    autoCalledPackages
+    aliases
+  ];
+
+  mkBootstrapStdenv =
+    stdenv:
+    stdenv.override (old: {
+      extraBuildInputs = map (
+        pkg:
+        if lib.isDerivation pkg && lib.getName pkg == "apple-sdk" then
+          pkg.override { enableBootstrap = true; }
+        else
+          pkg
+      ) (old.extraBuildInputs or [ ]);
+    });
 in
 
-(apple-source-releases // {
+makeScopeWithSplicing' {
+  otherSplices = generateSplicesForMkScope "darwin";
+  extra = self: {
+    inherit (llvmPackages) clang-unwrapped;
 
-  callPackage = newScope (darwin.apple_sdk.frameworks // darwin);
-
-  apple_sdk = callPackage ../os-specific/darwin/apple-sdk { };
-
-  binutils-unwrapped = callPackage ../os-specific/darwin/binutils {
-    inherit (darwin) cctools;
-    inherit (pkgs) binutils-unwrapped;
+    # This is an internal helper for building source-release packages.
+    # It’s not intended for use outside of the Darwin package set.
+    mkAppleDerivation = self.callPackage ../os-specific/darwin/mk-apple-derivation { };
   };
+  f = lib.extends autoCalledPackagesWithAliases (
+    self:
+    lib.recurseIntoAttrs {
+      inherit (self.adv_cmds) ps;
 
-  binutils = pkgs.wrapBintoolsWith {
-    libc =
-      if pkgs.targetPlatform != pkgs.hostPlatform
-      then pkgs.libcCross
-      else pkgs.stdenv.cc.libc;
-    bintools = darwin.binutils-unwrapped;
-  };
+      # Removes propagated packages from the stdenv, so those packages can be built without depending upon themselves.
+      bootstrapStdenv = mkBootstrapStdenv stdenv;
 
-  cctools = callPackage ../os-specific/darwin/cctools/port.nix {
-    inherit (darwin) libobjc maloader;
-    stdenv = if stdenv.isDarwin then stdenv else pkgs.libcxxStdenv;
-    libcxxabi = pkgs.libcxxabi;
-  };
+      # Note: Not in `package.nix` because it messes up the overrides.
+      binutils = wrapBintoolsWith {
+        libc = targetPackages.libc or libc;
+        bintools = self.binutils-unwrapped;
+      };
 
-  cf-private = callPackage ../os-specific/darwin/cf-private {
-    inherit (apple-source-releases) CF;
-    inherit (darwin) osx_private_sdk;
-  };
+      binutilsNoLibc = wrapBintoolsWith {
+        libc = targetPackages.preLibcHeaders or preLibcHeaders;
+        bintools = self.binutils-unwrapped;
+      };
 
-  DarwinTools = callPackage ../os-specific/darwin/DarwinTools { };
+      sourceRelease = self.callPackage ../os-specific/darwin/sourceRelease { };
 
-  maloader = callPackage ../os-specific/darwin/maloader {
-    inherit (darwin) opencflite;
-  };
+      inherit (self.file_cmds) xattr;
 
-  insert_dylib = callPackage ../os-specific/darwin/insert_dylib { };
+      # Note: Not in `packages.nix` because it’s a package set not a derivation.
+      inherit (self.callPackage ../os-specific/darwin/xcode { })
+        xcode_8_1
+        xcode_8_2
+        xcode_9_1
+        xcode_9_2
+        xcode_9_3
+        xcode_9_4
+        xcode_9_4_1
+        xcode_10_1
+        xcode_10_2
+        xcode_10_2_1
+        xcode_10_3
+        xcode_11
+        xcode_11_1
+        xcode_11_2
+        xcode_11_3_1
+        xcode_11_4
+        xcode_11_5
+        xcode_11_6
+        xcode_11_7
+        xcode_12
+        xcode_12_0_1
+        xcode_12_1
+        xcode_12_2
+        xcode_12_3
+        xcode_12_4
+        xcode_12_5
+        xcode_12_5_1
+        xcode_13
+        xcode_13_1
+        xcode_13_2
+        xcode_13_3
+        xcode_13_3_1
+        xcode_13_4
+        xcode_13_4_1
+        xcode_14
+        xcode_14_1
+        xcode_15
+        xcode_15_0_1
+        xcode_15_1
+        xcode_15_2
+        xcode_15_3
+        xcode_15_4
+        xcode_16
+        xcode_16_1
+        xcode_16_2
+        xcode_16_3
+        xcode_16_4
+        xcode_26
+        xcode_26_Apple_silicon
+        xcode_26_0_1
+        xcode_26_0_1_Apple_silicon
+        xcode_26_1
+        xcode_26_1_Apple_silicon
+        xcode_26_1_1
+        xcode_26_1_1_Apple_silicon
+        xcode_26_2
+        xcode_26_2_Apple_silicon
+        xcode_26_3
+        xcode_26_3_Apple_silicon
+        xcode_26_4
+        xcode_26_4_Apple_silicon
+        xcode_26_4_1
+        xcode_26_4_1_Apple_silicon
+        xcode_26_5
+        xcode_26_5_Apple_silicon
+        xcode_26_6
+        xcode_26_6_Apple_silicon
+        xcode_27
+        xcode
+        requireXcode
+        ;
 
-  iosSdkPkgs = darwin.callPackage ../os-specific/darwin/ios-sdk-pkgs {
-    buildIosSdk = buildPackages.darwin.iosSdkPkgs.sdk;
-    targetIosSdkPkgs = targetPackages.darwin.iosSdkPkgs;
-    xcode = darwin.xcode_8_2;
-    inherit (pkgs.llvmPackages) clang-unwrapped;
-  };
+      # Note: Not in `package.nix` because it references files outside of the package.
+      # See doc/packages/darwin-builder.section.md
+      linux-builder = lib.makeOverridable (
+        { modules }:
+        let
+          toGuest = builtins.replaceStrings [ "darwin" ] [ "linux" ];
 
-  iproute2mac = callPackage ../os-specific/darwin/iproute2mac { };
+          nixos = import ../../nixos {
+            configuration = {
+              imports = [
+                ../../nixos/modules/profiles/nix-builder-vm.nix
+              ]
+              ++ modules;
 
-  libobjc = apple-source-releases.objc4;
+              # If you need to override this, consider starting with the right Nixpkgs
+              # in the first place, ie change `pkgs` in `pkgs.darwin.linux-builder`.
+              # or if you're creating new wiring that's not `pkgs`-centric, perhaps use the
+              # macos-builder profile directly.
+              virtualisation.host = { inherit pkgs; };
 
-  lsusb = callPackage ../os-specific/darwin/lsusb { };
+              nixpkgs.hostPlatform = lib.mkDefault (toGuest stdenv.hostPlatform.system);
+            };
 
-  opencflite = callPackage ../os-specific/darwin/opencflite { };
+            system = null;
+          };
 
-  osx_private_sdk = callPackage ../os-specific/darwin/osx-private-sdk { };
+        in
+        nixos.config.system.build.macos-builder-installer
+      ) { modules = [ ]; };
 
-  security_tool = darwin.callPackage ../os-specific/darwin/security-tool {
-    Security-framework = darwin.apple_sdk.frameworks.Security;
-  };
+      linux-builder-x86_64 = self.linux-builder.override {
+        modules = [ { nixpkgs.hostPlatform = "x86_64-linux"; } ];
+      };
 
-  stubs = callPackages ../os-specific/darwin/stubs { };
+      # Like `linux-builder`, but runs the guest on Apple's Virtualization.framework
+      # via `vzvm`, translating x86_64-linux builds with Rosetta instead of emulating
+      # them. See doc/packages/darwin-builder.section.md
+      linux-builder-vz = lib.makeOverridable (
+        { modules }:
+        let
+          nixos = import ../../nixos {
+            configuration = {
+              imports = [
+                ../../nixos/modules/profiles/nix-builder-vz-vm.nix
+              ]
+              ++ modules;
 
-  trash = callPackage ../os-specific/darwin/trash { inherit (darwin.apple_sdk) frameworks; };
+              virtualisation.host = { inherit pkgs; };
 
-  usr-include = callPackage ../os-specific/darwin/usr-include { };
+              # aarch64-darwin is the only supported host, so the guest is fixed too.
+              nixpkgs.hostPlatform = lib.mkDefault "aarch64-linux";
+            };
 
-  inherit (callPackages ../os-specific/darwin/xcode { } ) xcode_8_1 xcode_8_2 xcode_9_1 xcode_9_2;
-
-  CoreSymbolication = callPackage ../os-specific/darwin/CoreSymbolication { };
-
-  swift-corelibs = callPackages ../os-specific/darwin/swift-corelibs { };
-
-  darling = callPackage ../os-specific/darwin/darling/default.nix { };
-
-})
+            system = null;
+          };
+        in
+        nixos.config.system.build.macos-builder-installer.overrideAttrs (oldAttrs: {
+          passthru = oldAttrs.passthru // {
+            tests = (oldAttrs.passthru.tests or { }) // {
+              store-gc = nixosTests.linux-builder-vz-store-gc;
+            };
+          };
+        })
+      ) { modules = [ ]; };
+    }
+  );
+}

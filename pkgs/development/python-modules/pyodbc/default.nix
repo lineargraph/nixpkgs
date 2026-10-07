@@ -1,23 +1,40 @@
-{ stdenv, buildPythonPackage, fetchPypi, isPyPy, libiodbc }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  isPyPy,
+  unixodbc,
+}:
 
 buildPythonPackage rec {
   pname = "pyodbc";
-  version = "4.0.23";
-  name = "${pname}-${version}";
-  disabled = isPyPy;  # use pypypdbc instead
+  version = "5.3.0";
+  format = "setuptools";
+
+  disabled = isPyPy; # use pypypdbc instead
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "bb33d032c1f25781db64e2e4fecf77047fab2ddde42a6cd9496e3c66fb8e9f66";
+    hash = "sha256-L+DgY9j7Zu/QrG3DkjbE3hpF8Xwz6t7Q1VPSHBmfTQU=";
   };
 
-  buildInputs = [ libiodbc ];
+  nativeBuildInputs = [
+    unixodbc # for odbc_config
+  ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [ unixodbc ];
+
+  # Tests require a database server
+  doCheck = false;
+
+  pythonImportsCheck = [ "pyodbc" ];
+
+  meta = {
     description = "Python ODBC module to connect to almost any database";
     homepage = "https://github.com/mkleehammer/pyodbc";
-    license = licenses.mit;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ bjornfor ];
+    changelog = "https://github.com/mkleehammer/pyodbc/releases/tag/${version}";
+    license = lib.licenses.mit;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ bjornfor ];
   };
 }

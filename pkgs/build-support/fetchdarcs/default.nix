@@ -1,18 +1,45 @@
-{stdenvNoCC, darcs, nix, cacert}:
+{
+  stdenvNoCC,
+  darcs,
+  cacert,
+  lib,
+}:
 
-{url, rev ? null, context ? null, md5 ? "", sha256 ? ""}:
+lib.makeOverridable (
+  lib.fetchers.withNormalizedHash { } (
+    {
+      # Repository to fetch
+      url,
+      # Additional list of repositories specifying alternative download
+      # location to be tried in order, if the prior repository failed to fetch.
+      mirrors ? [ ],
+      rev ? null,
+      context ? null,
+      outputHash ? lib.fakeHash,
+      outputHashAlgo ? null,
+      name ? "fetchdarcs",
+    }:
 
-if md5 != "" then
-  throw "fetchdarcs does not support md5 anymore, please use sha256"
-else
-stdenvNoCC.mkDerivation {
-  name = "fetchdarcs";
-  builder = ./builder.sh;
-  nativeBuildInputs = [cacert darcs];
+    stdenvNoCC.mkDerivation {
+      builder = ./builder.sh;
+      nativeBuildInputs = [
+        cacert
+        darcs
+      ];
 
-  outputHashAlgo = "sha256";
-  outputHashMode = "recursive";
-  outputHash = sha256;
+      strictDeps = true;
+      __structuredAttrs = true;
 
-  inherit url rev context;
-}
+      inherit outputHash outputHashAlgo;
+      outputHashMode = "recursive";
+
+      inherit
+        rev
+        context
+        name
+        ;
+
+      repositories = [ url ] ++ mirrors;
+    }
+  )
+)

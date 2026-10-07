@@ -1,18 +1,20 @@
-{ lib
-, crossSystem, config, overlays
-, bootStages
-, ...
+{
+  lib,
+  localSystem,
+  config,
+  overlays,
+  bootStages,
 }:
 
-assert crossSystem == null;
-
-bootStages ++ [
+let
+  genericStdenv = import ../generic { defaultConfig = config; };
+in
+bootStages
+++ [
   (prevStage: {
     inherit config overlays;
 
-    stdenv = import ../generic rec {
-      inherit config;
-
+    stdenv = genericStdenv rec {
       inherit (prevStage.stdenv) buildPlatform hostPlatform targetPlatform;
 
       preHook = ''
@@ -21,13 +23,19 @@ bootStages ++ [
         export NIX_IGNORE_LD_THROUGH_GCC=1
       '';
 
-      initialPath = (import ../common-path.nix) { pkgs = prevStage; };
+      initialPath = (import ../generic/common-path.nix) { pkgs = prevStage; };
 
       cc = import ../../build-support/cc-wrapper {
+        inherit lib;
         nativeTools = false;
         nativePrefix = lib.optionalString hostPlatform.isSunOS "/usr";
         nativeLibc = true;
-        inherit (prevStage) stdenvNoCC binutils coreutils gnugrep;
+        inherit (prevStage)
+          stdenvNoCC
+          binutils
+          coreutils
+          gnugrep
+          ;
         cc = prevStage.gcc.cc;
         isGNU = true;
         shell = prevStage.bash + "/bin/sh";
@@ -41,8 +49,21 @@ bootStages ++ [
         inherit cc;
         inherit (cc) binutils;
         inherit (prevStage)
-          gzip bzip2 xz bash coreutils diffutils findutils gawk
-          gnumake gnused gnutar gnugrep gnupatch perl;
+          gzip
+          bzip2
+          xz
+          bash
+          coreutils
+          diffutils
+          findutils
+          gawk
+          gnumake
+          gnused
+          gnutar
+          gnugrep
+          gnupatch
+          perl
+          ;
       };
     };
   })

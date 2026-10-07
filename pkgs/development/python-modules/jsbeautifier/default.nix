@@ -1,23 +1,41 @@
-{ stdenv, fetchurl, buildPythonApplication, EditorConfig, pytest, six }:
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  editorconfig,
+  pytestCheckHook,
+  six,
+  setuptools,
+}:
 
-buildPythonApplication rec {
+buildPythonPackage (finalAttrs: {
   pname = "jsbeautifier";
-  version = "1.7.5";
-  name = "${pname}-${version}";
+  version = "1.15.4";
+  pyproject = true;
 
-  propagatedBuildInputs = [ six ];
-
-  buildInputs = [ EditorConfig pytest ];
-
-  src = fetchurl {
-    url = "mirror://pypi/j/jsbeautifier/${name}.tar.gz";
-    sha256 = "78eb1e5c8535484f0d0b588aca38da3fb5e0e34de2d1ab53c077e71c55757473";
+  src = fetchPypi {
+    inherit (finalAttrs) pname version;
+    hash = "sha256-W7GNnvuTMdglc1+8U2DujxqsXlJ4AEKAOUOqf4VPdZI=";
   };
 
-  meta = with stdenv.lib; {
-    homepage    = "http://jsbeautifier.org";
-    description = "JavaScript unobfuscator and beautifier.";
-    license     = licenses.mit;
-    maintainers = with maintainers; [ apeyroux ];
+  build-system = [ setuptools ];
+  dependencies = [
+    editorconfig
+    six
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "jsbeautifier" ];
+
+  enabledTestPaths = [ "jsbeautifier/tests/testindentation.py" ];
+
+  meta = {
+    description = "JavaScript unobfuscator and beautifier";
+    mainProgram = "js-beautify";
+    homepage = "http://jsbeautifier.org";
+    changelog = "https://github.com/beautify-web/js-beautify/blob/v${finalAttrs.version}/CHANGELOG.md";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ apeyroux ];
   };
-}
+})

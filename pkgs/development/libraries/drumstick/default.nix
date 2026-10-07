@@ -1,35 +1,82 @@
-{ stdenv, fetchurl, alsaLib, cmake, docbook_xsl, docbook_xml_dtd_45, doxygen
-, fluidsynth, pkgconfig, qt5
+{
+  lib,
+  stdenv,
+  fetchurl,
+  cmake,
+  docbook_xml_dtd_45,
+  docbook_xsl,
+  doxygen,
+  graphviz-nox,
+  pkg-config,
+  qttools,
+  wrapQtAppsHook,
+  alsa-lib,
+  fluidsynth,
+  libpulseaudio,
+  qtbase,
+  qtsvg,
+  qtwayland,
+  sonivox,
+  qt5compat ? null,
 }:
 
+let
+  isQt6 = lib.versions.major qtbase.version == "6";
+in
 stdenv.mkDerivation rec {
-  name = "drumstick-${version}";
-  version = "1.1.1";
+  pname = "drumstick";
+  version = "2.11.1";
 
   src = fetchurl {
-    url = "mirror://sourceforge/drumstick/${version}/${name}.tar.bz2";
-    sha256 = "0avwxr6n9ra7narxc5lmkhdqi8ix10gmif8rpd06wp4g9iv46xrn";
+    url = "mirror://sourceforge/drumstick/${version}/drumstick-${version}.tar.bz2";
+    hash = "sha256-fVN67Kd0hvyPV6hK898b0N3dtAGmGTXotIIVQtFgtnc=";
   };
 
-  outputs = [ "out" "dev" "man" ];
+  patches = [ ./drumstick-plugins.patch ];
 
-  enableParallelBuilding = true;
+  postPatch = ''
+    substituteInPlace library/rt/backendmanager.cpp --subst-var out
+  '';
 
-  #Temporarily remove drumstick-piano; Gives segment fault. Submitted ticket
-  postInstall = ''
-    rm $out/bin/drumstick-vpiano
-    '';
-
-  nativeBuildInputs = [ cmake pkgconfig docbook_xsl docbook_xml_dtd_45 docbook_xml_dtd_45 ];
-  buildInputs = [
-    alsaLib doxygen fluidsynth qt5.qtbase qt5.qtsvg
+  outputs = [
+    "out"
+    "dev"
+    "man"
   ];
 
-  meta = with stdenv.lib; {
-    maintainers = with maintainers; [ solson ];
-    description = "MIDI libraries for Qt5/C++";
-    homepage = http://drumstick.sourceforge.net/;
-    license = licenses.gpl2Plus;
-    platforms = platforms.linux;
+  nativeBuildInputs = [
+    cmake
+    docbook_xml_dtd_45
+    docbook_xml_dtd_45
+    docbook_xsl
+    doxygen
+    graphviz-nox
+    pkg-config
+    qttools
+    wrapQtAppsHook
+  ];
+
+  buildInputs = [
+    alsa-lib
+    fluidsynth
+    libpulseaudio
+    qtbase
+    qtsvg
+    qtwayland
+    sonivox
+  ]
+  ++ lib.optionals isQt6 [ qt5compat ];
+
+  cmakeFlags = [
+    (lib.cmakeBool "USE_DBUS" true)
+    (lib.cmakeBool "USE_QT5" (!isQt6))
+  ];
+
+  meta = {
+    description = "MIDI libraries for Qt/C++";
+    homepage = "https://drumstick.sourceforge.io/";
+    license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ wegank ];
+    platforms = lib.platforms.linux;
   };
 }

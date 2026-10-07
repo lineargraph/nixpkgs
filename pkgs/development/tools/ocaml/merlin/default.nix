@@ -1,32 +1,57 @@
-{ stdenv, fetchzip, ocaml, findlib, yojson
-, withEmacsMode ? false, emacs }:
+{
+  lib,
+  fetchurl,
+  fetchpatch,
+  buildDunePackage,
+  replaceVars,
+  dot-merlin-reader,
+  dune_2,
+  yojson,
+  csexp,
+  result,
+  seq,
+  menhirSdk,
+}:
 
-assert stdenv.lib.versionAtLeast ocaml.version "4.02";
+buildDunePackage rec {
+  pname = "merlin";
+  version = "3.8.0";
 
-let
-  version = "3.0.5";
-in
-
-stdenv.mkDerivation {
-
-  name = "merlin-${version}";
-
-  src = fetchzip {
-    url = "https://github.com/ocaml/merlin/archive/v${version}.tar.gz";
-    sha256 = "06h0klzzvb62rzb6m0pq8aa207fz7z54mjr05vky4wv8195bbjiy";
+  src = fetchurl {
+    url = "https://github.com/ocaml/merlin/releases/download/v${version}/merlin-${version}.tbz";
+    sha256 = "sha256-wmBGNwXL3BduF4o1sUXtAOUHJ4xmMvsWAxl/QdNj/28=";
   };
 
-  buildInputs = [ ocaml findlib yojson ]
-    ++ stdenv.lib.optional withEmacsMode emacs;
+  minimalOCamlVersion = "4.02.3";
 
-  preConfigure = "mkdir -p $out/bin";
-  prefixKey = "--prefix ";
-  configureFlags = stdenv.lib.optional withEmacsMode "--enable-compiled-emacs-mode";
+  patches = [
+    (replaceVars ./fix-paths.patch {
+      dot-merlin-reader = "${dot-merlin-reader}/bin/dot-merlin-reader";
+      dune = "${dune_2}/bin/dune";
+    })
+    # https://github.com/ocaml/merlin/pull/1798
+    (fetchpatch {
+      name = "vim-python-12-syntax-warning-fix.patch";
+      url = "https://github.com/ocaml/merlin/commit/9e0c47b0d5fd0c4edc37c4c7ce927b155877557d.patch";
+      hash = "sha256-HmdTISE/s45C5cwLgsCHNUW6OAPSsvQ/GcJE6VDEobs=";
+    })
+  ];
 
-  meta = with stdenv.lib; {
-    description = "An editor-independent tool to ease the development of programs in OCaml";
+  strictDeps = true;
+
+  buildInputs = [
+    dot-merlin-reader
+    yojson
+    csexp
+    result
+    seq
+    menhirSdk
+  ];
+
+  meta = {
+    description = "Editor-independent tool to ease the development of programs in OCaml";
     homepage = "https://github.com/ocaml/merlin";
-    license = licenses.mit;
-    maintainers = [ maintainers.vbgl ];
+    license = lib.licenses.mit;
+    maintainers = [ lib.maintainers.vbgl ];
   };
 }

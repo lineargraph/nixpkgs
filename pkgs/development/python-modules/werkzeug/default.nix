@@ -1,27 +1,96 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, itsdangerous, hypothesis
-, pytest, requests, glibcLocales }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+
+  # build-system
+  flit-core,
+
+  # dependencies
+  markupsafe,
+
+  # optional-dependencies
+  watchdog,
+
+  # tests
+  cffi,
+  cryptography,
+  ephemeral-port-reserve,
+  pytest-timeout,
+  pytestCheckHook,
+
+  # reverse dependencies
+  moto,
+  sentry-sdk,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
-  pname = "Werkzeug";
-  version = "0.14.1";
+  pname = "werkzeug";
+  version = "3.1.8";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "c3fd7a7d41976d9f44db327260e263132466836cef6f91512889ed60ad26557c";
+    hash = "sha256-m61hpCaNrBEvHFzUYwpW7eYBtu1CAwBneoaQg9cKTEQ=";
   };
 
-  propagatedBuildInputs = [ itsdangerous ];
-  checkInputs = [ pytest requests glibcLocales hypothesis ];
+  build-system = [ flit-core ];
 
-  checkPhase = ''
-    LC_ALL="en_US.UTF-8" py.test ${stdenv.lib.optionalString stdenv.isDarwin "-k 'not test_get_machine_id'"}
-  '';
+  dependencies = [ markupsafe ];
 
-  meta = with stdenv.lib; {
-    homepage = http://werkzeug.pocoo.org/;
-    description = "A WSGI utility library for Python";
-    license = licenses.bsd3;
+  optional-dependencies = {
+    watchdog = [ watchdog ];
+  };
+
+  nativeCheckInputs = [
+    cffi
+    cryptography
+    ephemeral-port-reserve
+    pytest-timeout
+    pytestCheckHook
+  ]
+  ++ lib.concatAttrValues optional-dependencies;
+
+  pythonImportsCheck = [ "werkzeug" ];
+
+  disabledTests = [
+    # ConnectionRefusedError: [Errno 111] Connection refused
+    "test_http_proxy"
+    # ResourceWarning: subprocess 309 is still running
+    "test_basic"
+    "test_long_build"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [ "test_get_machine_id" ];
+
+  disabledTestPaths = [
+    # ConnectionRefusedError: [Errno 111] Connection refused
+    "tests/test_serving.py"
+  ];
+
+  disabledTestMarks = [
+    # don't run tests that are marked with filterwarnings, they fail with
+    # warnings._OptionError: unknown warning category: 'pytest.PytestUnraisableExceptionWarning'
+    "filterwarnings"
+  ];
+
+  passthru.tests = {
+    inherit moto sentry-sdk;
+  };
+
+  meta = {
+    changelog = "https://werkzeug.palletsprojects.com/en/stable/changes/#version-${
+      lib.replaceStrings [ "." ] [ "-" ] version
+    }";
+    homepage = "https://palletsprojects.com/p/werkzeug/";
+    description = "Comprehensive WSGI web application library";
+    longDescription = ''
+      Werkzeug is a comprehensive WSGI web application library. It
+      began as a simple collection of various utilities for WSGI
+      applications and has become one of the most advanced WSGI
+      utility libraries.
+    '';
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

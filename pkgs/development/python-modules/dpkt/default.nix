@@ -1,20 +1,29 @@
-{ stdenv, fetchPypi, buildPythonPackage }:
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+}:
 
 buildPythonPackage rec {
   pname = "dpkt";
-  version = "1.9.1";
-  name = "${pname}-${version}";
+  version = "1.9.8";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0rr9ygczhxkfb61778jx0cxs0sq46zwlcj5l3wn6xmd3iy3yx9y6";
+    hash = "sha256-Q/hobkVdpQUoNf0e2iaJ1R3jZwqsl5mxsAz9IDkn7kU=";
   };
 
-  meta = with stdenv.lib; {
+  # Project has no tests
+  doCheck = false;
+
+  pythonImportsCheck = [ "dpkt" ];
+
+  meta = {
     description = "Fast, simple packet creation / parsing, with definitions for the basic TCP/IP protocols";
-    homepage = https://code.google.com/p/dpkt/;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ bjornfor ];
-    platforms = platforms.all;
+    homepage = "https://github.com/kbandla/dpkt";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ bjornfor ];
+    platforms = lib.platforms.all;
   };
 }

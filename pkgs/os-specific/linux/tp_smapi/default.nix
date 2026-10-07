@@ -1,17 +1,32 @@
-{ stdenv, lib, fetchFromGitHub, kernel, writeScript, coreutils, gnugrep, jq, curl, common-updater-scripts
+{
+  stdenv,
+  lib,
+  fetchFromGitHub,
+  kernel,
 }:
 
-stdenv.mkDerivation rec {
-  name = "tp_smapi-${version}-${kernel.version}";
-  version = "0.43";
+stdenv.mkDerivation (finalAttrs: {
+  name = "${finalAttrs.pname}-${finalAttrs.version}-${kernel.version}";
+  pname = "tp_smapi";
+  version = "0.45";
 
   src = fetchFromGitHub {
-    owner = "evgeni";
+    owner = "linux-thinkpad";
     repo = "tp_smapi";
-    rev = "tp-smapi/${version}";
-    sha256 = "1rjb0njckczc2mj05cagvj0lkyvmyk6bw7wkiinv81lw8m90g77g";
-    name = "tp-smapi-${version}";
+    tag = "tp-smapi/${finalAttrs.version}";
+    hash = "sha256-rB+DNgWUXd1oQBbDgVEAJVJ16nKCaKDtWGAmpcFsx+A=";
   };
+
+  patches = [
+    # Linux v7.2 removed function strncpy, have to use strscpy instead.
+    # This is an open issue in upstream, patching with upstream PR's commit.
+    # This patch should be removed once the PR is merged in upstream.
+    #
+    # Upstream issue: https://github.com/linux-thinkpad/tp_smapi/issues/82
+    # Upstream pull request: https://github.com/linux-thinkpad/tp_smapi/pull/81
+    # Upstream commit: https://github.com/linux-thinkpad/tp_smapi/commit/0483993a64f6d922d71dddd8f7f353d8bc22d1bf
+    ./0001-use-strscpy-instead-of-strncpy.patch
+  ];
 
   nativeBuildInputs = kernel.moduleBuildDependencies;
 
@@ -19,30 +34,33 @@ stdenv.mkDerivation rec {
 
   makeFlags = [
     "KBASE=${kernel.dev}/lib/modules/${kernel.modDirVersion}"
-    "SHELL=/bin/sh"
+    "SHELL=${stdenv.shell}"
     "HDAPS=1"
   ];
 
   installPhase = ''
+    runHook preInstall
+
     install -v -D -m 644 thinkpad_ec.ko "$out/lib/modules/${kernel.modDirVersion}/kernel/drivers/firmware/thinkpad_ec.ko"
     install -v -D -m 644 tp_smapi.ko "$out/lib/modules/${kernel.modDirVersion}/kernel/drivers/firmware/tp_smapi.ko"
     install -v -D -m 644 hdaps.ko "$out/lib/modules/${kernel.modDirVersion}/kernel/drivers/firmware/hdapsd.ko"
+
+    runHook postInstall
   '';
 
   dontStrip = true;
 
   enableParallelBuilding = true;
 
-  passthru.updateScript = import ./update.nix {
-    inherit lib writeScript coreutils gnugrep jq curl common-updater-scripts;
-  };
-
   meta = {
     description = "IBM ThinkPad hardware functions driver";
-    homepage = https://github.com/evgeni/tp_smapi;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.garbas ];
-    # driver is only ment for linux thinkpads i think  bellow platforms should cover it.
-    platforms = [ "x86_64-linux" "i686-linux" ];
+    homepage = "https://github.com/linux-thinkpad/tp_smapi";
+    license = lib.licenses.gpl2Plus;
+    maintainers = [ ];
+    # driver is only meant for linux thinkpads, bellow platforms should cover it.
+    platforms = [
+      "x86_64-linux"
+      "i686-linux"
+    ];
   };
-}
+})

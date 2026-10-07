@@ -1,28 +1,31 @@
-{ stdenv, fetchFromGitHub, buildPythonPackage, pytest }:
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "iso3166";
-  version = "0.8";
+  version = "2.1.1";
+  format = "setuptools";
 
   src = fetchFromGitHub {
     owner = "deactivated";
     repo = "python-iso3166";
-    # repo has no version tags
-    rev = "f04e499447bbff10af701cf3dd81f6bcdf02f7d7";
-    sha256 = "0zs9za9dr2nl5srxir08yibmp6nffcapmzala0fgh8ny7y6rafrx";
+    tag = "v${version}";
+    hash = "sha256-/y7c2qSA6+WKUP9YTSaMBjBxtqAuF4nB3MKvL5P6vL0=";
   };
 
-  buildInputs = [ pytest ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  checkPhase = ''
-    py.test
-  '';
+  pythonImportsCheck = [ "iso3166" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/deactivated/python-iso3166;
+  meta = {
     description = "Self-contained ISO 3166-1 country definitions";
-    license = licenses.mit;
-    maintainers = with maintainers; [ zraexy ];
+    homepage = "https://github.com/deactivated/python-iso3166";
+    changelog = "https://github.com/deactivated/python-iso3166/blob/v${version}/CHANGES";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ zraexy ];
   };
 }

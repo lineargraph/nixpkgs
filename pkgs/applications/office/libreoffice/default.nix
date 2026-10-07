@@ -1,285 +1,921 @@
-{ stdenv, fetchurl, pam, python3, libxslt, perl, ArchiveZip, gettext
-, CompressZlib, zlib, libjpeg, expat, pkgconfigUpstream, freetype, libwpd
-, libxml2, db, sablotron, curl, fontconfig, libsndfile, neon
-, bison, flex, zip, unzip, gtk3, gtk2, libmspack, getopt, file, cairo, which
-, icu, boost, jdk, ant, cups, xorg, libcmis
-, openssl, gperf, cppunit, GConf, ORBit2, poppler, utillinux
-, librsvg, gnome_vfs, libGLU_combined, bsh, CoinMP, libwps, libabw
-, autoconf, automake, openldap, bash, hunspell, librdf_redland, nss, nspr
-, libwpg, dbus-glib, glibc, qt4, clucene_core, libcdr, lcms, vigra
-, unixODBC, mdds, sane-backends, mythes, libexttextcat, libvisio
-, fontsConf, pkgconfig, libzip, bluez5, libtool, maven, carlito
-, libatomic_ops, graphite2, harfbuzz, libodfgen, libzmf
-, librevenge, libe-book, libmwaw, glm, glew, gst_all_1
-, gdb, commonsLogging, librdf_rasqal, wrapGAppsHook
-, defaultIconTheme, glib, ncurses, epoxy, gpgme
-, langs ? [ "ca" "de" "en-GB" "en-US" "eo" "es" "fr" "hu" "it" "nl" "pl" "ru" "sl" ]
-, withHelp ? true
-, kdeIntegration ? false
+{
+  stdenv,
+  fetchurl,
+  fetchgit,
+  fetchpatch2,
+  fetchFromGitLab,
+  lib,
+  pam,
+  python3,
+  python3Packages,
+  libxslt,
+  perl,
+  perlPackages,
+  box2d_2,
+  gettext,
+  zlib,
+  libjpeg,
+  liblangtag,
+  expat,
+  freetype,
+  libwpd,
+  libxml2,
+  db,
+  curl,
+  fontconfig,
+  libsndfile,
+  neon,
+  bison,
+  flex,
+  zip,
+  unzip,
+  fast-float,
+  md4c,
+  gtk3,
+  libmspack,
+  getopt,
+  file,
+  cairo,
+  which,
+  icu,
+  boost,
+  boost188,
+  jdk21,
+  ant,
+  cups,
+  libixion,
+  libxtst,
+  libxi,
+  libxinerama,
+  libxext,
+  libxdmcp,
+  libxaw,
+  libx11,
+  libpthread-stubs,
+  libxshmfence,
+  fontforge,
+  jre21_minimal,
+  openssl,
+  gperf,
+  cppunit,
+  poppler,
+  util-linux,
+  librsvg,
+  libGLU,
+  libGL,
+  bsh,
+  coinmp,
+  libwps,
+  libabw,
+  libargon2,
+  libmysqlclient,
+  autoconf,
+  automake,
+  openldap,
+  bash,
+  hunspell,
+  librdf_rasqal,
+  librdf_redland,
+  nss,
+  nspr,
+  libwpg,
+  dbus-glib,
+  clucene-core_2,
+  libcdr,
+  lcms2,
+  unixodbc,
+  mdds,
+  sane-backends,
+  mythes,
+  libexttextcat,
+  libvisio,
+  pkg-config,
+  bluez5,
+  libtool,
+  libatomic_ops,
+  graphite2,
+  harfbuzz,
+  libodfgen,
+  libzmf,
+  librevenge,
+  libe-book,
+  libmwaw,
+  glm,
+  gst_all_1,
+  gdb,
+  adwaita-icon-theme,
+  glib,
+  ncurses,
+  libepoxy,
+  gpgme,
+  gpgmepp,
+  libwebp,
+  abseil-cpp,
+  libfreehand,
+  libepubgen,
+  libetonyek,
+  libpng,
+  liborcus,
+  libxcrypt,
+  langs ? [
+    "ar"
+    "ca"
+    "cs"
+    "da"
+    "de"
+    "en-GB"
+    "en-US"
+    "eo"
+    "es"
+    "fi"
+    "fr"
+    "hu"
+    "it"
+    "ja"
+    "ko"
+    "nl"
+    "pl"
+    "pt"
+    "pt-BR"
+    "ro"
+    "ru"
+    "sk"
+    "sl"
+    "tr"
+    "uk"
+    "zh-CN"
+    "zh-TW"
+  ],
+  withFonts ? false,
+  withHelp ? true,
+  withJava ? true,
+  kdeIntegration ? false,
+  variant ? "stable",
+  debugLogging ? variant == "stable",
+  qt6,
+  kdePackages,
+  symlinkJoin,
+  libpq,
+  makeFontsConf,
+  amiri,
+  caladea,
+  carlito,
+  culmus,
+  dejavu_fonts,
+  rubik,
+  liberation-sans-narrow,
+  liberation_ttf_v2,
+  libertine,
+  linux-libertine-g,
+  noto-fonts,
+  noto-fonts-lgc-plus,
+  noto-fonts-cjk-sans,
+  rhino,
+  lp_solve,
+  xmlsec,
+  libcmis,
+  frozen-containers,
 }:
 
+assert builtins.elem variant [
+  "stable"
+  "collabora"
+  "collabora-coda"
+];
+
 let
-  primary-src = import ./default-primary-src.nix { inherit fetchurl; };
-in
+  inherit (lib)
+    flatten
+    flip
+    concatMapStrings
+    concatStringsSep
+    getDev
+    getLib
+    optionals
+    optionalString
+    ;
 
-let inherit (primary-src) major minor subdir version; in
-
-let
-  lib = stdenv.lib;
-  langsSpaces = lib.concatStringsSep " " langs;
-
-  fetchSrc = {name, sha256}: fetchurl {
-    url = "https://download.documentfoundation.org/libreoffice/src/${subdir}/libreoffice-${name}-${version}.tar.xz";
-    inherit sha256;
+  fontsConf = makeFontsConf {
+    fontDirectories = [
+      amiri
+      caladea
+      carlito
+      culmus
+      dejavu_fonts
+      rubik
+      liberation-sans-narrow
+      liberation_ttf_v2
+      libertine
+      linux-libertine-g
+      noto-fonts-lgc-plus
+      noto-fonts
+      noto-fonts-cjk-sans
+    ];
   };
 
+  jre' = jre21_minimal.override {
+    modules = [
+      "java.base"
+      "java.desktop"
+      "java.logging"
+      "java.sql"
+    ];
+  };
+
+  mdds_2_1 = mdds.overrideAttrs {
+    version = "2.1.1";
+    src = fetchFromGitLab {
+      owner = "mdds";
+      repo = "mdds";
+      rev = "2.1.1";
+      hash = "sha256-a412LpgDiYM8TMToaUrTlHtblYS1HehzrDOwvIAAxiA=";
+    };
+  };
+
+  # required for libreoffice-collabora version 25.04.9-4
+  libixion_0_19 = libixion.overrideAttrs {
+    version = "0.19.0";
+
+    src = fetchFromGitLab {
+      owner = "ixion";
+      repo = "ixion";
+      rev = "0.19.0";
+      hash = "sha256-BrexWRaxrLTWuoU62kqws3tlSqVOHecSV5MXc4ZezFs=";
+    };
+
+    buildInputs = [
+      boost188
+      mdds_2_1
+      python3
+    ];
+
+    patches = [
+      # fix build with gcc 15, Add a missing <cstdint> include
+      (fetchpatch2 {
+        url = "https://gitlab.com/ixion/ixion/-/merge_requests/70.patch";
+        hash = "sha256-FzU/aejcMktrDQql5pzobiq6BJXryIXQXZTBWCkyqtU=";
+      })
+    ];
+  };
+
+  # required for libreoffice-collabora version 25.04.9-4
+  liborcus_0_19 = liborcus.overrideAttrs {
+    version = "0.19.2";
+
+    src = fetchFromGitLab {
+      owner = "orcus";
+      repo = "orcus";
+      rev = "0.19.2";
+      hash = "sha256-+9C52H99c/kL5DEIoXV+WcLnTftRbicRLQN/FdIXBw8=";
+    };
+
+    buildInputs = [
+      boost188
+      libixion_0_19
+      mdds_2_1
+      python3
+      zlib
+    ];
+
+    patches = [
+      # fix build with gcc 15, Add missing <cstdint> includes
+      (fetchpatch2 {
+        url = "https://gitlab.com/orcus/orcus/-/merge_requests/200.patch";
+        hash = "sha256-CZVw1+ri6UO56Bg/Y27W6G8JkGU6xDInd7fABr6i+7g=";
+      })
+    ];
+  };
+
+  importVariant = f: import (./. + "/src-${variant}/${f}");
+  # Update these files with:
+  # nix-shell maintainers/scripts/update.nix --argstr package libreoffice-$VARIANT.unwrapped
+  version = importVariant "version.nix";
+  srcsAttributes = {
+    main = importVariant "main.nix";
+    help = importVariant "help.nix";
+    translations = importVariant "translations.nix";
+    deps = importVariant "deps.nix";
+  };
   srcs = {
-    third_party = [ (let md5 = "185d60944ea767075d27247c3162b3bc"; in fetchurl rec {
-        url = "https://dev-www.libreoffice.org/extern/${md5}-${name}";
-        sha256 = "1infwvv1p6i21scywrldsxs22f62x85mns4iq8h6vr6vlx3fdzga";
-        name = "unowinreg.dll";
-      }) ] ++ (map (x : ((fetchurl {inherit (x) url sha256 name;}) // {inherit (x) md5name md5;})) (import ./libreoffice-srcs.nix));
-
-    translations = fetchSrc {
-      name = "translations";
-      sha256 = "0bjl3hdckd5bcgskh46xqna1hpxjjx0ycgpnilyk7j8l6407hpw6";
-    };
-
-    # TODO: dictionaries
-
-    help = fetchSrc {
-      name = "help";
-      sha256 = "1z21bk5lwd5gxsyjdwh0fmgkys4lhnx7flbjd6dbn9d99paz1w6f";
-    };
-
+    third_party = map (
+      x:
+      (fetchurl {
+        inherit (x) url sha256 name;
+      })
+      // {
+        inherit (x) md5name md5;
+      }
+    ) srcsAttributes.deps;
+    translations = srcsAttributes.translations { inherit fetchurl fetchgit; };
+    help = srcsAttributes.help { inherit fetchurl fetchgit; };
   };
-in stdenv.mkDerivation rec {
-  name = "libreoffice-${version}";
 
-  inherit (primary-src) src;
+  kdeDependencies = [
+    qt6.qtbase.out # has a dev output but you cannot find the headers there
+    qt6.qtmultimedia.out
+    kdePackages.kconfig
+    kdePackages.kcoreaddons
+    kdePackages.ki18n
+    kdePackages.kio
+    kdePackages.kwindowsystem
+  ];
+  mkKdeDeps =
+    pkgs: func:
+    symlinkJoin {
+      name = "libreoffice-kde-dependencies-${version}";
+      paths = flatten (
+        map (e: [
+          (func e)
+        ]) pkgs
+      );
+    };
+  # See `postPatch` for details
+  kdeDepsIncludes = mkKdeDeps kdeDependencies getDev;
+  kdeDepsLibs = mkKdeDeps kdeDependencies getLib;
 
-  # Openoffice will open libcups dynamically, so we link it directly
-  # to make its dlopen work.
-  # It also seems not to mention libdl explicitly in some places.
-  NIX_LDFLAGS = "-lcups -ldl";
+  tarballPath = "external/tarballs";
 
-  # For some reason librdf_redland sometimes refers to rasqal.h instead
-  # of rasqal/rasqal.h
-  # And LO refers to gpgme++ by no-path name
-  NIX_CFLAGS_COMPILE="-I${librdf_rasqal}/include/rasqal -I${gpgme.dev}/include/gpgme++";
+in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libreoffice";
+  inherit version;
 
-  # If we call 'configure', 'make' will then call configure again without parameters.
-  # It's their system.
-  configureScript = "./autogen.sh";
-  dontUseCmakeConfigure = true;
-
-  patches = [ ./xdg-open-brief.patch ];
+  src = srcsAttributes.main { inherit fetchurl fetchgit; };
 
   postUnpack = ''
-    mkdir -v $sourceRoot/src
-  '' + (stdenv.lib.concatMapStrings (f: "ln -sfv ${f} $sourceRoot/src/${f.md5 or f.outputHash}-${f.name}\nln -sfv ${f} $sourceRoot/src/${f.name}\n") srcs.third_party)
-  + ''
-    ln -sv ${srcs.help} $sourceRoot/src/${srcs.help.name}
-    ln -svf ${srcs.translations} $sourceRoot/src/${srcs.translations.name}
-  '';
+    mkdir -v $sourceRoot/${tarballPath}
+
+    ${flip concatMapStrings srcs.third_party (f: ''
+      ln -sfv ${f} $sourceRoot/${tarballPath}/${f.md5name}
+      ln -sfv ${f} $sourceRoot/${tarballPath}/${f.name}
+    '')}
+
+  ''
+  + (
+    if (variant != "collabora" && variant != "collabora-coda") then
+      ''
+        ln -sv ${srcs.help} $sourceRoot/${tarballPath}/${srcs.help.name}
+        ln -svf ${srcs.translations} $sourceRoot/${tarballPath}/${srcs.translations.name}
+
+        tar -xf ${srcs.help}
+        tar -xf ${srcs.translations}
+      ''
+    else
+      ''
+        cp -r --no-preserve=mode ${srcs.help}/. $sourceRoot/helpcontent2/
+        cp -r --no-preserve=mode ${srcs.translations}/. $sourceRoot/translations/
+      ''
+  );
+
+  patches = [
+    # Skip some broken tests:
+    # - tdf160386 does not fall back to a CJK font properly for some reason
+    # - the remaining tests have notes in the patches
+    # FIXME: get rid of this ASAP
+    ./skip-broken-tests.patch
+    (./skip-broken-tests- + variant + ".patch")
+  ]
+  ++ lib.optionals (variant == "stable") [
+    # Don't detect Qt paths from qmake, so our patched-in onese are used
+    ./dont-detect-qt-paths-from-qmake.patch
+  ]
+  ++ lib.optionals (variant != "stable") [
+    # Don't detect Qt paths from qmake, so our patched-in onese are used / old version
+    ./dont-detect-qt-paths-from-qmake-pre-26.8.patch
+    # Fix build with Poppler 26.01
+    (fetchpatch2 {
+      url = "https://gitlab.archlinux.org/archlinux/packaging/packages/libreoffice-still/-/raw/25.8.7-2/fix_build_with_poppler_26.01.0.patch";
+      hash = "sha256-5JTTvJFIV5MG0Gz7y46wAr3q9tWdSVoZ9TJQlMJVqBc=";
+    })
+
+    # Fix build with Poppler 26.02
+    (fetchpatch2 {
+      url = "https://gitlab.archlinux.org/archlinux/packaging/packages/libreoffice-still/-/raw/25.8.7-2/fix_build_with_poppler_26.02.0.patch";
+      hash = "sha256-IInhSoqTemDITB+AtkvVa9eGbodTbUGSpMMpC9N/mmg=";
+    })
+
+    # Fix build with Poppler 26.04
+    (fetchpatch2 {
+      url = "https://gitlab.archlinux.org/archlinux/packaging/packages/libreoffice-still/-/raw/25.8.7-2/fix_build_with_poppler_26.04.0.patch";
+      hash = "sha256-I9owj/NTCTi6ISszuasH410NLlhunPn/Ig22tenu8tw=";
+    })
+    # Fix build with Poppler 26.05
+    (fetchpatch2 {
+      url = "https://gitlab.archlinux.org/archlinux/packaging/packages/libreoffice-still/-/raw/25.8.7-2/fix_build_with_poppler_26.05.0.patch";
+      hash = "sha256-7wdiciTf/LrTk0MibBBYGliWRCvK1rtTGESgH7db1I4=";
+    })
+    # Fix build with Poppler 26.06
+    (fetchpatch2 {
+      url = "https://gitlab.archlinux.org/archlinux/packaging/packages/libreoffice-still/-/raw/25.8.7-3/fix_build_with_poppler_26.06.0.patch";
+      hash = "sha256-j66IsrzaqQ55MRVzhlw25guuoDtxx1D4XeJsBhgWP2c=";
+    })
+  ]
+  ++ lib.optionals (variant != "collabora" && variant != "collabora-coda") [
+    # Revert part of https://github.com/LibreOffice/core/commit/6f60670877208612b5ea320b3677480ef6508abb that broke zlib linking
+    ./readd-explicit-zlib-link.patch
+  ]
+  ++ lib.optionals (variant == "collabora" || variant == "collabora-coda") [
+    # Backport patch to fix build with Poppler 25.09
+    (fetchpatch2 {
+      url = "https://github.com/LibreOffice/core/commit/7848e02819c007026952a3fdc9da0961333dc079.patch";
+      includes = [ "sdext/*" ];
+      hash = "sha256-Nw6GFmkFy13w/ktCxw5s7SHL34auP1BQ9JvQnQ65aVU=";
+    })
+
+    # Fix build with Poppler 25.10
+    (fetchpatch2 {
+      url = "https://gitlab.archlinux.org/archlinux/packaging/packages/libreoffice-still/-/raw/f5241554e4a0f6fd95ac4e5cc398a30243407e6a/fix_build_with_poppler_25.10.patch";
+      hash = "sha256-lbPOkc1HeT5Qsp6XfVyVJtmvSL68qTrmbd3q9lvKSu8=";
+    })
+
+    ./fix-unpack-collabora.patch
+
+    # Add missing climits includes
+    (fetchpatch2 {
+      url = "https://github.com/LibreOffice/core/commit/6ebc3c540f2aa13363e3dcb32a44bfa2c7f66a9f.patch";
+      hash = "sha256-5GCosJryorH1P1Z2Zjey7oEC3seLHN5kH/ar4U7E74E=";
+    })
+    (fetchpatch2 {
+      url = "https://github.com/LibreOffice/core/commit/0084c2b22ce26084df5a379135ba8ac174585ac0.patch";
+      hash = "sha256-zssmbzfaZX2sBdHbzm+aIC8ncidp3eupQoUloeGdPcQ=";
+    })
+    (fetchpatch2 {
+      url = "https://github.com/LibreOffice/core/commit/19c32b44fead600118377417012b111a4f238766.patch";
+      hash = "sha256-jO7oFEfoL7V1dj67vwDAEp2BwjQvfva4zV8sVAAc+2g=";
+    })
+
+    # Add missing limits.h include
+    (fetchpatch2 {
+      url = "https://github.com/LibreOffice/core/commit/a6325b777b7bb9e1c760a4f1a02d48ba0889a7b1.patch";
+      hash = "sha256-QECBAdJ+4Q8c2kbdadNxzgDEebLvPy9cvRb34O7m5bA=";
+    })
+
+    # Add missing cstdint includes
+    (fetchpatch2 {
+      url = "https://github.com/LibreOffice/core/commit/47cabcb187dfbccb36ee02513998fbfcee509d5e.patch";
+      hash = "sha256-q883AMTtLzXwbwNRytCk6qiFA1snzba4JUsr7IaUEvI=";
+    })
+    (fetchpatch2 {
+      url = "https://github.com/LibreOffice/core/commit/0fede06b020fa0327877f4a8722290d48a742a2c.patch";
+      hash = "sha256-8w89mtZuFvpZU0GVZoWPZVBM+UlgnbTYxoDJ8Ss64Bo=";
+    })
+    (fetchpatch2 {
+      url = "https://github.com/LibreOffice/core/commit/aa9a194a99cec1dbcee9226b703fdcf9b62962d7.patch";
+      hash = "sha256-Eztv186ke97u0ucdd3jQmJaxtrxnsiWWE/qVOBc2uGc=";
+    })
+
+    # Add missing stdint.h include
+    (fetchpatch2 {
+      url = "https://github.com/LibreOffice/core/commit/d0265596672d78ad6f3980ff6fb900535aefd11f.patch";
+      hash = "sha256-tp7MW+8ExivGKKWjLy60lxWNf2hXF+jCD0pajo+YbVo=";
+    })
+  ]
+  ++ lib.optionals (lib.versionAtLeast version "26.8" && lib.versionOlder version "26.8.999") [
+    ./26.8-add-dir-prereq.patch
+  ];
 
   postPatch = ''
-    sed -e 's@/usr/bin/xdg-open@xdg-open@g' -i shell/source/unix/exec/shellexec.cxx
+    # configure checks for header 'gpgme++/gpgmepp_version.h',
+    # and if it is found (no matter where) uses a hardcoded path
+    # in what presumably is an effort to make it possible to write
+    # '#include <context.h>' instead of '#include <gpgmepp/context.h>'.
+    #
+    # Fix this path to point to where the headers can actually be found instead.
+    substituteInPlace configure.ac --replace-fail \
+      'GPGMEPP_CFLAGS=-I/usr/include/gpgme++' \
+      'GPGMEPP_CFLAGS=-I${lib.getDev gpgmepp}/include/gpgme++'
+
+    # Fix for Python 3.12
+    substituteInPlace configure.ac --replace-fail distutils.sysconfig sysconfig
   '';
 
-  QT4DIR = qt4;
+  nativeBuildInputs = [
+    autoconf
+    automake
+    bison
+    flex
+    fontforge
+    gdb
+    gettext
+    gperf
+    icu
+    libmysqlclient
+    libtool
+    libxml2
+    libxslt
+    perl
+    perlPackages.ArchiveZip
+    perlPackages.IOCompress
+    pkg-config
+    python3
+    unzip
+    zip
+  ]
+  ++ optionals kdeIntegration [
+    qt6.qtbase
+  ]
+  ++ optionals withJava [
+    ant
+    jdk21
+  ]
+  ++ optionals (lib.versionAtLeast version "26.2.1.2") [
+    python3Packages.afdko
+  ];
 
-  # Fix boost 1.59 compat
-  # Try removing in the next version
-  CPPFLAGS = "-DBOOST_ERROR_CODE_HEADER_ONLY -DBOOST_SYSTEM_NO_DEPRECATED";
+  buildInputs =
+    finalAttrs.passthru.gst_packages
+    ++ [
+      # Make libpng not handle APNG images, so LibreOffice's own handler kicks in
+      # This should be ordered first, so it gets picked up before any other
+      # propagated libpng
+      # See: https://www.mail-archive.com/libreoffice@lists.freedesktop.org/msg334080.html
+      (libpng.override { apngSupport = false; })
+      coinmp
+      abseil-cpp
+      bluez5
+      boost
+      cairo
+      clucene-core_2
+      cppunit
+      cups
+      curl
+      db
+      dbus-glib
+      expat
+      file
+      fontconfig
+      freetype
+      getopt
+      glib
+      glm
+      adwaita-icon-theme
+      gpgme
+      gpgmepp
+      graphite2
+      gtk3
+      (harfbuzz.override { withIcu = true; })
+      hunspell
+      icu
+      lcms2
+      libGL
+      libGLU
+      libtool
+      libx11
+      libxaw
+      libxdmcp
+      libxext
+      libxi
+      libxinerama
+      libxtst
+      libabw
+      libargon2
+      libatomic_ops
+      libcdr
+      libcmis
+      libfreehand
+      libe-book
+      libepoxy
+      libepubgen
+      libetonyek
+      libexttextcat
+      libjpeg
+      liblangtag
+      libmspack
+      libmwaw
+      libodfgen
+      libpthread-stubs
+      librdf_redland
+      librevenge
+      librsvg
+      libsndfile
+      libvisio
+      libwpd
+      libwpg
+      libwps
+      libxcrypt
+      libxml2
+      libxshmfence
+      libxslt
+      libzmf
+      libwebp
+      lp_solve
+      mdds
+      mythes
+      ncurses
+      neon
+      nspr
+      nss
+      openldap
+      openssl
+      pam
+      poppler
+      libpq
+      python3
+      sane-backends
+      unixodbc
+      util-linux
+      which
+      xmlsec
+      zlib
+      frozen-containers
+      md4c
+      fast-float
+    ]
+    ++ optionals kdeIntegration [
+      qt6.qtbase
+      kdePackages.kcoreaddons
+      kdePackages.kio
+    ]
+    ++ optionals withJava [
+      jre'
+    ]
+    ++ optionals (variant == "collabora" || variant == "collabora-coda") [
+      liborcus_0_19
+      mdds_2_1
+      box2d_2
+    ]
+    ++ optionals (variant == "stable") [
+      liborcus
+    ];
 
   preConfigure = ''
     configureFlagsArray=(
       "--with-parallelism=$NIX_BUILD_CORES"
-      "--with-lang=${langsSpaces}"
+      # here because we need to be very specific about spaces
+      "--with-lang=${concatStringsSep " " langs}"
     );
 
-    chmod a+x ./bin/unpack-sources
     patchShebangs .
-    # It is used only as an indicator of the proper current directory
-    touch solenv/inc/target.mk
 
-    # BLFS patch for Glibc 2.23 renaming isnan
-    sed -ire "s@isnan@std::&@g" xmloff/source/draw/ximp3dscene.cxx
-
-    # This is required as some cppunittests require fontconfig configured
-    cp "${fontsConf}" fonts.conf
-    sed -e '/include/i<include>${carlito}/etc/fonts/conf.d</include>' -i fonts.conf
-    export FONTCONFIG_FILE="$PWD/fonts.conf"
-  '';
-
-  # fetch_Download_item tries to interpret the name as a variable name
-  # Let it do so…
-  postConfigure = ''
-    sed -e '1ilibreoffice-translations-${version}.tar.xz=libreoffice-translations-${version}.tar.xz' -i Makefile
-    sed -e '1ilibreoffice-help-${version}.tar.xz=libreoffice-help-${version}.tar.xz' -i Makefile
-
-    # unit test sd_tiledrendering seems to be fragile
-    # https://nabble.documentfoundation.org/libreoffice-5-0-failure-in-CUT-libreofficekit-tiledrendering-td4150319.html
-    echo > ./sd/CppunitTest_sd_tiledrendering.mk
-    sed -e /CppunitTest_sd_tiledrendering/d -i sd/Module_sd.mk
-    # one more fragile test?
-    sed -e '/CPPUNIT_TEST(testTdf96536);/d' -i sw/qa/extras/uiwriter/uiwriter.cxx
-    # this I actually hate, this should be a data consistency test!
-    sed -e '/CPPUNIT_TEST(testTdf115013);/d' -i sw/qa/extras/uiwriter/uiwriter.cxx
-    # rendering-dependent test
-    sed -e '/CPPUNIT_ASSERT_EQUAL(11148L, pOleObj->GetLogicRect().getWidth());/d ' -i sc/qa/unit/subsequent_filters-test.cxx
-    # tilde expansion in path processing checks the existence of $HOME
-    sed -e 's@OString sSysPath("~/tmp");@& return ; @' -i sal/qa/osl/file/osl_File.cxx
-    # rendering-dependent: on my computer the test table actually doesn't fit…
-    # interesting fact: test disabled on macOS by upstream
-    sed -re '/DECLARE_WW8EXPORT_TEST[(]testTableKeep, "tdf91083.odt"[)]/,+5d' -i ./sw/qa/extras/ww8export/ww8export.cxx
-    # Segfault on DB access — maybe temporarily acceptable for a new version of Fresh?
-    sed -e 's/CppunitTest_dbaccess_empty_stdlib_save//' -i ./dbaccess/Module_dbaccess.mk
-    # one more fragile test?
-    sed -e '/CPPUNIT_TEST(testTdf77014);/d' -i sw/qa/extras/uiwriter/uiwriter.cxx
-    # rendering-dependent tests
-    sed -e '/CPPUNIT_TEST(testCustomColumnWidthExportXLSX)/d' -i sc/qa/unit/subsequent_export-test.cxx
-    sed -e '/CPPUNIT_TEST(testColumnWidthExportFromODStoXLSX)/d' -i sc/qa/unit/subsequent_export-test.cxx
-    sed -e '/CPPUNIT_TEST(testChartImportXLS)/d' -i sc/qa/unit/subsequent_filters-test.cxx
-    sed -zre 's/DesktopLOKTest::testGetFontSubset[^{]*[{]/& return; /' -i desktop/qa/desktop_lib/test_desktop_lib.cxx
-    sed -z -r -e 's/DECLARE_OOXMLEXPORT_TEST[(]testFlipAndRotateCustomShape,[^)]*[)].[{]/& return;/' -i sw/qa/extras/ooxmlexport/ooxmlexport7.cxx
-    sed -z -r -e 's/DECLARE_OOXMLEXPORT_TEST[(]tdf105490_negativeMargins,[^)]*[)].[{]/& return;/' -i sw/qa/extras/ooxmlexport/ooxmlexport9.cxx
-    sed -z -r -e 's/DECLARE_OOXMLIMPORT_TEST[(]testTdf112443,[^)]*[)].[{]/& return;/' -i sw/qa/extras/ooxmlimport/ooxmlimport.cxx
-    sed -z -r -e 's/DECLARE_RTFIMPORT_TEST[(]testTdf108947,[^)]*[)].[{]/& return;/' -i sw/qa/extras/rtfimport/rtfimport.cxx
-    # not sure about this fragile test
-    sed -z -r -e 's/DECLARE_OOXMLEXPORT_TEST[(]testTDF87348,[^)]*[)].[{]/& return;/' -i sw/qa/extras/ooxmlexport/ooxmlexport7.cxx
-  '';
-
-  makeFlags = "SHELL=${bash}/bin/bash";
-
-  enableParallelBuilding = true;
-
-  buildPhase = ''
-    # This to avoid using /lib:/usr/lib at linking
-    sed -i '/gb_LinkTarget_LDFLAGS/{ n; /rpath-link/d;}' solenv/gbuild/platform/unxgcc.mk
-
-    find -name "*.cmd" -exec sed -i s,/lib:/usr/lib,, {} \;
-
-    make
-  '';
-
-  # It installs only things to $out/lib/libreoffice
-  postInstall = ''
-    mkdir -p $out/bin $out/share/desktop
-
-    mkdir -p "$out/share/gsettings-schemas/collected-for-libreoffice/glib-2.0/schemas/"
-
-    for a in sbase scalc sdraw smath swriter simpress soffice; do
-      ln -s $out/lib/libreoffice/program/$a $out/bin/$a
-    done
-
-    ln -s $out/bin/soffice $out/bin/libreoffice
-    ln -s $out/lib/libreoffice/share/xdg $out/share/applications
-
-    for f in $out/share/applications/*.desktop; do
-      substituteInPlace "$f" --replace "Exec=libreofficedev${major}.${minor}" "Exec=libreoffice"
-      substituteInPlace "$f" --replace "Exec=libreoffice${major}.${minor}" "Exec=libreoffice"
-      substituteInPlace "$f" --replace "Exec=libreoffice" "Exec=libreoffice"
-    done
-
-    cp -r sysui/desktop/icons  "$out/share"
-    sed -re 's@Icon=libreoffice(dev)?[0-9.]*-?@Icon=@' -i "$out/share/applications/"*.desktop
+    NOCONFIGURE=1 ./autogen.sh
+  ''
+  + optionalString kdeIntegration ''
+    # configure.ac assumes that the first directory that contains headers and
+    # libraries during its checks contains *all* the relevant headers/libs which
+    # obviously doesn't work for us, so we have 2 options:
+    #
+    # 1. patch configure.ac in order to specify the direct paths to various Qt/KDE
+    # dependencies which is ugly and brittle, or
+    #
+    # 2. use symlinkJoin to pull in the relevant dependencies and just patch in
+    # that path which is *also* ugly, but far less likely to break
+    #
+    # The 2nd option is not very Nix'y, but I'll take robust over nice any day.
+    # Additionally, it's much easier to fix if LO breaks on the next upgrade (just
+    # add the missing dependencies to it).
+    export QT6INC=${kdeDepsIncludes}/include
+    export QT6LIB=${kdeDepsLibs}/lib
+    export KF6INC="${kdeDepsIncludes}/include ${kdeDepsIncludes}/include/KF6"
+    export KF6LIB=${kdeDepsLibs}/lib
   '';
 
   configureFlags = [
-    "${if withHelp then "" else "--without-help"}"
-    "--with-boost=${boost.dev}"
-    "--with-boost-libdir=${boost.out}/lib"
-    "--with-beanshell-jar=${bsh}"
+    # Explicitly passing in --host even on non-cross, because
+    # LibreOffice will attempt to detect WSL and cross-compile
+    # itself to Windows automatically, and we don't want it
+    # doing that.
+    "--host=${stdenv.hostPlatform.config}"
+    "--without-buildconfig-recorded"
+
+    (lib.withFeature withHelp "help")
+    "--with-boost=${getDev boost}"
+    "--with-boost-libdir=${getLib boost}/lib"
     "--with-vendor=NixOS"
-    "--with-commons-logging-jar=${commonsLogging}/share/java/commons-logging-1.2.jar"
     "--disable-report-builder"
+    "--disable-online-update"
     "--enable-python=system"
     "--enable-dbus"
     "--enable-release-build"
-    (lib.enableFeature kdeIntegration "kde4")
-    "--with-package-format=installed"
     "--enable-epm"
-    "--with-jdk-home=${jdk.home}"
-    "--with-ant-home=${ant}/lib/ant"
-    "--with-system-cairo"
-    "--with-system-libs"
-    "--with-system-headers"
-    "--with-system-openssl"
-    "--with-system-libabw"
-    "--with-system-libcmis"
-    "--with-system-libwps"
-    "--with-system-openldap"
-    "--with-system-coinmp"
+    (lib.withFeature withJava "java")
 
     # Without these, configure does not finish
     "--without-junit"
 
+    # Schema files for validation are not included in the source tarball
+    "--without-export-validation"
+
+    # We do tarball prefetching ourselves
+    "--disable-fetch-external"
+    "--enable-build-opensymbol"
+
     # I imagine this helps. Copied from go-oo.
     # Modified on every upgrade, though
     "--disable-odk"
-    "--disable-postgresql-sdbc"
     "--disable-firebird-sdbc"
-    "--without-fonts"
-    "--without-myspell-dicts"
+    (lib.withFeature withFonts "fonts")
     "--without-doxygen"
 
+    "--with-system-afdko"
+    "--with-system-cairo"
+    "--with-system-coinmp"
+    "--with-system-fast-float"
+    "--with-system-headers"
+    "--with-system-libabw"
+    "--with-system-libcmis"
+    "--with-system-libfreehand"
+    "--with-system-libepubgen"
+    "--with-system-libetonyek"
+    "--with-system-liblangtag"
+    "--with-system-libs"
+    "--with-system-libwps"
+    "--with-system-lpsolve"
+    "--with-system-mdds"
+    "--with-system-openldap"
+    "--with-system-openssl"
+    "--with-system-orcus"
+    "--with-system-postgresql"
+    "--with-system-xmlsec"
+    "--with-system-frozen"
+
     # TODO: package these as system libraries
-    "--with-system-beanshell"
-    "--without-system-hsqldb"
     "--without-system-altlinuxhyph"
-    "--without-system-lpsolve"
-    "--without-system-libetonyek"
-    "--without-system-libfreehand"
-    "--without-system-liblangtag"
+    "--without-system-libeot"
     "--without-system-libmspub"
+    "--without-system-libnumbertext"
     "--without-system-libpagemaker"
     "--without-system-libstaroffice"
-    "--without-system-libepubgen"
     "--without-system-libqxp"
-    "--without-system-mdds"
-    # https://github.com/NixOS/nixpkgs/commit/5c5362427a3fa9aefccfca9e531492a8735d4e6f
-    "--without-system-orcus"
-    "--without-system-xmlsec"
+    "--without-system-dragonbox"
+    "--without-system-libfixmath"
+
+    # requires an oddly specific, old version
+    "--without-system-hsqldb"
+
+    # searches hardcoded paths that are wrong
+    "--without-system-zxing"
+
+    # is packaged but headers can't be found because there is no pkg-config file
+    "--without-system-zxcvbn"
+
+    "--without-system-java-websocket"
+
+    # searches via pkg-config, upstream box2d has no mention of .pc files
+    "--without-system-box2d"
+  ]
+  ++ optionals kdeIntegration [
+    "--enable-kf6"
+    "--enable-qt6"
+  ]
+  ++ optionals withJava [
+    "--with-system-rhino"
+    "--with-rhino-jar=${rhino}/share/java/js.jar"
+
+    "--with-system-beanshell"
+    "--with-ant-home=${ant.home}"
+    "--with-beanshell-jar=${bsh}"
   ];
 
-  checkPhase = ''
-    make unitcheck
-    make slowcheck
+  env = {
+    # FIXME: this is a hack, because the right cflags are not being picked up
+    # from rasqal's .pc file. Needs more investigation.
+    NIX_CFLAGS_COMPILE =
+      "-I${librdf_rasqal}/include/rasqal"
+      + (lib.optionalString debugLogging " -DSAL_LOG_WARN=1 -DSAL_LOG_INFO=1 ");
+
+    # Provide all the fonts used in tests.
+    FONTCONFIG_FILE = fontsConf;
+  };
+
+  makeFlags = [ "SHELL=${bash}/bin/bash" ];
+
+  enableParallelBuilding = true;
+
+  buildTargets = [ "build-nocheck" ];
+
+  doCheck = true;
+
+  preCheck = ''
+    export HOME=$(pwd)
+  ''
+  + lib.optionalString (variant == "collabora" || variant == "collabora-coda") ''
+    export XDG_RUNTIME_DIR=$(mktemp -d)
+
+    # tests try to access x11 and fail
+    export GST_GL_WINDOW=dummy
+    export GST_VIDEOSINK=fakesink
+    export GST_AUDIOSINK=fakesink
   '';
 
-  buildInputs = with xorg;
-    [ ant ArchiveZip autoconf automake bison boost cairo clucene_core
-      CompressZlib cppunit cups curl db dbus-glib expat file flex fontconfig
-      freetype GConf getopt gnome_vfs gperf gtk3 gtk2
-      hunspell icu jdk lcms libcdr libexttextcat unixODBC libjpeg
-      libmspack librdf_redland librsvg libsndfile libvisio libwpd libwpg libX11
-      libXaw libXext libXi libXinerama libxml2 libxslt libXtst
-      libXdmcp libpthreadstubs libGLU_combined mythes gst_all_1.gstreamer
-      gst_all_1.gst-plugins-base glib
-      neon nspr nss openldap openssl ORBit2 pam perl pkgconfig poppler
-      python3 sablotron sane-backends unzip vigra which zip zlib
-      mdds bluez5 glibc libcmis libwps libabw libzmf libtool
-      libxshmfence libatomic_ops graphite2 harfbuzz gpgme utillinux
-      librevenge libe-book libmwaw glm glew ncurses epoxy
-      libodfgen CoinMP librdf_rasqal defaultIconTheme gettext
-      gdb
-    ]
-    ++ lib.optional kdeIntegration kdelibs4;
-  nativeBuildInputs = [ wrapGAppsHook ];
+  checkTarget = concatStringsSep " " [
+    "unitcheck"
+    "slowcheck"
+    "--keep-going" # easier to debug test failures
+  ];
+
+  postInstall = optionalString (variant != "collabora" && variant != "collabora-coda") ''
+    mkdir -p $out/{include,share/icons}
+
+    cp -r include/LibreOfficeKit $out/include/
+    cp -r sysui/desktop/icons/hicolor $out/share/icons
+
+    # Rename icons for consistency
+    for file in $out/share/icons/hicolor/*/apps/*; do
+      mv $file "$(dirname $file)/libreoffice-$(basename $file)"
+    done
+
+    ln -s $out/lib/libreoffice/share/xdg $out/share/applications
+
+    # Unversionize desktop files
+    . ./bin/get_config_variables PRODUCTVERSION
+    for file in $out/lib/libreoffice/share/xdg/*.desktop; do
+      substituteInPlace $file \
+        --replace-fail "LibreOffice $PRODUCTVERSION" "LibreOffice" \
+        --replace-warn "Icon=libreoffice$PRODUCTVERSION" "Icon=libreoffice" \
+        --replace-fail "Exec=libreoffice$PRODUCTVERSION" "Exec=libreoffice"
+    done
+  '';
+
+  # Wrapping is done in ./wrapper.nix
+  dontWrapQtApps = true;
+
+  __structuredAttrs = true;
+
+  strictDeps = true;
 
   passthru = {
-    inherit srcs jdk;
+    inherit srcs;
+    inherit withJava;
+    jdk = if withJava then jre' else null;
+    python = python3; # for unoconv
+    updateScript = [
+      ./update.sh
+      # Pass it this file name as argument
+      (builtins.unsafeGetAttrPos "pname" finalAttrs.finalPackage).file
+      # And the variant
+      variant
+    ];
+    inherit kdeIntegration;
+    # For the wrapper.nix
+    inherit gtk3;
+    # Although present in qtPackages, we need qtbase.qtPluginPrefix and
+    # qtbase.qtQmlPrefix
+    inherit (qt6) qtbase;
+    gst_packages = with gst_all_1; [
+      gst-libav
+      gst-plugins-bad
+      gst-plugins-base
+      gst-plugins-good
+      gst-plugins-ugly
+      gstreamer.out
+    ];
+    qmlPackages = [
+      kdePackages.ki18n
+      kdePackages.knotifications
+      qt6.qtdeclarative
+      qt6.qtmultimedia
+      qt6.qtwayland
+      kdePackages.solid
+      kdePackages.sonnet
+    ];
+    qtPackages = [
+      kdePackages.kauth
+      kdePackages.kcompletion
+      kdePackages.kconfigwidgets
+      kdePackages.kglobalaccel
+      kdePackages.ki18n
+      kdePackages.kio
+      kdePackages.kitemviews
+      kdePackages.ktextwidgets
+      kdePackages.kwidgetsaddons
+      kdePackages.kwindowsystem
+      kdePackages.kxmlgui
+      kdePackages.phonon
+      qt6.qtbase
+      qt6.qtdeclarative
+      qt6.qtmultimedia
+      qt6.qtsvg
+      qt6.qttools
+      qt6.qtwayland
+      kdePackages.sonnet
+    ];
   };
+
+  # libreoffice tries to reference the BUILDCONFIG (e.g. PKG_CONFIG_PATH)
+  # in the binary causing the closure size to blow up because of many unnecessary
+  # dependencies to dev outputs. This behavior was patched away in nixpkgs
+  # (see above), make sure these don't leak again by accident.
+  # FIXME: disabled for kdeIntegration builds because the weird symlinkJoin setup
+  # leaks all the -dev dependencies :(
+  disallowedRequisites = lib.optionals (!kdeIntegration) (
+    lib.concatMap (x: lib.optional (x ? dev) x.dev) finalAttrs.buildInputs
+  );
 
   requiredSystemFeatures = [ "big-parallel" ];
 
-  meta = with lib; {
+  meta = {
+    changelog = "https://wiki.documentfoundation.org/ReleaseNotes/${lib.versions.majorMinor version}";
     description = "Comprehensive, professional-quality productivity suite, a variant of openoffice.org";
-    homepage = https://libreoffice.org/;
-    license = licenses.lgpl3;
-    maintainers = with maintainers; [ viric raskin ];
-    platforms = platforms.linux;
+    homepage = "https://libreoffice.org/";
+    # at least one jar in dependencies
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
+    license = with lib.licenses; [
+      mpl20
+      lgpl3Plus
+      asl20
+    ];
+    maintainers = with lib.maintainers; [ raskin ];
+    platforms = lib.platforms.linux;
+    mainProgram = "libreoffice";
   };
-}
+})

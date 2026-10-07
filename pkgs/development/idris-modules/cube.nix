@@ -1,16 +1,11 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, base
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  lib,
 }:
-
-build-idris-package  {
-  name = "cube";
+build-idris-package {
+  pname = "cube";
   version = "2017-07-05";
-
-  idrisDeps = [ prelude base ];
 
   src = fetchFromGitHub {
     owner = "aatxe";
@@ -20,10 +15,9 @@ build-idris-package  {
   };
 
   meta = {
-    description = "An implementation of the Lambda Cube in Idris";
-    homepage = https://github.com/aatxe/cube.idr;
-    license = lib.licenses.agpl3;
+    description = "Implementation of the Lambda Cube in Idris";
+    homepage = "https://github.com/aatxe/cube.idr";
+    license = lib.licenses.agpl3Only;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

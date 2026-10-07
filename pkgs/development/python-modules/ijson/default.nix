@@ -1,21 +1,38 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  cffi,
+  fetchPypi,
+  pytestCheckHook,
+  setuptools,
+  yajl,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "ijson";
-  version = "2.3";
+  version = "3.5.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0x7l9k2dvxzd5mjgiq15nl9b0sxcqy1cqaz744bjwkz4z5mrypzg";
+    hash = "sha256-r0C9GoX1XbC4swcVyFh2Ewa9ktVZAUhjb3XDMJ5udr0=";
   };
 
-  doCheck = false; # something about yajl
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [ yajl ];
+
+  dependencies = [ cffi ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "ijson" ];
+
+  meta = {
     description = "Iterative JSON parser with a standard Python iterator interface";
-    homepage = "https://github.com/isagalaev/ijson";
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ rvl ];
+    homepage = "https://github.com/ICRAR/ijson";
+    changelog = "https://github.com/ICRAR/ijson/blob/v${version}/CHANGELOG.md";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

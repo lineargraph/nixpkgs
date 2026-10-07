@@ -1,27 +1,77 @@
-{ lib, stdenv, fetchurl, pkgconfig
-, wayland
+{
+  lib,
+  stdenv,
+  fetchurl,
+  pkg-config,
+  meson,
+  ninja,
+  wayland-scanner,
+  python3,
+  wayland,
+  gitUpdater,
+  testers,
 }:
 
-stdenv.mkDerivation rec {
-  name = "wayland-protocols-${version}";
-  version = "1.14";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "wayland-protocols";
+  version = "1.49";
+
+  doCheck =
+    stdenv.hostPlatform == stdenv.buildPlatform
+    &&
+      # https://gitlab.freedesktop.org/wayland/wayland-protocols/-/issues/48
+      stdenv.hostPlatform.linker == "bfd"
+    &&
+      # Even with bfd linker, the above issue occurs on platforms with stricter linker requirements
+      # https://gitlab.freedesktop.org/wayland/wayland-protocols/-/issues/48#note_1453201
+      !(stdenv.hostPlatform.isPower64 && stdenv.hostPlatform.isBigEndian)
+    && lib.meta.availableOn stdenv.hostPlatform wayland;
 
   src = fetchurl {
-    url = "http://wayland.freedesktop.org/releases/${name}.tar.xz";
-    sha256 = "1xknjcfhqvdi1s4iq4kk1q61fg2rar3g8q4vlqarpd324imqjj4n";
+    url = "https://gitlab.freedesktop.org/wayland/${finalAttrs.pname}/-/releases/${finalAttrs.version}/downloads/${finalAttrs.pname}-${finalAttrs.version}.tar.xz";
+    hash = "sha256-7EyPdJQtbf96zotM5HZPDvn/YYqTXZdOp37e4q0kCxQ=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  postPatch = lib.optionalString finalAttrs.finalPackage.doCheck ''
+    patchShebangs tests/
+  '';
 
-  buildInputs = [ wayland ];
+  depsBuildBuild = [ pkg-config ];
+  nativeBuildInputs = [
+    meson
+    ninja
+    wayland-scanner
+  ];
+  nativeCheckInputs = [
+    python3
+    wayland
+  ];
+  checkInputs = [ wayland ];
+  strictDeps = true;
+
+  mesonFlags = [ "-Dtests=${lib.boolToString finalAttrs.finalPackage.doCheck}" ];
 
   meta = {
     description = "Wayland protocol extensions";
-    homepage    = http://wayland.freedesktop.org/;
-    license     = lib.licenses.mit;
-    platforms   = lib.platforms.linux;
-    maintainers = with lib.maintainers; [ ];
+    longDescription = ''
+      wayland-protocols contains Wayland protocols that add functionality not
+      available in the Wayland core protocol. Such protocols either add
+      completely new functionality, or extend the functionality of some other
+      protocol either in Wayland core, or some other protocol in
+      wayland-protocols.
+    '';
+    homepage = "https://gitlab.freedesktop.org/wayland/wayland-protocols";
+    license = lib.licenses.mit; # Expat version
+    platforms = lib.platforms.all;
+    maintainers = with lib.maintainers; [ wineee ];
+    pkgConfigModules = [ "wayland-protocols" ];
   };
 
-  passthru.version = version;
-}
+  passthru.updateScript = gitUpdater {
+    url = "https://gitlab.freedesktop.org/wayland/wayland-protocols.git";
+  };
+  passthru.version = finalAttrs.version;
+  passthru.tests.pkg-config = testers.hasPkgConfigModules {
+    package = finalAttrs.finalPackage;
+  };
+})

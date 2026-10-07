@@ -1,23 +1,88 @@
-{ stdenv, buildPythonPackage, fetchPypi, lib
-, six, protobuf, enum34, futures, isPy26, isPy27, isPy34 }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  c-ares,
+  cython,
+  fetchPypi,
+  openssl,
+  pkg-config,
+  protobuf,
+  typing-extensions,
+  setuptools,
+  zlib,
+}:
 
+# This package should be updated together with the main grpc package and other
+# related python grpc packages.
+# nixpkgs-update: no auto update
 buildPythonPackage rec {
   pname = "grpcio";
-  version = "1.12.0";
+  version = "1.83.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0dsw58aimr8yyb6cgdvs7b7jc0rz2k9vhrsfglg2h7bmh83izzg1";
+    hash = "sha256-nO5vy/LrV8S0lFF4e/qHvo78HKAqCzJ91LVNRFAuNis=";
   };
 
-  propagatedBuildInputs = [ six protobuf ]
-                        ++ lib.optionals (isPy26 || isPy27 || isPy34) [ enum34 ]
-                        ++ lib.optionals (isPy26 || isPy27) [ futures ];
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace-fail cython==3.1.1 cython
+  '';
 
-  meta = with stdenv.lib; {
+  outputs = [
+    "out"
+    "dev"
+  ];
+
+  build-system = [ setuptools ];
+
+  nativeBuildInputs = [
+    cython
+    pkg-config
+  ];
+
+  buildInputs = [
+    c-ares
+    openssl
+    zlib
+  ];
+
+  dependencies = [
+    protobuf
+    typing-extensions
+  ];
+
+  preBuild = ''
+    export GRPC_PYTHON_BUILD_EXT_COMPILER_JOBS="$NIX_BUILD_CORES"
+    if [ -z "$enableParallelBuilding" ]; then
+      GRPC_PYTHON_BUILD_EXT_COMPILER_JOBS=1
+    fi
+  ''
+  + lib.optionalString stdenv.hostPlatform.isDarwin ''
+    unset AR
+  '';
+
+  env = {
+    GRPC_BUILD_WITH_BORING_SSL_ASM = "";
+    GRPC_PYTHON_BUILD_SYSTEM_OPENSSL = 1;
+    GRPC_PYTHON_BUILD_SYSTEM_ZLIB = 1;
+    GRPC_PYTHON_BUILD_SYSTEM_CARES = 1;
+  };
+
+  # does not contain any tests
+  doCheck = false;
+
+  enableParallelBuilding = true;
+
+  pythonImportsCheck = [ "grpc" ];
+
+  meta = {
     description = "HTTP/2-based RPC framework";
-    license = lib.licenses.bsd3;
     homepage = "https://grpc.io/grpc/python/";
-    maintainers = with maintainers; [ vanschelven ];
+    changelog = "https://github.com/grpc/grpc/releases/tag/v${version}";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
   };
 }

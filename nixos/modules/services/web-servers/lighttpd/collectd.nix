@@ -1,18 +1,25 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  options,
+  pkgs,
+  ...
+}:
 
 with lib;
 
 let
   cfg = config.services.lighttpd.collectd;
+  opt = options.services.lighttpd.collectd;
 
   collectionConf = pkgs.writeText "collection.conf" ''
     datadir: "${config.services.collectd.dataDir}"
     libdir: "${config.services.collectd.package}/lib/collectd"
   '';
 
-  defaultCollectionCgi = config.services.collectd.package.overrideDerivation(old: {
+  defaultCollectionCgi = config.services.collectd.package.overrideDerivation (old: {
     name = "collection.cgi";
-    configurePhase = "true";
+    dontConfigure = true;
     buildPhase = "true";
     installPhase = ''
       substituteInPlace contrib/collection.cgi --replace '"/etc/collection.conf"' '$ENV{COLLECTION_CONF}'
@@ -29,6 +36,9 @@ in
     collectionCgi = mkOption {
       type = types.path;
       default = defaultCollectionCgi;
+      defaultText = literalMD ''
+        `config.${options.services.collectd.package}` configured for lighttpd
+      '';
       description = ''
         Path to collection.cgi script from (collectd sources)/contrib/collection.cgi
         This option allows to use a customized version
@@ -37,7 +47,11 @@ in
   };
 
   config = mkIf cfg.enable {
-    services.lighttpd.enableModules = [ "mod_cgi" "mod_alias" "mod_setenv" ];
+    services.lighttpd.enableModules = [
+      "mod_cgi"
+      "mod_alias"
+      "mod_setenv"
+    ];
 
     services.lighttpd.extraConfig = ''
       $HTTP["url"] =~ "^/collectd" {
@@ -48,7 +62,15 @@ in
           "/collectd" => "${cfg.collectionCgi}"
         )
         setenv.add-environment = (
-          "PERL5LIB" => "${with pkgs; lib.makePerlPath [ perlPackages.CGI perlPackages.HTMLParser perlPackages.URI rrdtool ]}",
+          "PERL5LIB" => "${
+            with pkgs.perlPackages;
+            makePerlPath [
+              CGI
+              HTMLParser
+              URI
+              pkgs.rrdtool
+            ]
+          }",
           "COLLECTION_CONF" => "${collectionConf}"
         )
       }

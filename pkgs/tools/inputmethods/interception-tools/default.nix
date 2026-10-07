@@ -1,33 +1,54 @@
-{ stdenv, fetchurl, fetchFromGitHub, pkgconfig, cmake, libyamlcpp,
-  libevdev, libudev }:
+{
+  lib,
+  stdenv,
+  fetchFromGitLab,
+  fetchpatch,
+  pkg-config,
+  cmake,
+  yaml-cpp,
+  libevdev,
+  udev,
+  boost,
+}:
 
-let
-  version = "0.1.1";
-  baseName = "interception-tools";
-in stdenv.mkDerivation {
-  name = "${baseName}-${version}";
-
-  src = fetchurl {
-    url = "https://gitlab.com/interception/linux/tools/repository/v${version}/archive.tar.gz";
-    sha256 = "14g4pphvylqdb922va322z1pbp12ap753hcf7zf9sii1ikvif83j";
+stdenv.mkDerivation rec {
+  pname = "interception-tools";
+  version = "0.6.8";
+  src = fetchFromGitLab {
+    owner = "interception/linux";
+    repo = "tools";
+    rev = "v${version}";
+    hash = "sha256-jhdgfCWbkF+jD/iXsJ+fYKOtPymxcC46Q4w0aqpvcek=";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig ];
-  buildInputs = [ libevdev libudev libyamlcpp ];
+  patches = [
+    # Fix PATH forwarding to child processes.
+    # See #126681 issue for more information
+    ./interception-tools-udevmon-path-fix.patch
+    (fetchpatch {
+      name = "Bump-CMake-minimum-version-to-3.10";
+      url = "https://gitlab.com/interception/linux/tools/-/commit/110c9b39b54eae9acd16fa6d64539ce9886b5684.patch";
+      hash = "sha256-vLm7LvXh/pGA12gUpt9vt2XTWFqkdjQFOyRzaDRghHI=";
+    })
+  ];
 
-  prePatch = ''
-    substituteInPlace CMakeLists.txt --replace \
-      '"/usr/include/libevdev-1.0"' \
-      "\"$(pkg-config --cflags libevdev | cut -c 3-)\""
-  '';
-
-  patches = [ ./fix-udevmon-configuration-job-path.patch ];
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+  ];
+  buildInputs = [
+    libevdev
+    udev
+    yaml-cpp
+    boost
+  ];
 
   meta = {
-    description = "A minimal composable infrastructure on top of libudev and libevdev";
+    description = "Minimal composable infrastructure on top of libudev and libevdev";
     homepage = "https://gitlab.com/interception/linux/tools";
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = [ stdenv.lib.maintainers.vyp ];
-    platforms = stdenv.lib.platforms.linux;
+    changelog = "https://gitlab.com/interception/linux/tools/-/tags/v${version}";
+    license = lib.licenses.gpl3Only;
+    maintainers = [ ];
+    platforms = lib.platforms.linux;
   };
 }

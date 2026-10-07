@@ -1,16 +1,19 @@
 {
-  mkDerivation, lib,
+  mkDerivation,
+  cmake,
   extra-cmake-modules,
-  qtbase
+  qtbase,
 }:
 
 mkDerivation {
-  name = "threadweaver";
-  meta = {
-    maintainers = [ lib.maintainers.ttuegel ];
-    broken = builtins.compareVersions qtbase.version "5.7.0" < 0;
-  };
-  nativeBuildInputs = [ extra-cmake-modules ];
+  pname = "threadweaver";
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
+  ];
   propagatedBuildInputs = [ qtbase ];
-  outputs = [ "out" "dev" ];
+  outputs = [
+    "out"
+    "dev"
+  ];
 }

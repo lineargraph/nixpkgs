@@ -1,15 +1,11 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, base
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  lib,
 }:
-build-idris-package  {
-  name = "hezarfen";
+build-idris-package {
+  pname = "hezarfen";
   version = "2018-02-03";
-
-  idrisDeps = [ prelude base ];
 
   src = fetchFromGitHub {
     owner = "joom";
@@ -19,10 +15,9 @@ build-idris-package  {
   };
 
   meta = {
-    description = "a theorem prover for intuitionistic propositional logic in Idris, with metaprogramming features";
-    homepage = https://github.com/joom/hezarfen;
+    description = "Theorem prover for intuitionistic propositional logic in Idris, with metaprogramming features";
+    homepage = "https://github.com/joom/hezarfen";
     license = lib.licenses.mit;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

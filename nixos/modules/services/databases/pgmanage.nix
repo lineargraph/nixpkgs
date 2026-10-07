@@ -1,13 +1,15 @@
-{ lib, pkgs, config, ... } :
-
-with lib;
-
+{
+  lib,
+  pkgs,
+  config,
+  ...
+}:
 let
   cfg = config.services.pgmanage;
 
   confFile = pkgs.writeTextFile {
     name = "pgmanage.conf";
-    text =  ''
+    text = ''
       connection_file = ${pgmanageConnectionsFile}
 
       allow_custom_connections = ${builtins.toJSON cfg.allowCustomConnections}
@@ -16,7 +18,7 @@ let
 
       super_only = ${builtins.toJSON cfg.superOnly}
 
-      ${optionalString (!isNull cfg.loginGroup) "login_group = ${cfg.loginGroup}"}
+      ${lib.optionalString (cfg.loginGroup != null) "login_group = ${cfg.loginGroup}"}
 
       login_timeout = ${toString cfg.loginTimeout}
 
@@ -24,9 +26,9 @@ let
 
       sql_root = ${cfg.sqlRoot}
 
-      ${optionalString (!isNull cfg.tls) ''
-      tls_cert = ${cfg.tls.cert}
-      tls_key = ${cfg.tls.key}
+      ${lib.optionalString (cfg.tls != null) ''
+        tls_cert = ${cfg.tls.cert}
+        tls_key = ${cfg.tls.key}
       ''}
 
       log_level = ${cfg.logLevel}
@@ -35,37 +37,34 @@ let
 
   pgmanageConnectionsFile = pkgs.writeTextFile {
     name = "pgmanage-connections.conf";
-    text = concatStringsSep "\n"
-      (mapAttrsToList (name : conn : "${name}: ${conn}") cfg.connections);
+    text = lib.concatStringsSep "\n" (
+      lib.mapAttrsToList (name: conn: "${name}: ${conn}") cfg.connections
+    );
   };
 
   pgmanage = "pgmanage";
 
-  pgmanageOptions = {
-    enable = mkEnableOption "PostgreSQL Administration for the web";
+in
+{
 
-    package = mkOption {
-      type = types.package;
-      default = pkgs.pgmanage;
-      defaultText = "pkgs.pgmanage";
-      description = ''
-        The pgmanage package to use.
-      '';
-    };
+  options.services.pgmanage = {
+    enable = lib.mkEnableOption "PostgreSQL Administration for the web";
 
-    connections = mkOption {
-      type = types.attrsOf types.str;
-      default = {};
+    package = lib.mkPackageOption pkgs "pgmanage" { };
+
+    connections = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
       example = {
-        "nuc-server"  = "hostaddr=192.168.0.100 port=5432 dbname=postgres";
-        "mini-server" = "hostaddr=127.0.0.1 port=5432 dbname=postgres sslmode=require";
+        nuc-server = "hostaddr=192.168.0.100 port=5432 dbname=postgres";
+        mini-server = "hostaddr=127.0.0.1 port=5432 dbname=postgres sslmode=require";
       };
       description = ''
         pgmanage requires at least one PostgreSQL server be defined.
-        </para><para>
+
         Detailed information about PostgreSQL connection strings is available at:
-        <link xlink:href="http://www.postgresql.org/docs/current/static/libpq-connect.html"/>
-        </para><para>
+        <https://www.postgresql.org/docs/current/libpq-connect.html>
+
         Note that you should not specify your user name or password. That
         information will be entered on the login screen. If you specify a
         username or password, it will be removed by pgmanage before attempting to
@@ -73,8 +72,8 @@ let
       '';
     };
 
-    allowCustomConnections = mkOption {
-      type = types.bool;
+    allowCustomConnections = lib.mkOption {
+      type = lib.types.bool;
       default = false;
       description = ''
         This tells pgmanage whether or not to allow anyone to use a custom
@@ -82,16 +81,16 @@ let
       '';
     };
 
-    port = mkOption {
-      type = types.int;
+    port = lib.mkOption {
+      type = lib.types.port;
       default = 8080;
       description = ''
         This tells pgmanage what port to listen on for browser requests.
       '';
     };
 
-    localOnly = mkOption {
-      type = types.bool;
+    localOnly = lib.mkOption {
+      type = lib.types.bool;
       default = true;
       description = ''
         This tells pgmanage whether or not to set the listening socket to local
@@ -99,8 +98,8 @@ let
       '';
     };
 
-    superOnly = mkOption {
-      type = types.bool;
+    superOnly = lib.mkOption {
+      type = lib.types.bool;
       default = true;
       description = ''
         This tells pgmanage whether or not to only allow super users to
@@ -111,8 +110,8 @@ let
       '';
     };
 
-    loginGroup = mkOption {
-      type = types.nullOr types.str;
+    loginGroup = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
       default = null;
       description = ''
         This tells pgmanage to only allow users in a certain PostgreSQL group to
@@ -121,8 +120,8 @@ let
       '';
     };
 
-    loginTimeout = mkOption {
-      type = types.int;
+    loginTimeout = lib.mkOption {
+      type = lib.types.int;
       default = 3600;
       description = ''
         Number of seconds of inactivity before user is automatically logged
@@ -130,8 +129,8 @@ let
       '';
     };
 
-    sqlRoot = mkOption {
-      type = types.str;
+    sqlRoot = lib.mkOption {
+      type = lib.types.str;
       default = "/var/lib/pgmanage";
       description = ''
         This tells pgmanage where to put the SQL file history. All tabs are saved
@@ -140,19 +139,21 @@ let
       '';
     };
 
-    tls = mkOption {
-      type = types.nullOr (types.submodule {
-        options = {
-          cert = mkOption {
-            type = types.str;
-            description = "TLS certificate";
+    tls = lib.mkOption {
+      type = lib.types.nullOr (
+        lib.types.submodule {
+          options = {
+            cert = lib.mkOption {
+              type = lib.types.str;
+              description = "TLS certificate";
+            };
+            key = lib.mkOption {
+              type = lib.types.str;
+              description = "TLS key";
+            };
           };
-          key = mkOption {
-            type = types.str;
-            description = "TLS key";
-          };
-        };
-      });
+        }
+      );
       default = null;
       description = ''
         These options tell pgmanage where the TLS Certificate and Key files
@@ -163,12 +164,17 @@ let
         configuration. This allows your web server to terminate the secure
         connection and pass on the request to pgmanage. You can find help to set
         up this configuration in:
-        <link xlink:href="https://github.com/pgManage/pgManage/blob/master/INSTALL_NGINX.md"/>
+        <https://github.com/pgManage/pgManage/blob/master/INSTALL_NGINX.md>
       '';
     };
 
-    logLevel = mkOption {
-      type = types.enum ["error" "warn" "notice" "info"];
+    logLevel = lib.mkOption {
+      type = lib.types.enum [
+        "error"
+        "warn"
+        "notice"
+        "info"
+      ];
       default = "error";
       description = ''
         Verbosity of logs
@@ -176,47 +182,31 @@ let
     };
   };
 
-
-in {
-
-  options.services.pgmanage = pgmanageOptions;
-
-  # This is deprecated and should be removed for NixOS-18.03.
-  options.services.postage = pgmanageOptions;
-
-  config = mkMerge [
-    { assertions = [
-        { assertion = !config.services.postage.enable;
-          message =
-            "services.postage is deprecated in favour of pgmanage. " +
-            "They have the same options so just substitute postage for pgmanage." ;
-        }
-      ];
-    }
-    (mkIf cfg.enable {
-      systemd.services.pgmanage = {
-        description = "pgmanage - PostgreSQL Administration for the web";
-        wants    = [ "postgresql.service" ];
-        after    = [ "postgresql.service" ];
-        wantedBy = [ "multi-user.target" ];
-        serviceConfig = {
-          User         = pgmanage;
-          Group        = pgmanage;
-          ExecStart    = "${pkgs.pgmanage}/sbin/pgmanage -c ${confFile}" +
-                         optionalString cfg.localOnly " --local-only=true";
-        };
+  config = lib.mkIf cfg.enable {
+    systemd.services.pgmanage = {
+      description = "pgmanage - PostgreSQL Administration for the web";
+      wants = [ "postgresql.target" ];
+      after = [ "postgresql.target" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        User = pgmanage;
+        Group = pgmanage;
+        ExecStart =
+          "${cfg.package}/sbin/pgmanage -c ${confFile}"
+          + lib.optionalString cfg.localOnly " --local-only=true";
       };
-      users = {
-        users."${pgmanage}" = {
-          name  = pgmanage;
-          group = pgmanage;
-          home  = cfg.sqlRoot;
-          createHome = true;
-        };
-        groups."${pgmanage}" = {
-          name = pgmanage;
-        };
+    };
+    users = {
+      users.${pgmanage} = {
+        name = pgmanage;
+        group = pgmanage;
+        home = cfg.sqlRoot;
+        createHome = true;
+        isSystemUser = true;
       };
-    })
-  ];
+      groups.${pgmanage} = {
+        name = pgmanage;
+      };
+    };
+  };
 }

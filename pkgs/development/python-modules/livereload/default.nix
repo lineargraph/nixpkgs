@@ -1,35 +1,41 @@
-{ lib
-, buildPythonPackage
-, fetchFromGitHub
-, nose
-, django
-, tornado
-, six
-, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  django,
+  pytestCheckHook,
+  tornado,
+  six,
 }:
 
 buildPythonPackage rec {
   pname = "livereload";
-  version = "2.5.1";
-  name = "${pname}-${version}";
+  version = "2.7.1";
+  format = "setuptools";
 
   src = fetchFromGitHub {
     owner = "lepture";
     repo = "python-livereload";
-    rev = "v${version}";
-    sha256 = "1irs59wqmffp8q4l9fh7givs05mamlgm5n7ga49gwxp5imwrdzba";
+    tag = "v${version}";
+    sha256 = "sha256-WFpPCUjvyGT826EkIuqAB4jcJOEqoohJY9Xw/EJrk6c=";
   };
 
-  buildInputs = [ nose django ];
+  buildInputs = [ django ];
 
-  propagatedBuildInputs = [ tornado six ];
+  propagatedBuildInputs = [
+    tornado
+    six
+  ];
 
-  checkInputs = [ pytest ];
-  checkPhase = "pytest tests";
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTests = [ "test_watch_multiple_dirs" ];
 
   meta = {
     description = "Runs a local server that reloads as you develop";
+    mainProgram = "livereload";
     homepage = "https://github.com/lepture/python-livereload";
     license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

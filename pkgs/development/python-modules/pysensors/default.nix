@@ -1,6 +1,13 @@
-{ stdenv, buildPythonPackage, python, fetchFromGitHub, lm_sensors }:
-buildPythonPackage rec {
+{
+  lib,
+  buildPythonPackage,
+  unittestCheckHook,
+  fetchFromGitHub,
+  lm_sensors,
+}:
+buildPythonPackage {
   version = "2017-07-13";
+  format = "setuptools";
   pname = "pysensors";
 
   # note that https://pypi.org/project/PySensors/ is a different project
@@ -17,16 +24,18 @@ buildPythonPackage rec {
   # due to sandboxing
   doCheck = false;
 
-  checkPhase = ''
-    cd tests
-    ${python.interpreter} -m unittest discover
-  '';
+  nativeCheckInputs = [ unittestCheckHook ];
 
-  meta = with stdenv.lib; {
-    maintainers = with maintainers; [ guibou ];
+  unittestFlagsArray = [
+    "-s"
+    "tests"
+  ];
+
+  meta = {
+    maintainers = with lib.maintainers; [ guibou ];
     description = "Easy hardware health monitoring in Python for Linux systems";
-    homepage = http://pysensors.readthedocs.org;
-    license = licenses.bsd2;
-    platforms = platforms.linux;
+    homepage = "https://bastienleonard.github.io/pysensors/";
+    license = lib.licenses.bsd2;
+    platforms = lib.platforms.linux;
   };
 }

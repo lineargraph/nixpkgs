@@ -1,27 +1,38 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytest, mock, six, twisted }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  hatchling,
+  pytestCheckHook,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "txaio";
-  version = "2.9.0";
+  version = "25.12.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "dfc3a7d04b4b484ae5ff241affab5bb01306b1e950dd6f54fd036cfca94345d0";
+  src = fetchFromGitHub {
+    owner = "crossbario";
+    repo = "txaio";
+    tag = "v${lib.replaceString "." "_" finalAttrs.version}";
+    hash = "sha256-/vlkjSOlQYbRpjMySBzoSBSXm0yxWSHmzIF3ZfFIR64=";
   };
 
-  checkInputs = [ pytest mock ];
+  build-system = [
+    hatchling
+  ];
 
-  propagatedBuildInputs = [ six twisted ];
+  nativeCheckInputs = [
+    pytestCheckHook
+  ];
 
-  checkPhase = ''
-    py.test -k "not test_sdist"
-  '';
+  pythonImportsCheck = [ "txaio" ];
 
-  meta = with stdenv.lib; {
-    description = "Utilities to support code that runs unmodified on Twisted and asyncio.";
-    homepage    = "https://github.com/crossbario/txaio";
-    license     = licenses.mit;
-    maintainers = with maintainers; [ nand0p ];
-    platforms   = platforms.all;
+  meta = {
+    description = "Utilities to support code that runs unmodified on Twisted and asyncio";
+    homepage = "https://github.com/crossbario/txaio";
+    changelog = "https://github.com/crossbario/txaio/blob/${finalAttrs.src.tag}/docs/releases.rst";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
-}
+})

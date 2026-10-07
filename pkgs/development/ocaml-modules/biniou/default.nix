@@ -1,30 +1,30 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, jbuilder, easy-format }:
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+  camlp-streams,
+  easy-format,
+}:
 
-stdenv.mkDerivation rec {
-  version = "1.2.0";
-  name = "ocaml${ocaml.version}-biniou-${version}";
-  src = fetchFromGitHub {
-    owner = "mjambon";
-    repo = "biniou";
-    rev = "v${version}";
-    sha256 = "0mjpgwyfq2b2izjw0flmlpvdjgqpq8shs89hxj1np2r50csr8dcb";
+buildDunePackage (finalAttrs: {
+  pname = "biniou";
+  version = "1.2.2";
+
+  src = fetchurl {
+    url = "https://github.com/ocaml-community/biniou/releases/download/${finalAttrs.version}/biniou-${finalAttrs.version}.tbz";
+    hash = "sha256-i/P/F80Oyy1rbR2UywjvCJ1Eyu+W6brmvmg51Cj6MY8=";
   };
 
-  buildInputs = [ ocaml findlib jbuilder ];
-
-  propagatedBuildInputs = [ easy-format ];
-
-  postPatch = ''
-   patchShebangs .
-  '';
-
-  inherit (jbuilder) installPhase;
+  propagatedBuildInputs = [
+    camlp-streams
+    easy-format
+  ];
 
   meta = {
-    inherit (src.meta) homepage;
-    inherit (ocaml.meta) platforms;
     description = "Binary data format designed for speed, safety, ease of use and backward compatibility as protocols evolve";
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
-    license = stdenv.lib.licenses.bsd3;
+    homepage = "https://github.com/ocaml-community/biniou";
+    license = lib.licenses.bsd3;
+    maintainers = [ lib.maintainers.vbgl ];
+    mainProgram = "bdump";
   };
-}
+})

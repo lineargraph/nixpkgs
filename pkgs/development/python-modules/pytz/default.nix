@@ -1,22 +1,47 @@
-{ lib, buildPythonPackage, fetchPypi, python }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  tzdata,
+  unittestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pytz";
-  version = "2018.3";
+  version = "2026.2";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "410bcd1d6409026fbaa65d9ed33bf6dd8b1e94a499e32168acfc7b332e4095c0";
+    hash = "sha256-DmC0eynyFXQ3byGP4hq8AJiUojIeoWxnVPPK1ut83Wo=";
   };
 
-  checkPhase = ''
-    ${python.interpreter} -m unittest discover -s pytz/tests
+  postPatch = ''
+    # Use our system-wide zoneinfo dir instead of the bundled one
+    rm -rf pytz/zoneinfo
+    ln -snvf ${tzdata}/share/zoneinfo pytz/zoneinfo
   '';
 
-  meta = with lib; {
+  build-system = [ setuptools ];
+
+  nativeCheckInputs = [ unittestCheckHook ];
+
+  unittestFlagsArray = [
+    "-s"
+    "pytz/tests"
+  ];
+
+  pythonImportsCheck = [ "pytz" ];
+
+  meta = {
+    changelog = "https://launchpad.net/pytz/+announcements";
     description = "World timezone definitions, modern and historical";
-    homepage = "http://pythonhosted.org/pytz";
-    license = licenses.mit;
-    maintainers = with maintainers; [ dotlambda ];
+    homepage = "https://pythonhosted.org/pytz";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [
+      dotlambda
+      jherland
+    ];
   };
 }

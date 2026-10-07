@@ -1,34 +1,76 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, six, requests, websocket_client
-, ipaddress, backports_ssl_match_hostname, docker_pycreds
-}:
-buildPythonPackage rec {
-  version = "3.3.0";
-  pname = "docker";
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "dc5cc0971a0d36fe94c5ce89bd4adb6c892713500af7b0818708229c3199911a";
+  # build-system
+  hatchling,
+  hatch-vcs,
+
+  # dependencies
+  packaging,
+  requests,
+  urllib3,
+
+  # optional-dependencies
+  paramiko,
+  websocket-client,
+
+  # tests
+  pytestCheckHook,
+}:
+
+buildPythonPackage rec {
+  pname = "docker";
+  version = "7.2.0";
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "docker";
+    repo = "docker-py";
+    tag = version;
+    hash = "sha256-4LmmWAmwoFroV4Ez0r1X72jCpBt69upQMrsA4eP5K6o=";
   };
 
-  propagatedBuildInputs = [
-    six
-    requests
-    websocket_client
-    ipaddress
-    backports_ssl_match_hostname
-    docker_pycreds
+  build-system = [
+    hatchling
+    hatch-vcs
   ];
 
-  # Flake8 version conflict
-  doCheck = false;
+  dependencies = [
+    packaging
+    requests
+    urllib3
+  ];
 
-  meta = with stdenv.lib; {
-    description = "An API client for docker written in Python";
-    homepage = https://github.com/docker/docker-py;
-    license = licenses.asl20;
-    maintainers = with maintainers; [
-      jgeerds
-    ];
+  optional-dependencies = {
+    ssh = [ paramiko ];
+    tls = [ ];
+    websockets = [ websocket-client ];
+  };
+
+  pythonImportsCheck = [ "docker" ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ]
+  ++ lib.concatAttrValues optional-dependencies;
+
+  enabledTestPaths = [ "tests/unit" ];
+
+  # Deselect socket tests on Darwin because it hits the path length limit for a Unix domain socket
+  disabledTests = lib.optionals stdenv.hostPlatform.isDarwin [
+    "api_test"
+    "stream_response"
+    "socket_file"
+  ];
+
+  meta = {
+    changelog = "https://github.com/docker/docker-py/releases/tag/${version}";
+    description = "API client for docker written in Python";
+    homepage = "https://github.com/docker/docker-py";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
   };
 }

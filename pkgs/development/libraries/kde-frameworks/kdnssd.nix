@@ -1,17 +1,25 @@
 {
-  mkDerivation, lib,
+  mkDerivation,
+  cmake,
   extra-cmake-modules,
-  avahi, qtbase, qttools,
+  avahi,
+  qtbase,
+  qttools,
 }:
 
 mkDerivation {
-  name = "kdnssd";
-  meta = {
-    maintainers = [ lib.maintainers.ttuegel ];
-    broken = builtins.compareVersions qtbase.version "5.7.0" < 0;
-  };
-  nativeBuildInputs = [ extra-cmake-modules ];
-  buildInputs = [ avahi qttools ];
+  pname = "kdnssd";
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
+  ];
+  buildInputs = [
+    avahi
+    qttools
+  ];
   propagatedBuildInputs = [ qtbase ];
-  outputs = [ "out" "dev" ];
+  outputs = [
+    "out"
+    "dev"
+  ];
 }

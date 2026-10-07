@@ -1,8 +1,10 @@
 # SVN server
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.svnserve;
@@ -17,28 +19,29 @@ in
 
     services.svnserve = {
 
-      enable = mkOption {
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = "Whether to enable svnserve to serve Subversion repositories through the SVN protocol.";
       };
 
-      svnBaseDir = mkOption {
+      svnBaseDir = lib.mkOption {
+        type = lib.types.str;
         default = "/repos";
-	description = "Base directory from which Subversion repositories are accessed.";
+        description = "Base directory from which Subversion repositories are accessed.";
       };
     };
 
   };
 
-
   ###### implementation
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     systemd.services.svnserve = {
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
       preStart = "mkdir -p ${cfg.svnBaseDir}";
-      script = "${pkgs.subversion.out}/bin/svnserve -r ${cfg.svnBaseDir} -d --foreground --pid-file=/var/run/svnserve.pid";
+      script = "${pkgs.subversion.out}/bin/svnserve -r ${cfg.svnBaseDir} -d --foreground --pid-file=/run/svnserve.pid";
     };
   };
 }

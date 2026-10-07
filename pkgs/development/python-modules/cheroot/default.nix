@@ -1,30 +1,94 @@
-{ stdenv, fetchPypi, buildPythonPackage
-, more-itertools, six
-, pytest, pytestcov, portend
-, backports_unittest-mock, setuptools_scm }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  jaraco-functools,
+  jaraco-text,
+  more-itertools,
+  portend,
+  pypytools,
+  pytest-mock,
+  pytestCheckHook,
+  requests,
+  requests-toolbelt,
+  requests-unixsocket,
+  setuptools,
+  setuptools-scm,
+  six,
+}:
 
 buildPythonPackage rec {
   pname = "cheroot";
-  version = "6.0.0";
+  version = "11.1.2";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "10s67wxymk4xg45l7ca59n4l6m6rnj8b9l52pg1angxh958lwixs";
+    hash = "sha256-v7cMSWY/Y7BEDytU28aw0WUOVt/k4mQfWbLG9ye0Sso=";
   };
 
-  propagatedBuildInputs = [ more-itertools six ];
+  nativeBuildInputs = [
+    setuptools
+    setuptools-scm
+  ];
 
-  buildInputs = [ setuptools_scm ];
+  dependencies = [
+    jaraco-functools
+    more-itertools
+    six
+  ];
 
-  checkInputs = [ pytest pytestcov portend backports_unittest-mock ];
+  nativeCheckInputs = [
+    jaraco-text
+    portend
+    pypytools
+    pytest-mock
+    pytestCheckHook
+    requests
+    requests-toolbelt
+    requests-unixsocket
+  ];
 
-  checkPhase = ''
-    py.test cheroot
+  # Disable doctest plugin because times out
+  # Disable xdist (-n arg) because it's incompatible with testmon
+  # Deselect test_bind_addr_unix on darwin because times out
+  # Deselect test_http_over_https_error on darwin because builtin cert fails
+  # Disable warnings-as-errors because of deprecation warnings from socks on python 3.7
+  # Disable pytest-testmon because it doesn't work
+  # adds many other pytest utilities which aren't necessary like linting
+  preCheck = ''
+    rm pytest.ini
   '';
 
-  meta = with stdenv.lib; {
+  disabledTests = [
+    "tls" # touches network
+    "peercreds_unix_sock" # test urls no longer allowed
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    "http_over_https_error"
+    "bind_addr_unix"
+    "test_ssl_env"
+  ];
+
+  disabledTestPaths = [
+    # avoid attempting to use 3 packages not available on nixpkgs
+    # (jaraco.apt, jaraco.context, yg.lockfile)
+    "cheroot/test/test_wsgi.py"
+    # requires pyopenssl
+    "cheroot/test/test_ssl.py"
+  ];
+
+  pythonImportsCheck = [ "cheroot" ];
+
+  # Some of the tests use localhost networking.
+  __darwinAllowLocalNetworking = true;
+
+  meta = {
     description = "High-performance, pure-Python HTTP";
-    homepage = https://github.com/cherrypy/cheroot;
-    license = licenses.mit;
+    mainProgram = "cheroot";
+    homepage = "https://github.com/cherrypy/cheroot";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

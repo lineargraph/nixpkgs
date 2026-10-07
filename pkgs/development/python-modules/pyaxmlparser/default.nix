@@ -1,20 +1,42 @@
-{ buildPythonPackage, stdenv, lxml, click, fetchPypi }:
+{
+  buildPythonPackage,
+  lib,
+  lxml,
+  click,
+  fetchFromGitHub,
+  pytestCheckHook,
+  asn1crypto,
+}:
 
 buildPythonPackage rec {
-  version = "0.3.7";
+  version = "0.3.31";
+  format = "setuptools";
   pname = "pyaxmlparser";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1spwr28sc6fc3cqdx2j2zq38qx889hixl4ahhf1nphpmrl39ypxr";
+  src = fetchFromGitHub {
+    owner = "appknox";
+    repo = "pyaxmlparser";
+    rev = "v${version}";
+    hash = "sha256-ZV2PyWQfK9xidzGUz7XPAReaVjlB8tMUKQiXoGcFCGs=";
   };
 
-  propagatedBuildInputs = [ lxml click ];
+  propagatedBuildInputs = [
+    asn1crypto
+    click
+    lxml
+  ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = {
     description = "Python3 Parser for Android XML file and get Application Name without using Androguard";
-    homepage = https://github.com/appknox/pyaxmlparser;
-    license = licenses.mit;
-    maintainers = with maintainers; [ ma27 ];
+    mainProgram = "apkinfo";
+    homepage = "https://github.com/appknox/pyaxmlparser";
+    # Files from Androguard are licensed ASL 2.0
+    license = with lib.licenses; [
+      mit
+      asl20
+    ];
+    maintainers = [ ];
   };
 }

@@ -1,210 +1,110 @@
-{ lib, pkgs }:
-
-lib.makeScope pkgs.newScope (self: with self; {
-  #### NixOS support
-
-  inherit (pkgs.gnome2) libglade libwnck vte gtksourceview;
-  inherit (pkgs.gnome3) dconf;
-  inherit (pkgs.perlPackages) URI;
-
-  gtk = pkgs.gtk2;
-
-  # Samba is a rather heavy dependency
-  gvfs = pkgs.gvfs.override { samba = null; };
-
-  xinitrc = "${xfce4-session}/etc/xdg/xfce4/xinitrc";
-
-  #### CORE
-
-  exo = callPackage ./core/exo.nix { };
-
-  garcon = callPackage ./core/garcon.nix { };
-
-  # When built with GTK+3, it was breaking GTK+3 app layout
-  gtk-xfce-engine = callPackage ./core/gtk-xfce-engine.nix { withGtk3 = false; };
-
-  libxfce4ui = callPackage ./core/libxfce4ui.nix { };
-
-  libxfce4util = callPackage ./core/libxfce4util.nix { };
-
-  libxfcegui4 = callPackage ./core/libxfcegui4.nix { };
-
-  thunar-bare = callPackage ./core/thunar-build.nix { };
-
-  thunar = callPackage ./core/thunar.nix { };
-
-  # NB: thunar already has it
-  thunar-volman = callPackage ./core/thunar-volman.nix { };
-
-  thunar-archive-plugin = callPackage ./thunar-plugins/archive { };
-
-  thunar-dropbox-plugin = callPackage ./thunar-plugins/dropbox { };
-
-  tumbler = callPackage ./core/tumbler.nix { };
-
-  # TODO: impure plugins from /run/current-system/sw/lib/xfce4
-  xfce4-panel = callPackage ./core/xfce4-panel.nix { };
-
-  xfce4-session = callPackage ./core/xfce4-session.nix { };
-
-  xfce4-settings = callPackage ./core/xfce4-settings.nix { };
-
-  xfce4-power-manager = callPackage ./core/xfce4-power-manager.nix { };
-
-  xfconf = callPackage ./core/xfconf.nix { };
-
-  xfdesktop = callPackage ./core/xfdesktop.nix { };
-
-  xfwm4 = callPackage ./core/xfwm4.nix { };
-
-  xfce4-appfinder = callPackage ./core/xfce4-appfinder.nix { };
-
-  xfce4-dev-tools = callPackage ./core/xfce4-dev-tools.nix { };
-
-  #### APPLICATIONS
-
-  gigolo = callPackage ./applications/gigolo.nix { };
-
-  mousepad = callPackage ./applications/mousepad.nix { };
-
-  orage = callPackage ./applications/orage.nix { };
-
-  parole = callPackage ./applications/parole.nix { };
-
-  ristretto = callPackage ./applications/ristretto.nix { };
-
-  xfce4-mixer = callPackage ./applications/xfce4-mixer.nix { };
-
-  xfce4-mixer-pulse = callPackage ./applications/xfce4-mixer.nix { pulseaudioSupport = true; };
-
-  xfce4-notifyd = callPackage ./applications/xfce4-notifyd.nix { };
-
-  xfce4-taskmanager = callPackage ./applications/xfce4-taskmanager.nix { };
-
-  xfce4-terminal = callPackage ./applications/terminal.nix { };
-
-  xfce4-screenshooter = callPackage ./applications/xfce4-screenshooter.nix { };
-
-  xfce4-volumed = callPackage ./applications/xfce4-volumed.nix { };
-
-  xfce4-volumed-pulse = callPackage ./applications/xfce4-volumed-pulse.nix { };
-
-  #### ART
-
-  xfce4-icon-theme = callPackage ./art/xfce4-icon-theme.nix { };
-
-  xfwm4-themes = callPackage ./art/xfwm4-themes.nix { };
-
-  #### PANEL PLUGINS
-
-  xfce4-vala-panel-appmenu-plugin = callPackage ./panel-plugins/xfce4-vala-panel-appmenu-plugin { };
-
-  xfce4-battery-plugin = callPackage ./panel-plugins/xfce4-battery-plugin.nix { };
-
-  xfce4-clipman-plugin = callPackage ./panel-plugins/xfce4-clipman-plugin.nix { };
-
-  xfce4-cpufreq-plugin = callPackage ./panel-plugins/xfce4-cpufreq-plugin.nix { };
-
-  xfce4-cpugraph-plugin = callPackage ./panel-plugins/xfce4-cpugraph-plugin.nix { };
-
-  xfce4-datetime-plugin = callPackage ./panel-plugins/xfce4-datetime-plugin.nix { };
-
-  xfce4-dict-plugin = callPackage ./panel-plugins/xfce4-dict-plugin.nix { };
-
-  xfce4-dockbarx-plugin = callPackage ./panel-plugins/xfce4-dockbarx-plugin.nix { };
-
-  xfce4-embed-plugin = callPackage ./panel-plugins/xfce4-embed-plugin.nix { };
-
-  xfce4-eyes-plugin = callPackage ./panel-plugins/xfce4-eyes-plugin.nix { };
-
-  xfce4-fsguard-plugin = callPackage ./panel-plugins/xfce4-fsguard-plugin.nix { };
-
-  xfce4-genmon-plugin = callPackage ./panel-plugins/xfce4-genmon-plugin.nix { };
-
-  xfce4-hardware-monitor-plugin = callPackage ./panel-plugins/xfce4-hardware-monitor-plugin.nix { };
-
-  xfce4-namebar-plugin = callPackage ./panel-plugins/xfce4-namebar-plugin.nix { };
-
-  xfce4-netload-plugin = callPackage ./panel-plugins/xfce4-netload-plugin.nix { };
-
-  xfce4-notes-plugin = callPackage ./panel-plugins/xfce4-notes-plugin.nix { };
-
-  xfce4-mailwatch-plugin = callPackage ./panel-plugins/xfce4-mailwatch-plugin.nix { };
-
-  xfce4-mpc-plugin = callPackage ./panel-plugins/xfce4-mpc-plugin.nix { };
-
-  xfce4-sensors-plugin = callPackage ./panel-plugins/xfce4-sensors-plugin.nix { };
-
-  xfce4-systemload-plugin = callPackage ./panel-plugins/xfce4-systemload-plugin.nix { };
-
-  xfce4-timer-plugin = callPackage ./panel-plugins/xfce4-timer-plugin.nix { };
-
-  xfce4-verve-plugin = callPackage ./panel-plugins/xfce4-verve-plugin.nix { };
-
-  xfce4-xkb-plugin = callPackage ./panel-plugins/xfce4-xkb-plugin.nix { };
-
-  xfce4-weather-plugin = callPackage ./panel-plugins/xfce4-weather-plugin.nix { };
-
-  xfce4-whiskermenu-plugin = callPackage ./panel-plugins/xfce4-whiskermenu-plugin.nix { };
-
-  xfce4-windowck-plugin = callPackage ./panel-plugins/xfce4-windowck-plugin.nix { };
-
-  xfce4-pulseaudio-plugin = callPackage ./panel-plugins/xfce4-pulseaudio-plugin.nix { };
-
-  #### GTK+3 (deprecated, see NixOS/nixpkgs#32763)
-
-  libxfce4ui_gtk3 = libxfce4ui.override { withGtk3 = true; };
-
-  xfce4panel_gtk3 = xfce4-panel.override { withGtk3 = true; };
-
-  xfce4_power_manager_gtk3 = xfce4-power-manager.override { withGtk3 = true; };
-
-  #### ALIASES - added 2018-01
-
-  terminal = xfce4-terminal;
-  thunar-build = thunar-bare;
-  thunarx-2-dev = thunar-build;
-  thunar_volman = thunar-volman;
-  xfce4panel = xfce4-panel;
-  xfce4session = xfce4-session;
-  xfce4settings = xfce4-settings;
-  xfce4_power_manager = xfce4-power-manager;
-  xfce4_appfinder = xfce4-appfinder;
-  xfce4_dev_tools = xfce4-dev-tools;
-  xfce4mixer = xfce4-mixer;
-  xfce4mixer_pulse = xfce4-mixer-pulse;
-  xfce4notifyd = xfce4-notifyd;
-  xfce4taskmanager = xfce4-taskmanager;
-  xfce4terminal = xfce4-terminal;
-  xfce4volumed = xfce4-volumed;
-  xfce4volumed_pulse = xfce4-volumed-pulse;
-  xfce4icontheme = xfce4-icon-theme;
-  xfwm4themes = xfwm4-themes;
-
-  xfce4_battery_plugin = xfce4-battery-plugin;
-  xfce4_clipman_plugin = xfce4-clipman-plugin;
-  xfce4_cpufreq_plugin = xfce4-cpufreq-plugin;
-  xfce4_cpugraph_plugin = xfce4-cpugraph-plugin;
-  xfce4_datetime_plugin = xfce4-datetime-plugin;
-  xfce4_dict_plugin = xfce4-dict-plugin;
-  xfce4_dockbarx_plugin = xfce4-dockbarx-plugin;
-  xfce4_embed_plugin = xfce4-embed-plugin;
-  xfce4_eyes_plugin = xfce4-eyes-plugin;
-  xfce4_fsguard_plugin = xfce4-fsguard-plugin;
-  xfce4_genmon_plugin = xfce4-genmon-plugin;
-  xfce4_hardware_monitor_plugin = xfce4-hardware-monitor-plugin;
-  xfce4_namebar_plugin = xfce4-namebar-plugin;
-  xfce4_netload_plugin = xfce4-netload-plugin;
-  xfce4_notes_plugin = xfce4-notes-plugin;
-  xfce4_mailwatch_plugin = xfce4-mailwatch-plugin;
-  xfce4_mpc_plugin = xfce4-mpc-plugin;
-  xfce4_sensors_plugin = xfce4-sensors-plugin;
-  xfce4_systemload_plugin = xfce4-systemload-plugin;
-  xfce4_timer_plugin = xfce4-timer-plugin;
-  xfce4_verve_plugin = xfce4-verve-plugin;
-  xfce4_xkb_plugin = xfce4-xkb-plugin;
-  xfce4_weather_plugin = xfce4-weather-plugin;
-  xfce4_whiskermenu_plugin = xfce4-whiskermenu-plugin;
-  xfce4_windowck_plugin = xfce4-windowck-plugin;
-  xfce4_pulseaudio_plugin = xfce4-pulseaudio-plugin;
-})
+{
+  config,
+  lib,
+  linuxPackages,
+  pkgs,
+  generateSplicesForMkScope,
+  makeScopeWithSplicing',
+}:
+
+# New packages should go to top-level instead of here!
+# TODO: Remove this scope entirely in NixOS 26.11.
+makeScopeWithSplicing' {
+  otherSplices = generateSplicesForMkScope "xfce";
+  f = (
+    self:
+    let
+      inherit (self) callPackage;
+    in
+    {
+
+    }
+    // lib.optionalAttrs config.allowAliases {
+      #### ALIASES
+      genericUpdater = throw "‘xfce.genericUpdater’ has been removed: use ‘pkgs.genericUpdater’ directly"; # added 2025-12-22
+      xinitrc = throw "‘xfce.xinitrc’ has been removed: use ‘pkgs.xfce4-session.xinitrc’ directly"; # added 2025-12-28
+      thunar-bare = throw "‘xfce.thunar-bare’ has been removed: use ‘pkgs.thunar-unwrapped’ directly"; # added 2025-12-28
+
+      mkXfceDerivation = lib.warnOnInstantiate ''
+        xfce.mkXfceDerivation has been deprecated, please use stdenv.mkDerivation
+        directly. You can migrate by adding `pkg-config`, `xfce4-dev-tools`, and
+        `wrapGAppsHook3` to your nativeBuildInputs and `--enable-maintainer-mode`
+        to your configureFlags.
+      '' (callPackage ./mkXfceDerivation.nix { }); # added 2025-12-22
+
+      xfce4-datetime-plugin = throw ''
+        xfce4-datetime-plugin has been removed: this plugin has been merged into the xfce4-panel's built-in clock
+        plugin and thus no longer maintained upstream, see https://gitlab.xfce.org/xfce/xfce4-panel/-/issues/563.
+      ''; # Added 2025-05-20
+
+      exo = lib.warnOnInstantiate "‘xfce.exo’ was moved to top-level. Please use ‘pkgs.xfce4-exo’ directly" pkgs.xfce4-exo; # Added on 2025-12-23
+      garcon = lib.warnOnInstantiate "‘xfce.garcon’ was moved to top-level. Please use ‘pkgs.garcon’ directly" pkgs.garcon; # Added on 2025-12-23
+      libxfce4ui = lib.warnOnInstantiate "‘xfce.libxfce4ui’ was moved to top-level. Please use ‘pkgs.libxfce4ui’ directly" pkgs.libxfce4ui; # Added on 2025-12-23
+      libxfce4util = lib.warnOnInstantiate "‘xfce.libxfce4util’ was moved to top-level. Please use ‘pkgs.libxfce4util’ directly" pkgs.libxfce4util; # Added on 2025-12-23
+      libxfce4windowing = lib.warnOnInstantiate "‘xfce.libxfce4windowing’ was moved to top-level. Please use ‘pkgs.libxfce4windowing’ directly" pkgs.libxfce4windowing; # Added on 2025-12-23
+      xfce4-dev-tools = lib.warnOnInstantiate "‘xfce.xfce4-dev-tools’ was moved to top-level. Please use ‘pkgs.xfce4-dev-tools’ directly" pkgs.xfce4-dev-tools; # Added on 2025-12-23
+      xfce4-panel = lib.warnOnInstantiate "‘xfce.xfce4-panel’ was moved to top-level. Please use ‘pkgs.xfce4-panel’ directly" pkgs.xfce4-panel; # Added on 2025-12-23
+      xfconf = lib.warnOnInstantiate "‘xfce.xfconf’ was moved to top-level. Please use ‘pkgs.xfconf’ directly" pkgs.xfconf; # Added on 2025-12-23
+      thunar = lib.warnOnInstantiate "‘xfce.thunar’ was moved to top-level. Please use ‘pkgs.thunar’ directly" pkgs.thunar; # Added on 2025-12-26
+      thunar-unwrapped = lib.warnOnInstantiate "‘xfce.thunar-unwrapped’ was moved to top-level. Please use ‘pkgs.thunar-unwrapped’ directly" pkgs.thunar-unwrapped; # Added on 2025-12-26
+      thunar-volman = lib.warnOnInstantiate "‘xfce.thunar-volman’ was moved to top-level. Please use ‘pkgs.thunar-volman’ directly" pkgs.thunar-volman; # Added on 2025-12-26
+      tumbler = lib.warnOnInstantiate "‘xfce.tumbler’ was moved to top-level. Please use ‘pkgs.tumbler’ directly" pkgs.tumbler; # Added on 2025-12-26
+      xfce4-session = lib.warnOnInstantiate "‘xfce.xfce4-session’ was moved to top-level. Please use ‘pkgs.xfce4-session’ directly" pkgs.xfce4-session; # Added on 2025-12-26
+      xfce4-settings = lib.warnOnInstantiate "‘xfce.xfce4-settings’ was moved to top-level. Please use ‘pkgs.xfce4-settings’ directly" pkgs.xfce4-settings; # Added on 2025-12-26
+      xfce4-power-manager = lib.warnOnInstantiate "‘xfce.xfce4-power-manager’ was moved to top-level. Please use ‘pkgs.xfce4-power-manager’ directly" pkgs.xfce4-power-manager; # Added on 2025-12-26
+      xfdesktop = lib.warnOnInstantiate "‘xfce.xfdesktop’ was moved to top-level. Please use ‘pkgs.xfdesktop’ directly" pkgs.xfdesktop; # Added on 2025-12-26
+      xfwm4 = lib.warnOnInstantiate "‘xfce.xfwm4’ was moved to top-level. Please use ‘pkgs.xfwm4’ directly" pkgs.xfwm4; # Added on 2025-12-26
+      xfce4-appfinder = lib.warnOnInstantiate "‘xfce.xfce4-appfinder’ was moved to top-level. Please use ‘pkgs.xfce4-appfinder’ directly" pkgs.xfce4-appfinder; # Added on 2025-12-26
+      catfish = lib.warnOnInstantiate "‘xfce.catfish’ was moved to top-level. Please use ‘pkgs.catfish’ directly" pkgs.catfish; # Added on 2025-12-26
+      gigolo = lib.warnOnInstantiate "‘xfce.gigolo’ was moved to top-level. Please use ‘pkgs.gigolo’ directly" pkgs.gigolo; # Added on 2025-12-26
+      mousepad = lib.warnOnInstantiate "‘xfce.mousepad’ was moved to top-level. Please use ‘pkgs.mousepad’ directly" pkgs.mousepad; # Added on 2025-12-26
+      orage = lib.warnOnInstantiate "‘xfce.orage’ was moved to top-level. Please use ‘pkgs.orage’ directly" pkgs.orage; # Added on 2025-12-26
+      parole = lib.warnOnInstantiate "‘xfce.parole’ was moved to top-level. Please use ‘pkgs.parole’ directly" pkgs.parole; # Added on 2025-12-26
+      ristretto = lib.warnOnInstantiate "‘xfce.ristretto’ was moved to top-level. Please use ‘pkgs.ristretto’ directly" pkgs.ristretto; # Added on 2025-12-26
+      xfburn = lib.warnOnInstantiate "‘xfce.xfburn’ was moved to top-level. Please use ‘pkgs.xfburn’ directly" pkgs.xfburn; # Added on 2025-12-26
+      xfce4-dict = lib.warnOnInstantiate "‘xfce.xfce4-dict’ was moved to top-level. Please use ‘pkgs.xfce4-dict’ directly" pkgs.xfce4-dict; # Added on 2025-12-26
+      xfce4-notifyd = lib.warnOnInstantiate "‘xfce.xfce4-notifyd’ was moved to top-level. Please use ‘pkgs.xfce4-notifyd’ directly" pkgs.xfce4-notifyd; # Added on 2025-12-26
+      xfce4-panel-profiles = lib.warnOnInstantiate "‘xfce.xfce4-panel-profiles’ was moved to top-level. Please use ‘pkgs.xfce4-panel-profiles’ directly" pkgs.xfce4-panel-profiles; # Added on 2025-12-26
+      xfce4-screensaver = lib.warnOnInstantiate "‘xfce.xfce4-screensaver’ was moved to top-level. Please use ‘pkgs.xfce4-screensaver’ directly" pkgs.xfce4-screensaver; # Added on 2025-12-26
+      xfce4-screenshooter = lib.warnOnInstantiate "‘xfce.xfce4-screenshooter’ was moved to top-level. Please use ‘pkgs.xfce4-screenshooter’ directly" pkgs.xfce4-screenshooter; # Added on 2025-12-26
+      xfce4-taskmanager = lib.warnOnInstantiate "‘xfce.xfce4-taskmanager’ was moved to top-level. Please use ‘pkgs.xfce4-taskmanager’ directly" pkgs.xfce4-taskmanager; # Added on 2025-12-26
+      xfce4-terminal = lib.warnOnInstantiate "‘xfce.xfce4-terminal’ was moved to top-level. Please use ‘pkgs.xfce4-terminal’ directly" pkgs.xfce4-terminal; # Added on 2025-12-26
+      xfce4-volumed-pulse = lib.warnOnInstantiate "‘xfce.xfce4-volumed-pulse’ was moved to top-level. Please use ‘pkgs.xfce4-volumed-pulse’ directly" pkgs.xfce4-volumed-pulse; # Added on 2025-12-26
+      xfdashboard = lib.warnOnInstantiate "‘xfce.xfdashboard’ was moved to top-level. Please use ‘pkgs.xfdashboard’ directly" pkgs.xfdashboard; # Added on 2025-12-26
+      xfmpc = lib.warnOnInstantiate "‘xfce.xfmpc’ was moved to top-level. Please use ‘pkgs.xfmpc’ directly" pkgs.xfmpc; # Added on 2025-12-26
+      xfce4-icon-theme = lib.warnOnInstantiate "‘xfce.xfce4-icon-theme’ was moved to top-level. Please use ‘pkgs.xfce4-icon-theme’ directly" pkgs.xfce4-icon-theme; # Added on 2025-12-26
+      xfwm4-themes = lib.warnOnInstantiate "‘xfce.xfwm4-themes’ was moved to top-level. Please use ‘pkgs.xfwm4-themes’ directly" pkgs.xfwm4-themes; # Added on 2025-12-26
+
+      thunar-archive-plugin = lib.warnOnInstantiate "‘xfce.thunar-archive-plugin’ was moved to top-level. Please use ‘pkgs.thunar-archive-plugin’ directly" pkgs.thunar-archive-plugin; # Added on 2025-12-26
+      thunar-dropbox-plugin = lib.warnOnInstantiate "‘xfce.thunar-dropbox-plugin’ was moved to top-level. Please use ‘pkgs.thunar-dropbox-plugin’ directly" pkgs.thunar-dropbox-plugin; # Added on 2025-12-26
+      thunar-media-tags-plugin = lib.warnOnInstantiate "‘xfce.thunar-media-tags-plugin’ was moved to top-level. Please use ‘pkgs.thunar-media-tags-plugin’ directly" pkgs.thunar-media-tags-plugin; # Added on 2025-12-26
+      thunar-vcs-plugin = lib.warnOnInstantiate "‘xfce.thunar-vcs-plugin’ was moved to top-level. Please use ‘pkgs.thunar-vcs-plugin’ directly" pkgs.thunar-vcs-plugin; # Added on 2025-12-26
+
+      xfce4-alsa-plugin = lib.warnOnInstantiate "‘xfce.xfce4-alsa-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-alsa-plugin’ directly" pkgs.xfce4-alsa-plugin; # Added on 2025-12-19
+      xfce4-battery-plugin = lib.warnOnInstantiate "‘xfce.xfce4-battery-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-battery-plugin’ directly" pkgs.xfce4-battery-plugin; # Added on 2025-12-19
+      xfce4-clipman-plugin = lib.warnOnInstantiate "‘xfce.xfce4-clipman-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-clipman-plugin’ directly" pkgs.xfce4-clipman-plugin; # Added on 2025-12-19
+      xfce4-cpufreq-plugin = lib.warnOnInstantiate "‘xfce.xfce4-cpufreq-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-cpufreq-plugin’ directly" pkgs.xfce4-cpufreq-plugin; # Added on 2025-12-19
+      xfce4-cpugraph-plugin = lib.warnOnInstantiate "‘xfce.xfce4-cpugraph-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-cpugraph-plugin’ directly" pkgs.xfce4-cpugraph-plugin; # Added on 2025-12-19
+      xfce4-dockbarx-plugin = lib.warnOnInstantiate "‘xfce.xfce4-dockbarx-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-dockbarx-plugin’ directly" pkgs.xfce4-dockbarx-plugin; # Added on 2025-12-19
+      xfce4-docklike-plugin = lib.warnOnInstantiate "‘xfce.xfce4-docklike-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-docklike-plugin’ directly" pkgs.xfce4-docklike-plugin; # Added on 2025-12-19
+      xfce4-eyes-plugin = lib.warnOnInstantiate "‘xfce.xfce4-eyes-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-eyes-plugin’ directly" pkgs.xfce4-eyes-plugin; # Added on 2025-12-19
+      xfce4-fsguard-plugin = lib.warnOnInstantiate "‘xfce.xfce4-fsguard-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-fsguard-plugin’ directly" pkgs.xfce4-fsguard-plugin; # Added on 2025-12-19
+      xfce4-genmon-plugin = lib.warnOnInstantiate "‘xfce.xfce4-genmon-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-genmon-plugin’ directly" pkgs.xfce4-genmon-plugin; # Added on 2025-12-19
+      xfce4-i3-workspaces-plugin = lib.warnOnInstantiate "‘xfce.xfce4-i3-workspaces-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-i3-workspaces-plugin’ directly" pkgs.xfce4-i3-workspaces-plugin; # Added on 2025-12-19
+      xfce4-mailwatch-plugin = lib.warnOnInstantiate "‘xfce.xfce4-mailwatch-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-mailwatch-plugin’ directly" pkgs.xfce4-mailwatch-plugin; # Added on 2025-12-19
+      xfce4-mpc-plugin = lib.warnOnInstantiate "‘xfce.xfce4-mpc-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-mpc-plugin’ directly" pkgs.xfce4-mpc-plugin; # Added on 2025-12-19
+      xfce4-netload-plugin = lib.warnOnInstantiate "‘xfce.xfce4-netload-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-netload-plugin’ directly" pkgs.xfce4-netload-plugin; # Added on 2025-12-19
+      xfce4-notes-plugin = lib.warnOnInstantiate "‘xfce.xfce4-notes-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-notes-plugin’ directly" pkgs.xfce4-notes-plugin; # Added on 2025-12-19
+      xfce4-systemload-plugin = lib.warnOnInstantiate "‘xfce.xfce4-systemload-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-systemload-plugin’ directly" pkgs.xfce4-systemload-plugin; # Added on 2025-12-19
+      xfce4-time-out-plugin = lib.warnOnInstantiate "‘xfce.xfce4-time-out-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-time-out-plugin’ directly" pkgs.xfce4-time-out-plugin; # Added on 2025-12-19
+      xfce4-timer-plugin = lib.warnOnInstantiate "‘xfce.xfce4-timer-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-timer-plugin’ directly" pkgs.xfce4-timer-plugin; # Added on 2025-12-19
+      xfce4-verve-plugin = lib.warnOnInstantiate "‘xfce.xfce4-verve-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-verve-plugin’ directly" pkgs.xfce4-verve-plugin; # Added on 2025-12-19
+      xfce4-xkb-plugin = lib.warnOnInstantiate "‘xfce.xfce4-xkb-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-xkb-plugin’ directly" pkgs.xfce4-xkb-plugin; # Added on 2025-12-19
+      xfce4-weather-plugin = lib.warnOnInstantiate "‘xfce.xfce4-weather-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-weather-plugin’ directly" pkgs.xfce4-weather-plugin; # Added on 2025-12-19
+      xfce4-whiskermenu-plugin = lib.warnOnInstantiate "‘xfce.xfce4-whiskermenu-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-whiskermenu-plugin’ directly" pkgs.xfce4-whiskermenu-plugin; # Added on 2025-12-19
+      xfce4-windowck-plugin = lib.warnOnInstantiate "‘xfce.xfce4-windowck-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-windowck-plugin’ directly" pkgs.xfce4-windowck-plugin; # Added on 2025-12-19
+      xfce4-pulseaudio-plugin = lib.warnOnInstantiate "‘xfce.xfce4-pulseaudio-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-pulseaudio-plugin’ directly" pkgs.xfce4-pulseaudio-plugin; # Added on 2025-12-19
+      xfce4-sensors-plugin = lib.warnOnInstantiate "‘xfce.xfce4-sensors-plugin’ was moved to top-level. Please use ‘pkgs.xfce4-sensors-plugin’ directly" pkgs.xfce4-sensors-plugin; # Added on 2025-12-19
+    }
+  );
+}

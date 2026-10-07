@@ -1,28 +1,50 @@
-{ lib, buildPythonPackage, fetchPypi, isPy3k, cryptography, futures, pytest, pyopenssl, service-identity }:
+{
+  lib,
+  buildPythonPackage,
+  cryptography,
+  fetchPypi,
+  hatchling,
+  idna,
+  pyopenssl,
+  pytestCheckHook,
+  service-identity,
+}:
 
 buildPythonPackage rec {
   pname = "trustme";
-  version = "0.4.0";
+  version = "1.2.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1215vr6l6c0fzsv5gyay82fxd4fidvq2rd94wvjrljs6h2wajazk";
+    hash = "sha256-ZSi6K7x/LbQfM4JcjdE+Pj650zS6D5CXE8jDE59K5H8=";
   };
 
-  checkInputs = [ pytest pyopenssl service-identity ];
-  checkPhase = ''
-    py.test
-  '';
-  propagatedBuildInputs = [
+  build-system = [ hatchling ];
+
+  dependencies = [
     cryptography
-  ] ++ lib.optionals (!isPy3k) [
-    futures
+    idna
   ];
 
+  nativeCheckInputs = [
+    pyopenssl
+    pytestCheckHook
+    service-identity
+  ];
+
+  # Some of the tests use localhost networking.
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [ "trustme" ];
+
   meta = {
-    description = "#1 quality TLS certs while you wait, for the discerning tester";
-    homepage = https://github.com/python-trio/trustme;
-    license = with lib.licenses; [ mit asl20 ];
-    maintainers = with lib.maintainers; [ catern ];
+    description = "High quality TLS certs while you wait, for the discerning tester";
+    homepage = "https://github.com/python-trio/trustme";
+    changelog = "https://trustme.readthedocs.io/en/latest/#change-history";
+    license = with lib.licenses; [
+      mit
+      asl20
+    ];
   };
 }

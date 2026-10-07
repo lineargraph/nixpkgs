@@ -1,29 +1,45 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, setuptools-git, pytest, six }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  pytest,
+  pytestCheckHook,
+  six,
+}:
 
 buildPythonPackage rec {
   pname = "pytest-fixture-config";
-  version = "1.3.0";
+  version = "1.8.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1717cd7d2233943cae9af419c6e31dca5e40d5de01ef0bcfd5cd06f37548db08";
+  src = fetchFromGitHub {
+    owner = "man-group";
+    repo = "pytest-plugins";
+    tag = "v${version}";
+    hash = "sha256-fLctuuvHVk9GvQB5cTL4/T7GeWzJ2zLJpwZqq9/6C30=";
   };
 
-  nativeBuildInputs = [ setuptools-git ];
+  postPatch = ''
+    cd pytest-fixture-config
+  '';
+
+  build-system = [
+    setuptools
+  ];
 
   buildInputs = [ pytest ];
 
-  checkInputs = [ six ];
+  nativeCheckInputs = [
+    pytestCheckHook
+    six
+  ];
 
-  checkPhase = ''
-    py.test
-  '';
-
-  meta = with stdenv.lib; {
-    description = "Simple configuration objects for Py.test fixtures. Allows you to skip tests when their required config variables aren’t set.";
-    homepage = https://github.com/manahl/pytest-plugins;
-    license = licenses.mit;
-    maintainers = with maintainers; [ ryansydnor ];
+  meta = {
+    changelog = "https://github.com/man-group/pytest-plugins/blob/${src.tag}/CHANGES.md";
+    description = "Simple configuration objects for Py.test fixtures. Allows you to skip tests when their required config variables aren’t set";
+    homepage = "https://github.com/manahl/pytest-plugins";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ ryansydnor ];
   };
 }

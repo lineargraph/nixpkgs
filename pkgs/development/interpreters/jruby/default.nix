@@ -1,62 +1,81 @@
-{ stdenv, callPackage, fetchurl, makeWrapper, jre }:
+{
+  lib,
+  stdenv,
+  callPackage,
+  fetchurl,
+  fetchMavenArtifact,
+  gitUpdater,
+  mkRubyVersion,
+  makeBinaryWrapper,
+  jre,
+}:
 
 let
-# The version number here is whatever is reported by the RUBY_VERSION string
-rubyVersion = callPackage ../ruby/ruby-version.nix {} "2" "3" "3" "";
-jruby = stdenv.mkDerivation rec {
-  name = "jruby-${version}";
-
-  version = "9.2.0.0";
+  # The version number here is whatever is reported by the RUBY_VERSION string
+  rubyVersion = mkRubyVersion "3" "4" "2" "";
+in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "jruby";
+  version = "10.0.2.0";
 
   src = fetchurl {
-    url = "https://s3.amazonaws.com/jruby.org/downloads/${version}/jruby-bin-${version}.tar.gz";
-    sha256 = "1106s1vmcm36gm3vrl1sjrrr2wj6splgik1zrfb7c2y9bzm8swa2";
+    url = "https://repo1.maven.org/maven2/org/jruby/jruby-dist/${finalAttrs.version}/jruby-dist-${finalAttrs.version}-bin.tar.gz";
+    hash = "sha256-uKAm84qphGGgTtCqCyCJHOJX7L5T4SRxnOnuW4BFJfE=";
   };
 
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeBinaryWrapper ];
 
   installPhase = ''
-     mkdir -pv $out/docs
-     mv * $out
-     rm $out/bin/*.{bat,dll,exe,sh}
-     mv $out/COPYING $out/LICENSE* $out/docs
+    mkdir -pv $out/share/jruby/docs
+    mv * $out
+    rm $out/bin/*.{bat,dll,exe}
+    mv $out/samples $out/share/jruby/
+    mv $out/BSDL $out/COPYING $out/LEGAL $out/LICENSE* $out/share/jruby/docs/
 
-     for i in $out/bin/jruby{,.bash}; do
-       wrapProgram $i \
-         --set JAVA_HOME ${jre}
-     done
+    for i in $out/bin/jruby; do
+      wrapProgram $i \
+        --set JAVA_HOME ${jre.home}
+    done
 
-     ln -s $out/bin/jruby $out/bin/ruby
+    # Bundler tries to create this directory
+    mkdir -pv $out/${finalAttrs.passthru.gemPath}
+    mkdir -p $out/nix-support
+    cat > $out/nix-support/setup-hook <<EOF
+      addGemPath() {
+        addToSearchPath GEM_PATH \$1/${finalAttrs.passthru.gemPath}
+      }
 
-     # Bundler tries to create this directory
-     mkdir -pv $out/${passthru.gemPath}
-     mkdir -p $out/nix-support
-     cat > $out/nix-support/setup-hook <<EOF
-       addGemPath() {
-         addToSearchPath GEM_PATH \$1/${passthru.gemPath}
-       }
+      addEnvHooks "$hostOffset" addGemPath
+    EOF
+  '';
 
-       addEnvHooks "$hostOffset" addGemPath
-     EOF
+  postFixup = ''
+    PATH=$out/bin:$PATH patchShebangs $out/bin
   '';
 
   passthru = rec {
     rubyEngine = "jruby";
     gemPath = "lib/${rubyEngine}/gems/${rubyVersion.libDir}";
     libPath = "lib/${rubyEngine}/${rubyVersion.libDir}";
+    devEnv = callPackage ../ruby/dev.nix {
+      ruby = finalAttrs.finalPackage;
+    };
+    updateScript = gitUpdater {
+      url = "https://github.com/jruby/jruby.git";
+    };
   };
 
   meta = {
     description = "Ruby interpreter written in Java";
-    homepage = http://jruby.org/;
-    license = with stdenv.lib.licenses; [ cpl10 gpl2 lgpl21 ];
-    platforms = stdenv.lib.platforms.unix;
-  };
-};
-in jruby.overrideAttrs (oldAttrs: {
-  passthru = oldAttrs.passthru // {
-    devEnv = callPackage ../ruby/dev.nix {
-      ruby = jruby;
-    };
+    homepage = "https://www.jruby.org/";
+    changelog = "https://github.com/jruby/jruby/releases/tag/${finalAttrs.version}";
+    license = with lib.licenses; [
+      cpl10
+      gpl2
+      lgpl21
+    ];
+    platforms = jre.meta.platforms;
+    maintainers = [ lib.maintainers.fzakaria ];
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
   };
 })

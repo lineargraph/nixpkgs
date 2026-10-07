@@ -1,30 +1,68 @@
-{ stdenv, fetchzip, autoreconfHook, pkgconfig, glib, libtool, pcre
-, json_c, flex, bison, dtc, pciutils, dmidecode, iasl }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  autoreconfHook,
+  pkg-config,
+  glib,
+  json_c,
+  flex,
+  bison,
+  dtc,
+  pciutils,
+  dmidecode,
+  acpica-tools,
+  libbsd,
+  zlib,
+}:
 
-stdenv.mkDerivation rec {
-  name = "fwts-${version}";
-  version = "18.05.00";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "fwts";
+  version = "26.07.00";
 
-  src = fetchzip {
-    url = "http://fwts.ubuntu.com/release/fwts-V${version}.tar.gz";
-    sha256 = "0ixc82zdv4cfj8g2mwd851fc47cpjj81mwjhn00n5wddb9cxmgkj";
-    stripRoot = false;
+  src = fetchFromGitHub {
+    owner = "fwts";
+    repo = "fwts";
+    rev = "V${finalAttrs.version}";
+    hash = "sha256-82rk3yOvQCBfq833xiD82QParDJi8voszMGp47UR0qk=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig libtool ];
-  buildInputs = [ glib pcre json_c flex bison dtc pciutils dmidecode iasl ];
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ];
+
+  buildInputs = [
+    glib
+    json_c
+    flex
+    bison
+    dtc
+    pciutils
+    dmidecode
+    acpica-tools
+    libbsd
+    zlib
+  ];
 
   postPatch = ''
-    substituteInPlace src/lib/include/fwts_binpaths.h --replace "/usr/bin/lspci"      "${pciutils}/bin/lspci"
-    substituteInPlace src/lib/include/fwts_binpaths.h --replace "/usr/sbin/dmidecode" "${dmidecode}/bin/dmidecode"
-    substituteInPlace src/lib/include/fwts_binpaths.h --replace "/usr/bin/iasl"       "${iasl}/bin/iasl"
+    substituteInPlace src/lib/include/fwts_binpaths.h \
+      --replace-fail "/usr/bin/lspci"      "${pciutils}/bin/lspci" \
+      --replace-fail "/usr/sbin/dmidecode" "${dmidecode}/bin/dmidecode" \
+      --replace-fail "/usr/bin/iasl"       "${acpica-tools}/bin/iasl"
+
+    substituteInPlace src/lib/src/fwts_devicetree.c \
+                      src/devicetree/dt_base/dt_base.c \
+      --replace-fail "dtc -I" "${dtc}/bin/dtc -I"
   '';
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+
+  meta = {
     homepage = "https://wiki.ubuntu.com/FirmwareTestSuite";
     description = "Firmware Test Suite";
-    platforms = platforms.linux;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ tadfisher ];
+    platforms = lib.platforms.linux;
+    license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ tadfisher ];
   };
-}
+})

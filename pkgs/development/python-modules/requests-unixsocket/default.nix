@@ -1,28 +1,43 @@
-{ lib, buildPythonPackage, fetchPypi
-, pbr, requests
-, pytest, pytestpep8, waitress }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  requests,
+  setuptools-scm,
+  setuptools,
+  waitress,
+}:
 
 buildPythonPackage rec {
   pname = "requests-unixsocket";
-  version = "0.1.5";
+  version = "0.4.1";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "0k19knydh0fzd7w12lfy18arl1ndwa0zln33vsb37yv1iw9w06x9";
+    pname = "requests_unixsocket";
+    inherit version;
+    hash = "sha256-sllhWMNW7O5o0nukaaUiESMKxvsM3otmr7GfDtR6GZU=";
   };
 
-  nativeBuildInputs = [ pbr ];
-  propagatedBuildInputs = [ requests ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
-  checkInputs = [ pytest pytestpep8 waitress ];
-  checkPhase = ''
-    py.test
-  '';
+  dependencies = [ requests ];
 
-  meta = with lib; {
+  nativeCheckInputs = [
+    pytestCheckHook
+    waitress
+  ];
+
+  pythonImportsCheck = [ "requests_unixsocket" ];
+
+  meta = {
     description = "Use requests to talk HTTP via a UNIX domain socket";
-    homepage = https://github.com/msabramo/requests-unixsocket;
-    license = licenses.asl20;
-    maintainers = [ maintainers.catern ];
+    homepage = "https://github.com/msabramo/requests-unixsocket";
+    changelog = "https://github.com/msabramo/requests-unixsocket/releases/tag/v${version}";
+    license = lib.licenses.asl20;
   };
 }

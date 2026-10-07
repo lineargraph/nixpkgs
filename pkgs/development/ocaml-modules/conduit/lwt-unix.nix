@@ -1,18 +1,43 @@
-{ stdenv, ocaml, findlib, jbuilder, conduit-lwt
-, logs, ppx_sexp_conv, lwt_ssl
+{
+  lib,
+  buildDunePackage,
+  conduit-lwt,
+  ppx_sexp_conv,
+  lwt,
+  uri,
+  ipaddr,
+  ipaddr-sexp,
+  ca-certs,
+  logs,
+  lwt_ssl,
+  lwt_log,
+  ssl,
 }:
 
-if !stdenv.lib.versionAtLeast conduit-lwt.version "1.0"
-then conduit-lwt
-else
+buildDunePackage {
+  pname = "conduit-lwt-unix";
+  inherit (conduit-lwt) version src;
 
-stdenv.mkDerivation rec {
-	name = "ocaml${ocaml.version}-conduit-lwt-unix-${version}";
-	inherit (conduit-lwt) version src installPhase meta;
+  buildInputs = [ ppx_sexp_conv ];
 
-	buildInputs = [ ocaml findlib jbuilder ppx_sexp_conv ];
+  propagatedBuildInputs = [
+    conduit-lwt
+    lwt
+    uri
+    ipaddr
+    ipaddr-sexp
+    ca-certs
+    logs
+    lwt_ssl
+  ];
 
-	propagatedBuildInputs = [ conduit-lwt logs lwt_ssl ];
+  doCheck = !lib.versionAtLeast lwt.version "6.0.0";
+  checkInputs = [
+    lwt_log
+    ssl
+  ];
 
-	buildPhase = "jbuilder build -p conduit-lwt-unix";
+  meta = conduit-lwt.meta // {
+    description = "Network connection establishment library for Lwt_unix";
+  };
 }

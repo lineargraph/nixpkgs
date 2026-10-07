@@ -1,22 +1,55 @@
-{ stdenv, fetchPypi, buildPythonPackage
-, nose, flask, six }:
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  flask,
+  werkzeug,
+  pytestCheckHook,
+  setuptools,
+  setuptools-scm,
 
-buildPythonPackage rec {
-  name = "${pname}-${version}";
-  pname = "Flask-Cors";
-  version = "3.0.4";
+  # for passthru.tests
+  aiobotocore,
+  moto,
+}:
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "bec996f0603a0693c0ea63c8126e5f8e966bb679cf82e6104b254e9c7f3a7d08";
+buildPythonPackage (finalAttrs: {
+  pname = "flask-cors";
+  version = "6.0.5";
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "corydolphin";
+    repo = "flask-cors";
+    tag = finalAttrs.version;
+    hash = "sha256-fngKJm7/7BMcWPPFncTCWw2sL1UJ0t4ICpXr95yNpbg=";
   };
 
-  buildInputs = [ nose ];
-  propagatedBuildInputs = [ flask six ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
-  meta = with stdenv.lib; {
-    description = "A Flask extension adding a decorator for CORS support";
-    homepage = https://github.com/corydolphin/flask-cors;
-    license = with licenses; [ mit ];
+  dependencies = [
+    flask
+    werkzeug
+  ];
+
+  pythonImportsCheck = [ "flask_cors" ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ];
+
+  passthru.tests = {
+    inherit aiobotocore moto;
   };
-}
+
+  meta = {
+    description = "Flask extension adding a decorator for CORS support";
+    homepage = "https://github.com/corydolphin/flask-cors";
+    changelog = "https://github.com/corydolphin/flask-cors/releases/tag/${finalAttrs.src.tag}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ nickcao ];
+  };
+})

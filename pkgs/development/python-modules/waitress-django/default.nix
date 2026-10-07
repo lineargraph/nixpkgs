@@ -1,12 +1,31 @@
-{ buildPythonPackage, django_1_8, waitress }:
+{
+  lib,
+  buildPythonPackage,
+  setuptools,
+  django,
+  waitress,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage {
   pname = "waitress-django";
-  version = "0.0.0";
-  name = pname;
+  version = "1.0.0";
+  pyproject = true;
 
-  src = ./.;
-  pythonPath = [ django_1_8 waitress ];
+  src = ./src;
+
+  build-system = [ setuptools ];
+
+  pythonPath = [
+    django
+    waitress
+  ];
+
   doCheck = false;
-  meta.description = "A waitress WSGI server serving django";
+
+  meta = {
+    description = "Waitress WSGI server serving django";
+    mainProgram = "waitress-serve-django";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ basvandijk ];
+  };
 }

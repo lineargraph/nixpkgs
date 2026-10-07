@@ -1,4 +1,10 @@
-{ config, lib, pkgs, modules, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  modules,
+  ...
+}:
 
 with lib;
 
@@ -8,9 +14,12 @@ let
   nixosPath = toString ../..;
 
   # Check if the path is from the NixOS repository
-  isNixOSFile = path:
-    let s = toString path; in
-      removePrefix nixosPath s != s;
+  isNixOSFile =
+    path:
+    let
+      s = toString path;
+    in
+    removePrefix nixosPath s != s;
 
   # Copy modules given as extra configuration files.  Unfortunately, we
   # cannot serialized attribute set given in the list of modules (that's why
@@ -22,20 +31,24 @@ let
   # Partition module files because between NixOS and non-NixOS files.  NixOS
   # files may change if the repository is updated.
   partitionedModuleFiles =
-    let p = partition isNixOSFile moduleFiles; in
-    { nixos = p.right; others = p.wrong; };
+    let
+      p = partition isNixOSFile moduleFiles;
+    in
+    {
+      nixos = p.right;
+      others = p.wrong;
+    };
 
   # Path transformed to be valid on the installation device.  Thus the
   # device configuration could be rebuild.
   relocatedModuleFiles =
     let
-      relocateNixOS = path:
-        "<nixpkgs/nixos" + removePrefix nixosPath (toString path) + ">";
-      relocateOthers = null;
+      relocateNixOS = path: "<nixpkgs/nixos" + removePrefix nixosPath (toString path) + ">";
     in
-      { nixos = map relocateNixOS partitionedModuleFiles.nixos;
-        others = []; # TODO: copy the modules to the install-device repository.
-      };
+    {
+      nixos = map relocateNixOS partitionedModuleFiles.nixos;
+      others = [ ]; # TODO: copy the modules to the install-device repository.
+    };
 
   # A dummy /etc/nixos/configuration.nix in the booted CD that
   # rebuilds the CD's configuration (and allows the configuration to
@@ -43,14 +56,15 @@ let
   # that we don't really know how the CD was built - the Nix
   # expression language doesn't allow us to query the expression being
   # evaluated.  So we'll just hope for the best.
-  configClone = pkgs.writeText "configuration.nix"
-    ''
-      { config, pkgs, ... }:
+  configClone = pkgs.writeText "configuration.nix" ''
+    { config, pkgs, ... }:
 
-      {
-        imports = [ ${toString config.installer.cloneConfigIncludes} ];
-      }
-    '';
+    {
+      imports = [ ${toString config.installer.cloneConfigIncludes} ];
+
+      ${config.installer.cloneConfigExtra}
+    }
+  '';
 
 in
 
@@ -67,34 +81,39 @@ in
     };
 
     installer.cloneConfigIncludes = mkOption {
-      default = [];
+      default = [ ];
       example = [ "./nixos/modules/hardware/network/rt73.nix" ];
       description = ''
         List of modules used to re-build this installation device profile.
       '';
     };
 
+    installer.cloneConfigExtra = mkOption {
+      default = "";
+      description = ''
+        Extra text to include in the cloned configuration.nix included in this
+        installer.
+      '';
+    };
   };
 
   config = {
 
-    installer.cloneConfigIncludes =
-      relocatedModuleFiles.nixos ++ relocatedModuleFiles.others;
+    installer.cloneConfigIncludes = relocatedModuleFiles.nixos ++ relocatedModuleFiles.others;
 
-    boot.postBootCommands =
-      ''
-        # Provide a mount point for nixos-install.
-        mkdir -p /mnt
+    boot.postBootCommands = ''
+      # Provide a mount point for nixos-install.
+      mkdir -p /mnt
 
-        ${optionalString config.installer.cloneConfig ''
-          # Provide a configuration for the CD/DVD itself, to allow users
-          # to run nixos-rebuild to change the configuration of the
-          # running system on the CD/DVD.
-          if ! [ -e /etc/nixos/configuration.nix ]; then
-            cp ${configClone} /etc/nixos/configuration.nix
-          fi
-       ''}
-      '';
+      ${optionalString config.installer.cloneConfig ''
+        # Provide a configuration for the CD/DVD itself, to allow users
+        # to run nixos-rebuild to change the configuration of the
+        # running system on the CD/DVD.
+        if ! [ -e /etc/nixos/configuration.nix ]; then
+          cp ${configClone} /etc/nixos/configuration.nix
+        fi
+      ''}
+    '';
 
   };
 

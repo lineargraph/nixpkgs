@@ -1,28 +1,47 @@
-{ stdenv, fetchPypi, buildPythonPackage, aenum, isPy3k, pythonOlder, enum34, python }:
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  setuptools,
+  aenum,
+  pytestCheckHook,
+  python,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
+  pname = "dbf";
+  version = "0.99.11";
+  pyproject = true;
+
+  __structuredAttrs = true;
+
+  src = fetchPypi {
     pname = "dbf";
-    version = "0.97.7";
+    inherit (finalAttrs) version;
+    hash = "sha256-IWnAUlLA776JfzRvBoMybsJYVL6rHQxkMN9ukDpXsxU=";
+  };
 
-    src = fetchPypi {
-      inherit pname version;
-      sha256 = "855800d12df87855096eeafc58f34c9092407e8faf197f48073e7bc2b1938de0";
-    };
+  build-system = [ setuptools ];
 
-    propagatedBuildInputs = [ aenum ] ++ stdenv.lib.optional (pythonOlder "3.4") [ enum34 ];
+  # Workaround for https://github.com/ethanfurman/dbf/issues/48
+  patches = lib.optional python.stdenv.hostPlatform.isDarwin ./darwin.patch;
 
-    doCheck = !isPy3k;
-    # tests are not yet ported.
-    # https://groups.google.com/forum/#!topic/python-dbase/96rx2xmCG4w
+  dependencies = [ aenum ];
 
-    checkPhase = ''
-      ${python.interpreter} dbf/test.py
-    '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-    meta = with stdenv.lib; {
-      description = "Pure python package for reading/writing dBase, FoxPro, and Visual FoxPro .dbf files";
-      homepage    = "https://pypi.python.org/pypi/dbf";
-      license     = licenses.bsd2;
-      maintainers = with maintainers; [ vrthra ];
-    };
-}
+  preCheck = ''
+    sed -i '/^import tempfile$/a tempdir = tempfile.mkdtemp()' dbf/test.py
+  '';
+
+  enabledTestPaths = [ "dbf/test.py" ];
+
+  pythonImportsCheck = [ "dbf" ];
+
+  meta = {
+    description = "Module for reading/writing dBase, FoxPro, and Visual FoxPro .dbf files";
+    homepage = "https://github.com/ethanfurman/dbf";
+    license = lib.licenses.bsd2;
+    maintainers = [ ];
+  };
+})

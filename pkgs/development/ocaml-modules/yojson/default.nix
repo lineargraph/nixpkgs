@@ -1,43 +1,31 @@
-{ stdenv, fetchzip, ocaml, findlib, jbuilder, cppo, easy-format, biniou }:
-let
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+  seq,
+}:
+
+buildDunePackage (finalAttrs: {
   pname = "yojson";
-  param =
-  if stdenv.lib.versionAtLeast ocaml.version "4.02" then {
-    version = "1.4.1";
-    sha256 = "0nwsfkmqpyfab4rxq76q8ff7giyanghw08094jyrp275v99zdjr9";
-    buildInputs = [ jbuilder ];
-    extra = { inherit (jbuilder) installPhase; };
-  } else {
-    version = "1.2.3";
-    sha256 = "10dvkndgwanvw4agbjln7kgb1n9s6lii7jw82kwxczl5rd1sgmvl";
-    buildInputs = [];
-    extra = {
-      createFindlibDestdir = true;
+  version = "3.0.0";
 
-      makeFlags = "PREFIX=$(out)";
-
-      preBuild = "mkdir $out/bin";
-    };
-  };
-in
-stdenv.mkDerivation ({
-
-  name = "ocaml${ocaml.version}-${pname}-${param.version}";
-
-  src = fetchzip {
-    url = "https://github.com/mjambon/${pname}/archive/v${param.version}.tar.gz";
-    inherit (param) sha256;
+  src = fetchurl {
+    url = "https://github.com/ocaml-community/yojson/releases/download/${finalAttrs.version}/yojson-${finalAttrs.version}.tbz";
+    hash =
+      {
+        "3.0.0" = "sha256-mUFNp2CbkqAkdO9LSezaFe3Iy7pSKTQbEk5+RpXDlhA=";
+        "2.2.2" = "sha256-mr+tjJp51HI60vZEjmacHmjb/IfMVKG3wGSwyQkSxZU=";
+      }
+      ."${finalAttrs.version}";
   };
 
-  buildInputs = [ ocaml findlib ] ++ param.buildInputs;
+  propagatedBuildInputs = lib.optional (!lib.versionAtLeast finalAttrs.version "3.0.0") seq;
 
-  propagatedBuildInputs = [ cppo easy-format biniou ];
-
-  meta = with stdenv.lib; {
-    description = "An optimized parsing and printing library for the JSON format";
-    homepage = "http://mjambon.com/${pname}.html";
-    license = licenses.bsd3;
-    maintainers = [ maintainers.vbgl ];
-    platforms = ocaml.meta.platforms or [];
+  meta = {
+    description = "Optimized parsing and printing library for the JSON format";
+    homepage = "https://github.com/ocaml-community/yojson";
+    license = lib.licenses.bsd3;
+    maintainers = [ lib.maintainers.vbgl ];
+    mainProgram = "ydump";
   };
-} // param.extra)
+})

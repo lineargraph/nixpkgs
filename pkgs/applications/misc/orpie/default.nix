@@ -1,21 +1,37 @@
-{ stdenv, fetchurl, ocamlPackages, ncurses, gsl }:
+{
+  lib,
+  fetchFromGitHub,
+  ocamlPackages,
+}:
 
-stdenv.mkDerivation rec {
-  name = "orpie-${version}";
-  version = "1.5.2";
+ocamlPackages.buildDunePackage rec {
+  pname = "orpie";
+  version = "1.6.1";
 
-  src = fetchurl {
-    url = "http://pessimization.com/software/orpie/${name}.tar.gz";
-    sha256 = "0v9xgpcf186ni55rkmx008msyszw0ypd6rd98hgwpih8yv3pymfy";
+  src = fetchFromGitHub {
+    owner = "pelzlpj";
+    repo = "orpie";
+    tag = "release-${version}";
+    sha256 = "sha256-LwhH2BO4p8Y8CB2pNkl2heIR7yh42erdTcDsxgy1ouc=";
   };
 
-  buildInputs = [ ncurses gsl ] ++ (with ocamlPackages; [ ocaml camlp4 ]);
+  patches = [ ./prefix.patch ];
+
+  preConfigure = ''
+    substituteInPlace src/orpie/install.ml.in --replace '@prefix@' $out
+  '';
+
+  nativeBuildInputs = [ ocamlPackages.camlp5 ];
+  buildInputs = with ocamlPackages; [
+    curses
+    num
+    gsl
+  ];
 
   meta = {
-    homepage = http://pessimization.com/software/orpie/;
-    description = "A fullscreen RPN calculator for the console";
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = with stdenv.lib.maintainers; [ obadz ];
+    inherit (src.meta) homepage;
+    description = "Curses-based RPN calculator";
+    license = lib.licenses.gpl3Only;
+    maintainers = with lib.maintainers; [ obadz ];
   };
 }

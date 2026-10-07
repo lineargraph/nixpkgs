@@ -1,32 +1,45 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  python,
+  setuptools,
+
+  # passthru tests
+  apache-beam,
+  datasets,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "dill";
-  version = "0.2.7.1";
-  name = "${pname}-${version}";
+  version = "0.4.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "97fd758f5fe742d42b11ec8318ecfcff8776bccacbfcec05dfd6276f5d450f73";
+  src = fetchFromGitHub {
+    owner = "uqfoundation";
+    repo = "dill";
+    tag = finalAttrs.version;
+    hash = "sha256-Yh9WvescLgV7DmxGBTGKsb29+eRzF9qjZMg0DQQyLyY=";
   };
 
-  # Messy test suite. Even when running the tests like tox does, it fails
-  doCheck = false;
+  build-system = [ setuptools ];
+
   checkPhase = ''
-    for test in tests/*.py; do
-      ${python.interpreter} $test
-    done
+    runHook preCheck
+    ${python.interpreter} dill/tests/__main__.py
+    runHook postCheck
   '';
-  # Following error without setting checkPhase
-  # TypeError: don't know how to make test from: {'byref': False, 'recurse': False, 'protocol': 3, 'fmode': 0}
+
+  passthru.tests = {
+    inherit apache-beam datasets;
+  };
+
+  pythonImportsCheck = [ "dill" ];
 
   meta = {
     description = "Serialize all of python (almost)";
-    homepage = http://www.cacr.caltech.edu/~mmckerns/dill.htm;
+    homepage = "https://github.com/uqfoundation/dill/";
+    changelog = "https://github.com/uqfoundation/dill/releases/tag/${finalAttrs.src.tag}";
     license = lib.licenses.bsd3;
   };
-}
+})

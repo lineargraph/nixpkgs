@@ -1,34 +1,68 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytestrunner
-, pytest
-, hypothesis
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  replaceVars,
+  marisa-cpp,
+  cython,
+  setuptools,
+  pytestCheckHook,
+  hypothesis,
 }:
 
 buildPythonPackage rec {
   pname = "marisa-trie";
-  version = "0.7.5";
+  version = "1.4.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "c73bc25d868e8c4ea7aa7f1e19892db07bba2463351269b05340ccfa06eb2baf";
+  src = fetchFromGitHub {
+    owner = "pytries";
+    repo = "marisa-trie";
+    tag = version;
+    hash = "sha256-U3gntlvJ0IaWoK+2V0OQ/XoDLfQsSbrrsSj95VR1m+4=";
   };
 
+  patches = [
+    (replaceVars ./unvendor-marisa.patch {
+      marisa = lib.getDev marisa-cpp;
+    })
+  ];
+
   postPatch = ''
-    substituteInPlace setup.py \
-      --replace "hypothesis==" "hypothesis>="
+    # https://github.com/pytries/marisa-trie/issues/132
+    substituteInPlace tests/test_binary_trie.py tests/test_trie.py \
+      --replace-fail MARISA_FORMAT_ERROR std::runtime_error
   '';
 
-  nativeBuildInputs = [ pytestrunner ];
+  build-system = [
+    cython
+    setuptools
+  ];
 
-  checkInputs = [ pytest hypothesis ];
+  buildInputs = [
+    marisa-cpp
+  ];
 
-  meta = with lib; {
-    description = "Static memory-efficient Trie-like structures for Python (2.x and 3.x) based on marisa-trie C++ library";
-    longDescription = "There are official SWIG-based Python bindings included in C++ library distribution; this package provides alternative Cython-based pip-installable Python bindings.";
-    homepage =  https://github.com/kmike/marisa-trie;
-    license = licenses.mit;
-    maintainers = with maintainers; [ ixxie ];
+  nativeCheckInputs = [
+    pytestCheckHook
+    hypothesis
+  ];
+
+  disabledTestPaths = [
+    # Don't test packaging
+    "tests/test_packaging.py"
+  ];
+
+  pythonImportsCheck = [ "marisa_trie" ];
+
+  meta = {
+    description = "Static memory-efficient Trie-like structures for Python based on marisa-trie C++ library";
+    longDescription = ''
+      There are official SWIG-based Python bindings included in C++ library distribution.
+      This package provides alternative Cython-based pip-installable Python bindings.
+    '';
+    homepage = "https://github.com/kmike/marisa-trie";
+    changelog = "https://github.com/pytries/marisa-trie/blob/${src.tag}/CHANGES.rst";
+    license = lib.licenses.mit;
   };
 }

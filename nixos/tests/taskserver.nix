@@ -1,289 +1,297 @@
-import ./make-test.nix ({ pkgs, ... }: let
-  snakeOil = pkgs.runCommand "snakeoil-certs" {
-    outputs = [ "out" "cacert" "cert" "key" "crl" ];
-    buildInputs = [ pkgs.gnutls.bin ];
-    caTemplate = pkgs.writeText "snakeoil-ca.template" ''
-      cn = server
-      expiration_days = -1
-      cert_signing_key
-      ca
-    '';
-    certTemplate = pkgs.writeText "snakeoil-cert.template" ''
-      cn = server
-      expiration_days = -1
-      tls_www_server
-      encryption_key
-      signing_key
-    '';
-    crlTemplate = pkgs.writeText "snakeoil-crl.template" ''
-      expiration_days = -1
-    '';
-    userCertTemplace = pkgs.writeText "snakoil-user-cert.template" ''
-      organization = snakeoil
-      cn = server
-      expiration_days = -1
-      tls_www_client
-      encryption_key
-      signing_key
-    '';
-  } ''
-    certtool -p --bits 4096 --outfile ca.key
-    certtool -s --template "$caTemplate" --load-privkey ca.key \
-                --outfile "$cacert"
-    certtool -p --bits 4096 --outfile "$key"
-    certtool -c --template "$certTemplate" \
-                --load-ca-privkey ca.key \
-                --load-ca-certificate "$cacert" \
-                --load-privkey "$key" \
-                --outfile "$cert"
-    certtool --generate-crl --template "$crlTemplate" \
-                            --load-ca-privkey ca.key \
-                            --load-ca-certificate "$cacert" \
-                            --outfile "$crl"
+{ pkgs, ... }:
+let
+  snakeOil =
+    pkgs.runCommand "snakeoil-certs"
+      {
+        outputs = [
+          "out"
+          "cacert"
+          "cert"
+          "key"
+          "crl"
+        ];
+        buildInputs = [ pkgs.gnutls.bin ];
+        caTemplate = pkgs.writeText "snakeoil-ca.template" ''
+          cn = server
+          expiration_days = -1
+          cert_signing_key
+          ca
+        '';
+        certTemplate = pkgs.writeText "snakeoil-cert.template" ''
+          cn = server
+          expiration_days = -1
+          tls_www_server
+          encryption_key
+          signing_key
+        '';
+        crlTemplate = pkgs.writeText "snakeoil-crl.template" ''
+          expiration_days = -1
+        '';
+        userCertTemplate = pkgs.writeText "snakeoil-user-cert.template" ''
+          organization = snakeoil
+          cn = server
+          expiration_days = -1
+          tls_www_client
+          encryption_key
+          signing_key
+        '';
+      }
+      ''
+        certtool -p --bits 4096 --outfile ca.key
+        certtool -s --template "$caTemplate" --load-privkey ca.key \
+                    --outfile "$cacert"
+        certtool -p --bits 4096 --outfile "$key"
+        certtool -c --template "$certTemplate" \
+                    --load-ca-privkey ca.key \
+                    --load-ca-certificate "$cacert" \
+                    --load-privkey "$key" \
+                    --outfile "$cert"
+        certtool --generate-crl --template "$crlTemplate" \
+                                --load-ca-privkey ca.key \
+                                --load-ca-certificate "$cacert" \
+                                --outfile "$crl"
 
-    mkdir "$out"
+        mkdir "$out"
 
-    # Stripping key information before the actual PEM-encoded values is solely
-    # to make test output a bit less verbose when copying the client key to the
-    # actual client.
-    certtool -p --bits 4096 | sed -n \
-      -e '/^----* *BEGIN/,/^----* *END/p' > "$out/alice.key"
+        # Stripping key information before the actual PEM-encoded values is solely
+        # to make test output a bit less verbose when copying the client key to the
+        # actual client.
+        certtool -p --bits 4096 | sed -n \
+          -e '/^----* *BEGIN/,/^----* *END/p' > "$out/alice.key"
 
-    certtool -c --template "$userCertTemplace" \
-                --load-privkey "$out/alice.key" \
-                --load-ca-privkey ca.key \
-                --load-ca-certificate "$cacert" \
-                --outfile "$out/alice.cert"
-  '';
+        certtool -c --template "$userCertTemplate" \
+                    --load-privkey "$out/alice.key" \
+                    --load-ca-privkey ca.key \
+                    --load-ca-certificate "$cacert" \
+                    --outfile "$out/alice.cert"
+      '';
 
-in {
+in
+{
   name = "taskserver";
 
   nodes = rec {
     server = {
       services.taskserver.enable = true;
       services.taskserver.listenHost = "::";
+      services.taskserver.openFirewall = true;
       services.taskserver.fqdn = "server";
       services.taskserver.organisations = {
-        testOrganisation.users = [ "alice" "foo" ];
+        testOrganisation.users = [
+          "alice"
+          "foo"
+        ];
         anotherOrganisation.users = [ "bob" ];
       };
-    };
 
-    # New generation of the server with manual config
-    newServer = { lib, nodes, ... }: {
-      imports = [ server ];
-      services.taskserver.pki.manual = {
-        ca.cert = snakeOil.cacert;
-        server.cert = snakeOil.cert;
-        server.key = snakeOil.key;
-        server.crl = snakeOil.crl;
-      };
-      # This is to avoid assigning a different network address to the new
-      # generation.
-      networking = lib.mapAttrs (lib.const lib.mkForce) {
-        inherit (nodes.server.config.networking)
-          hostName interfaces primaryIPAddress extraHosts;
+      specialisation.manual_config.configuration = {
+        services.taskserver.pki.manual = {
+          ca.cert = snakeOil.cacert;
+          server.cert = snakeOil.cert;
+          server.key = snakeOil.key;
+          server.crl = snakeOil.crl;
+        };
       };
     };
 
-    client1 = { pkgs, ... }: {
-      environment.systemPackages = [ pkgs.taskwarrior pkgs.gnutls ];
-      users.users.alice.isNormalUser = true;
-      users.users.bob.isNormalUser = true;
-      users.users.foo.isNormalUser = true;
-      users.users.bar.isNormalUser = true;
-    };
+    client1 =
+      { pkgs, ... }:
+      {
+        environment.systemPackages = [
+          pkgs.taskwarrior2
+          pkgs.gnutls
+        ];
+        users.users.alice.isNormalUser = true;
+        users.users.bob.isNormalUser = true;
+        users.users.foo.isNormalUser = true;
+        users.users.bar.isNormalUser = true;
+      };
 
     client2 = client1;
   };
 
-  testScript = { nodes, ... }: let
-    cfg = nodes.server.config.services.taskserver;
-    portStr = toString cfg.listenPort;
-    newServerSystem = nodes.newServer.config.system.build.toplevel;
-    switchToNewServer = "${newServerSystem}/bin/switch-to-configuration test";
-  in ''
-    sub su ($$) {
-      my ($user, $cmd) = @_;
-      my $esc = $cmd =~ s/'/'\\${"'"}'/gr;
-      return "su - $user -c '$esc'";
-    }
+  testScript =
+    { nodes, ... }:
+    let
+      cfg = nodes.server.services.taskserver;
+      portStr = toString cfg.listenPort;
+      specialisations = "${nodes.server.system.build.toplevel}/specialisation";
+      newServerSystem = "${specialisations}/manual_config";
+      switchToNewServer = "${newServerSystem}/bin/switch-to-configuration test";
+    in
+    ''
+      from shlex import quote
 
-    sub setupClientsFor ($$;$) {
-      my ($org, $user, $extraInit) = @_;
 
-      for my $client ($client1, $client2) {
-        $client->nest("initialize client for user $user", sub {
-          $client->succeed(
-            (su $user, "rm -rf /home/$user/.task"),
-            (su $user, "task rc.confirmation=no config confirmation no")
-          );
+      def su(user, cmd):
+          return f"su - {user} -c {quote(cmd)}"
 
-          my $exportinfo = $server->succeed(
-            "nixos-taskserver user export $org $user"
-          );
 
-          $exportinfo =~ s/'/'\\'''/g;
+      def no_extra_init(client, org, user):
+          pass
 
-          $client->nest("importing taskwarrior configuration", sub {
-            my $cmd = su $user, "eval '$exportinfo' >&2";
-            my ($status, $out) = $client->execute_($cmd);
-            if ($status != 0) {
-              $client->log("output: $out");
-              die "command `$cmd' did not succeed (exit code $status)\n";
-            }
-          });
 
-          eval { &$extraInit($client, $org, $user) };
+      def setup_clients_for(org, user, extra_init=no_extra_init):
+          for client in [client1, client2]:
+              with client.nested(f"initialize client for user {user}"):
+                  client.succeed(
+                      su(user, f"rm -rf /home/{user}/.task"),
+                      su(user, "task rc.confirmation=no config confirmation no"),
+                  )
 
-          $client->succeed(su $user,
-            "task config taskd.server server:${portStr} >&2"
-          );
+                  exportinfo = server.succeed(f"nixos-taskserver user export {org} {user}")
 
-          $client->succeed(su $user, "task sync init >&2");
-        });
-      }
-    }
+                  with client.nested("importing taskwarrior configuration"):
+                      client.succeed(su(user, f"eval {quote(exportinfo)} >&2"))
 
-    sub restartServer {
-      $server->succeed("systemctl restart taskserver.service");
-      $server->waitForOpenPort(${portStr});
-    }
+                  extra_init(client, org, user)
 
-    sub readdImperativeUser {
-      $server->nest("(re-)add imperative user bar", sub {
-        $server->execute("nixos-taskserver org remove imperativeOrg");
-        $server->succeed(
-          "nixos-taskserver org add imperativeOrg",
-          "nixos-taskserver user add imperativeOrg bar"
-        );
-        setupClientsFor "imperativeOrg", "bar";
-      });
-    }
+                  client.succeed(su(user, "task config taskd.server server:${portStr} >&2"))
 
-    sub testSync ($) {
-      my $user = $_[0];
-      subtest "sync for user $user", sub {
-        $client1->succeed(su $user, "task add foo >&2");
-        $client1->succeed(su $user, "task sync >&2");
-        $client2->fail(su $user, "task list >&2");
-        $client2->succeed(su $user, "task sync >&2");
-        $client2->succeed(su $user, "task list >&2");
-      };
-    }
+                  client.succeed(su(user, "task sync init >&2"))
 
-    sub checkClientCert ($) {
-      my $user = $_[0];
-      my $cmd = "gnutls-cli".
-        " --x509cafile=/home/$user/.task/keys/ca.cert".
-        " --x509keyfile=/home/$user/.task/keys/private.key".
-        " --x509certfile=/home/$user/.task/keys/public.cert".
-        " --port=${portStr} server < /dev/null";
-      return su $user, $cmd;
-    }
 
-    # Explicitly start the VMs so that we don't accidentally start newServer
-    $server->start;
-    $client1->start;
-    $client2->start;
+      def restart_server():
+          server.systemctl("restart taskserver.service")
+          server.wait_for_open_port(${portStr})
 
-    $server->waitForUnit("taskserver.service");
 
-    $server->succeed(
-      "nixos-taskserver user list testOrganisation | grep -qxF alice",
-      "nixos-taskserver user list testOrganisation | grep -qxF foo",
-      "nixos-taskserver user list anotherOrganisation | grep -qxF bob"
-    );
+      def re_add_imperative_user():
+          with server.nested("(re-)add imperative user bar"):
+              server.execute("nixos-taskserver org remove imperativeOrg")
+              server.succeed(
+                  "nixos-taskserver org add imperativeOrg",
+                  "nixos-taskserver user add imperativeOrg bar",
+              )
+              setup_clients_for("imperativeOrg", "bar")
 
-    $server->waitForOpenPort(${portStr});
 
-    $client1->waitForUnit("multi-user.target");
-    $client2->waitForUnit("multi-user.target");
+      def test_sync(user):
+          with subtest(f"sync for user {user}"):
+              client1.succeed(su(user, "task add foo >&2"))
+              client1.succeed(su(user, "task sync >&2"))
+              client2.fail(su(user, "task list >&2"))
+              client2.succeed(su(user, "task sync >&2"))
+              client2.succeed(su(user, "task list >&2"))
 
-    setupClientsFor "testOrganisation", "alice";
-    setupClientsFor "testOrganisation", "foo";
-    setupClientsFor "anotherOrganisation", "bob";
 
-    testSync $_ for ("alice", "bob", "foo");
+      def check_client_cert(user):
+          # debug level 3 is a workaround for gnutls issue https://gitlab.com/gnutls/gnutls/-/issues/1040
+          cmd = (
+              f"gnutls-cli -d 3"
+              f" --x509cafile=/home/{user}/.task/keys/ca.cert"
+              f" --x509keyfile=/home/{user}/.task/keys/private.key"
+              f" --x509certfile=/home/{user}/.task/keys/public.cert"
+              f" --port=${portStr} server < /dev/null"
+          )
+          return su(user, cmd)
 
-    $server->fail("nixos-taskserver user add imperativeOrg bar");
-    readdImperativeUser;
 
-    testSync "bar";
+      # Explicitly start the VMs so that we don't accidentally start newServer
+      server.start()
+      client1.start()
+      client2.start()
 
-    subtest "checking certificate revocation of user bar", sub {
-      $client1->succeed(checkClientCert "bar");
+      server.wait_for_unit("taskserver.service")
 
-      $server->succeed("nixos-taskserver user remove imperativeOrg bar");
-      restartServer;
+      server.succeed(
+          "nixos-taskserver user list testOrganisation | grep -qxF alice",
+          "nixos-taskserver user list testOrganisation | grep -qxF foo",
+          "nixos-taskserver user list anotherOrganisation | grep -qxF bob",
+      )
 
-      $client1->fail(checkClientCert "bar");
+      server.wait_for_open_port(${portStr})
 
-      $client1->succeed(su "bar", "task add destroy everything >&2");
-      $client1->fail(su "bar", "task sync >&2");
-    };
+      client1.wait_for_unit("multi-user.target")
+      client2.wait_for_unit("multi-user.target")
 
-    readdImperativeUser;
+      setup_clients_for("testOrganisation", "alice")
+      setup_clients_for("testOrganisation", "foo")
+      setup_clients_for("anotherOrganisation", "bob")
 
-    subtest "checking certificate revocation of org imperativeOrg", sub {
-      $client1->succeed(checkClientCert "bar");
+      for user in ["alice", "bob", "foo"]:
+          test_sync(user)
 
-      $server->succeed("nixos-taskserver org remove imperativeOrg");
-      restartServer;
+      server.fail("nixos-taskserver user add imperativeOrg bar")
+      re_add_imperative_user()
 
-      $client1->fail(checkClientCert "bar");
+      test_sync("bar")
 
-      $client1->succeed(su "bar", "task add destroy even more >&2");
-      $client1->fail(su "bar", "task sync >&2");
-    };
+      with subtest("checking certificate revocation of user bar"):
+          client1.succeed(check_client_cert("bar"))
 
-    readdImperativeUser;
+          server.succeed("nixos-taskserver user remove imperativeOrg bar")
+          restart_server()
 
-    subtest "check whether declarative config overrides user bar", sub {
-      restartServer;
-      testSync "bar";
-    };
+          client1.fail(check_client_cert("bar"))
 
-    subtest "check manual configuration", sub {
-      # Remove the keys from automatic CA creation, to make sure the new
-      # generation doesn't use keys from before.
-      $server->succeed('rm -rf ${cfg.dataDir}/keys/* >&2');
+          client1.succeed(su("bar", "task add destroy everything >&2"))
+          client1.fail(su("bar", "task sync >&2"))
 
-      $server->succeed('${switchToNewServer} >&2');
-      $server->waitForUnit("taskserver.service");
-      $server->waitForOpenPort(${portStr});
+      re_add_imperative_user()
 
-      $server->succeed(
-        "nixos-taskserver org add manualOrg",
-        "nixos-taskserver user add manualOrg alice"
-      );
+      with subtest("checking certificate revocation of org imperativeOrg"):
+          client1.succeed(check_client_cert("bar"))
 
-      setupClientsFor "manualOrg", "alice", sub {
-        my ($client, $org, $user) = @_;
-        my $cfgpath = "/home/$user/.task";
+          server.succeed("nixos-taskserver org remove imperativeOrg")
+          restart_server()
 
-        $client->copyFileFromHost("${snakeOil.cacert}", "$cfgpath/ca.cert");
-        for my $file ('alice.key', 'alice.cert') {
-          $client->copyFileFromHost("${snakeOil}/$file", "$cfgpath/$file");
-        }
+          client1.fail(check_client_cert("bar"))
 
-        for my $file ("$user.key", "$user.cert") {
-          $client->copyFileFromHost(
-            "${snakeOil}/$file", "$cfgpath/$file"
-          );
-        }
-        $client->copyFileFromHost(
-          "${snakeOil.cacert}", "$cfgpath/ca.cert"
-        );
-        $client->succeed(
-          (su "alice", "task config taskd.ca $cfgpath/ca.cert"),
-          (su "alice", "task config taskd.key $cfgpath/$user.key"),
-          (su $user, "task config taskd.certificate $cfgpath/$user.cert")
-        );
-      };
+          client1.succeed(su("bar", "task add destroy even more >&2"))
+          client1.fail(su("bar", "task sync >&2"))
 
-      testSync "alice";
-    };
-  '';
-})
+      re_add_imperative_user()
+
+      with subtest("check whether declarative config overrides user bar"):
+          restart_server()
+          test_sync("bar")
+
+
+      def init_manual_config(client, org, user):
+          cfgpath = f"/home/{user}/.task"
+
+          client.copy_from_host(
+              "${snakeOil.cacert}",
+              f"{cfgpath}/ca.cert",
+          )
+          for file in ["alice.key", "alice.cert"]:
+              client.copy_from_host(
+                  f"${snakeOil}/{file}",
+                  f"{cfgpath}/{file}",
+              )
+
+          for file in [f"{user}.key", f"{user}.cert"]:
+              client.copy_from_host(
+                  f"${snakeOil}/{file}",
+                  f"{cfgpath}/{file}",
+              )
+
+          client.succeed(
+              su("alice", f"task config taskd.ca {cfgpath}/ca.cert"),
+              su("alice", f"task config taskd.key {cfgpath}/{user}.key"),
+              su(user, f"task config taskd.certificate {cfgpath}/{user}.cert"),
+          )
+
+
+      with subtest("check manual configuration"):
+          # Remove the keys from automatic CA creation, to make sure the new
+          # generation doesn't use keys from before.
+          server.succeed("rm -rf ${cfg.dataDir}/keys/* >&2")
+
+          server.succeed(
+              "${switchToNewServer} >&2"
+          )
+          server.wait_for_unit("taskserver.service")
+          server.wait_for_open_port(${portStr})
+
+          server.succeed(
+              "nixos-taskserver org add manualOrg",
+              "nixos-taskserver user add manualOrg alice",
+          )
+
+          setup_clients_for("manualOrg", "alice", init_manual_config)
+
+          test_sync("alice")
+    '';
+}

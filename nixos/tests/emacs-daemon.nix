@@ -1,15 +1,15 @@
-import ./make-test.nix ({ pkgs, ...} : {
+{ lib, ... }:
+{
   name = "emacs-daemon";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ ];
-  };
+  meta.maintainers = lib.teams.emacs.members;
 
   enableOCR = true;
 
-  machine =
-    { config, pkgs, ... }:
+  nodes.machine =
+    { ... }:
 
-    { imports = [ ./common/x11.nix ];
+    {
+      imports = [ ./common/x11.nix ];
       services.emacs = {
         enable = true;
         defaultEditor = true;
@@ -21,25 +21,28 @@ import ./make-test.nix ({ pkgs, ...} : {
       environment.variables.TEST_SYSTEM_VARIABLE = "system variable";
     };
 
-  testScript =
-    ''
-      $machine->waitForUnit("multi-user.target");
+  testScript = ''
+    machine.wait_for_unit("multi-user.target")
 
-      # checks that the EDITOR environment variable is set
-      $machine->succeed("test \$(basename \"\$EDITOR\") = emacseditor");
+    # checks that the EDITOR environment variable is set
+    machine.succeed('test $(basename "$EDITOR") = emacseditor')
 
-      # waits for the emacs service to be ready
-      $machine->waitUntilSucceeds("systemctl --user status emacs.service | grep 'Active: active'");
+    # waits for the emacs service to be ready
+    machine.wait_until_succeeds(
+        "systemctl --user status emacs.service | grep 'Active: active'"
+    )
 
-      # connects to the daemon
-      $machine->succeed("emacsclient --create-frame \$EDITOR &");
+    # connects to the daemon
+    machine.succeed("emacsclient --no-wait --frame-parameters='((display . \"'\"$DISPLAY\"'\"))' --create-frame $EDITOR >&2")
 
-      # checks that Emacs shows the edited filename
-      $machine->waitForText("emacseditor");
+    # checks that Emacs shows the edited filename
+    machine.wait_for_text("emacseditor")
 
-      # makes sure environment variables are accessible from Emacs
-      $machine->succeed("emacsclient --eval '(getenv \"TEST_SYSTEM_VARIABLE\")'") =~ /system variable/ or die;
+    # makes sure environment variables are accessible from Emacs
+    machine.succeed(
+        "emacsclient --eval '(getenv \"TEST_SYSTEM_VARIABLE\")' | grep -q 'system variable'"
+    )
 
-      $machine->screenshot("emacsclient");
-    '';
-})
+    machine.screenshot("emacsclient")
+  '';
+}

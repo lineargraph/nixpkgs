@@ -1,31 +1,64 @@
-{ stdenv, lib, buildPythonPackage, fetchPypi, isPyPy, libgit2, six, cffi }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  cacert,
+  cached-property,
+  cffi,
+  fetchPypi,
+  isPyPy,
+  libgit2,
+  pycparser,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "pygit2";
-  version = "0.26.4";
+  version = "1.20.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "a8a0ecce4aadac2675afa5bcda0f698bfe39ec61ac1e15b9264704d1b41bb390";
+    hash = "sha256-clNzVinCL/9BKnLEjCBLGcIG/an8sB5RET2WiRlMsc8=";
   };
 
-  preConfigure = lib.optionalString stdenv.isDarwin ''
+  preConfigure = lib.optionalString stdenv.hostPlatform.isDarwin ''
     export DYLD_LIBRARY_PATH="${libgit2}/lib"
   '';
 
-  propagatedBuildInputs = [ libgit2 six ] ++ lib.optional (!isPyPy) cffi;
+  build-system = [ setuptools ];
 
-  preCheck = ''
-    # disable tests that require networking
-    rm test/test_repository.py
-    rm test/test_credentials.py
-    rm test/test_submodule.py
-  '';
+  buildInputs = [ libgit2 ];
 
-  meta = with lib; {
-    description = "A set of Python bindings to the libgit2 shared library";
-    homepage = https://pypi.python.org/pypi/pygit2;
-    license = licenses.gpl2;
+  dependencies = [
+    cached-property
+    pycparser
+  ]
+  ++ lib.optionals (!isPyPy) [ cffi ];
+
+  propagatedNativeBuildInputs = lib.optionals (!isPyPy) [ cffi ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTestPaths = [
+    # Disable tests that require networking
+    "test/test_repository.py"
+    "test/test_credentials.py"
+    "test/test_submodule.py"
+  ];
+
+  # Tests require certificates
+  # https://github.com/NixOS/nixpkgs/pull/72544#issuecomment-582674047
+  env.SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+
+  pythonImportsCheck = [ "pygit2" ];
+
+  meta = {
+    description = "Set of Python bindings to the libgit2 shared library";
+    homepage = "https://github.com/libgit2/pygit2";
+    changelog = "https://github.com/libgit2/pygit2/blob/v${version}/CHANGELOG.md";
+    license = lib.licenses.gpl2Only;
+    maintainers = [ ];
   };
 }

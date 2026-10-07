@@ -1,22 +1,36 @@
-{ stdenv, fetchPypi, buildPythonPackage, six }:
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  six,
+  cssselect,
+  lxml,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "leather";
-  version = "0.3.3";
-  name = "${pname}-${version}";
+  version = "0.4.1";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "125r372q7bwcajfdysp7w5zh5wccwxf1mkhqawl8h518nl1icv87";
+    hash = "sha256-ZxGcKu6TvoIfB3GTvYU04pbAWzi9F02cWoDEqjHRpNM=";
   };
 
   propagatedBuildInputs = [ six ];
 
-  meta = with stdenv.lib; {
-    homepage = http://leather.rtfd.io;
+  nativeCheckInputs = [
+    cssselect
+    lxml
+    pytestCheckHook
+  ];
+
+  meta = {
+    homepage = "http://leather.rtfd.io";
     description = "Python charting library";
-    license = licenses.mit;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ vrthra ];
+    license = lib.licenses.mit;
+    platforms = lib.platforms.all;
+    maintainers = [ ];
   };
 }

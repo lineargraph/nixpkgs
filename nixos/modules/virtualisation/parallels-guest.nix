@@ -1,4 +1,9 @@
-{ config, lib, pkgs, pkgs_i686, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -8,6 +13,14 @@ in
 
 {
 
+  imports = [
+    (mkRemovedOptionModule [
+      "hardware"
+      "parallels"
+      "autoMountShares"
+    ] "Shares are always automatically mounted since Parallels Desktop 20.")
+  ];
+
   options = {
     hardware.parallels = {
 
@@ -15,56 +28,16 @@ in
         type = types.bool;
         default = false;
         description = ''
-          This enables Parallels Tools for Linux guests, along with provided
-          video, mouse and other hardware drivers.
+          This enables Parallels Tools for Linux guests.
         '';
       };
 
-      autoMountShares = mkOption {
-        type = types.bool;
-        default = true;
-        description = ''
-          Control prlfsmountd service. When this service is running, shares can not be manually
-          mounted through `mount -t prl_fs ...` as this service will remount and trample any set options.
-          Recommended to enable for simple file sharing, but extended share use such as for code should
-          disable this to manually mount shares.
-        '';
-      };
-
-      package = mkOption {
-        type = types.package;
-        default = config.boot.kernelPackages.prl-tools;
-        defaultText = "config.boot.kernelPackages.prl-tools";
-        example = literalExample "config.boot.kernelPackages.prl-tools";
-        description = ''
-          Defines which package to use for prl-tools. Override to change the version.
-        '';
-      };
+      package = lib.mkPackageOption pkgs "prl-tools" { };
     };
 
   };
 
   config = mkIf config.hardware.parallels.enable {
-    services.xserver = {
-      drivers = singleton
-        { name = "prlvideo"; modules = [ prl-tools ]; libPath = [ prl-tools ]; };
-
-      screenSection = ''
-        Option "NoMTRR"
-      '';
-
-      config = ''
-        Section "InputClass"
-          Identifier "prlmouse"
-          MatchIsPointer "on"
-          MatchTag "prlmouse"
-          Driver "prlmouse"
-        EndSection
-      '';
-    };
-
-    hardware.opengl.package = prl-tools;
-    hardware.opengl.package32 = pkgs_i686.linuxPackages.prl-tools.override { libsOnly = true; kernel = null; };
 
     services.udev.packages = [ prl-tools ];
 
@@ -72,84 +45,54 @@ in
 
     boot.extraModulePackages = [ prl-tools ];
 
-    boot.kernelModules = [ "prl_tg" "prl_eth" "prl_fs" "prl_fs_freeze" ];
-
     services.timesyncd.enable = false;
 
+    # Parallels Desktop 26+ mounts shared folders under /mnt/psf by default.
+    # prltoolsd tries to create subdirectories there at runtime, which fails
+    # if /mnt/psf does not exist. Create it declaratively via tmpfiles.
+    systemd.tmpfiles.rules = [
+      "d /mnt/psf 0755 root root - -"
+    ];
+
     systemd.services.prltoolsd = {
-      description = "Parallels Tools' service";
+      description = "Parallels Tools Service";
       wantedBy = [ "multi-user.target" ];
+      # prltoolsd mount scripts invoke coreutils (tail, mkdir, chmod)
+      # and gnused (sed) without inheriting the service PATH in all
+      # code paths. Make them available alongside prl-tools.
+      path = [
+        prl-tools
+        pkgs.coreutils
+        pkgs.gnused
+      ];
       serviceConfig = {
         ExecStart = "${prl-tools}/bin/prltoolsd -f";
         PIDFile = "/var/run/prltoolsd.pid";
-      };
-    };
-
-    systemd.services.prlfsmountd = mkIf config.hardware.parallels.autoMountShares {
-      description = "Parallels Shared Folders Daemon";
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig = rec {
-        ExecStart = "${prl-tools}/sbin/prlfsmountd ${PIDFile}";
-        ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p /media";
-        ExecStopPost = "${prl-tools}/sbin/prlfsmountd -u";
-        PIDFile = "/run/prlfsmountd.pid";
+        WorkingDirectory = "${prl-tools}/bin";
       };
     };
 
     systemd.services.prlshprint = {
-      description = "Parallels Shared Printer Tool";
+      description = "Parallels Printing Tool";
       wantedBy = [ "multi-user.target" ];
       bindsTo = [ "cups.service" ];
+      path = [ prl-tools ];
       serviceConfig = {
-        Type = "forking";
         ExecStart = "${prl-tools}/bin/prlshprint";
+        WorkingDirectory = "${prl-tools}/bin";
       };
     };
 
-    systemd.user.services = {
-      prlcc = {
-        description = "Parallels Control Center";
-        wantedBy = [ "graphical-session.target" ];
-        serviceConfig = {
-          ExecStart = "${prl-tools}/bin/prlcc";
-        };
-      };
-      prldnd = {
-        description = "Parallels Control Center";
-        wantedBy = [ "graphical-session.target" ];
-        serviceConfig = {
-          ExecStart = "${prl-tools}/bin/prldnd";
-        };
-      };
-      prl_wmouse_d  = {
-        description = "Parallels Walking Mouse Daemon";
-        wantedBy = [ "graphical-session.target" ];
-        serviceConfig = {
-          ExecStart = "${prl-tools}/bin/prl_wmouse_d";
-        };
-      };
-      prlcp = {
-        description = "Parallels CopyPaste Tool";
-        wantedBy = [ "graphical-session.target" ];
-        serviceConfig = {
-          ExecStart = "${prl-tools}/bin/prlcp";
-        };
-      };
-      prlsga = {
-        description = "Parallels Shared Guest Applications Tool";
-        wantedBy = [ "graphical-session.target" ];
-        serviceConfig = {
-          ExecStart = "${prl-tools}/bin/prlsga";
-        };
-      };
-      prlshprof = {
-        description = "Parallels Shared Profile Tool";
-        wantedBy = [ "graphical-session.target" ];
-        serviceConfig = {
-          ExecStart = "${prl-tools}/bin/prlshprof";
-        };
+    systemd.user.services.prlcc = {
+      description = "Parallels Control Center";
+      wantedBy = [ "graphical-session.target" ];
+      path = [ prl-tools ];
+      serviceConfig = {
+        ExecStart = "${prl-tools}/bin/prlcc";
+        WorkingDirectory = "${prl-tools}/bin";
       };
     };
-
   };
+
+  meta.maintainers = with maintainers; [ codgician ];
 }

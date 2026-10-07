@@ -1,27 +1,37 @@
-{ stdenv, fetchurl, unzip, lib, file, licenseFile, optgamsFile}:
-
-assert licenseFile != null;
+{
+  lib,
+  stdenv,
+  fetchurl,
+  unzip,
+  file,
+  licenseFile ? null,
+  optgamsFile ? null,
+}:
 
 stdenv.mkDerivation rec {
   version = "25.0.2";
-  name = "gams-${version}";
+  pname = "gams";
   src = fetchurl {
     url = "https://d37drm4t2jghv5.cloudfront.net/distributions/${version}/linux/linux_x64_64_sfx.exe";
     sha256 = "4f95389579f33ff7c2586838a2c19021aa0746279555cbb51aa6e0efd09bd297";
   };
   unpackCmd = "unzip $src";
-  buildInputs = [ unzip file ];
+  nativeBuildInputs = [ unzip ];
+  buildInputs = [ file ];
   dontBuild = true;
 
-  installPhase = ''
-    mkdir -p "$out/bin" "$out/share/gams"
-    cp -a * "$out/share/gams"
+  installPhase =
+    assert licenseFile != null;
+    ''
+      mkdir -p "$out/bin" "$out/share/gams"
+      cp -a * "$out/share/gams"
 
-    cp ${licenseFile} $out/share/gamslice.txt
-  '' + stdenv.lib.optionalString (optgamsFile != null) ''
-    cp ${optgamsFile} $out/share/optgams.def
-    ln -s $out/share/gams/optgams.def $out/bin/optgams.def
-  '';
+      cp ${licenseFile} $out/share/gams/gamslice.txt
+    ''
+    + lib.optionalString (optgamsFile != null) ''
+      cp ${optgamsFile} $out/share/gams/optgams.def
+      ln -s $out/share/gams/optgams.def $out/bin/optgams.def
+    '';
 
   postFixup = ''
     for f in $out/share/gams/*; do
@@ -35,16 +45,16 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  meta = with stdenv.lib;{
+  meta = {
     description = "General Algebraic Modeling System";
     longDescription = ''
       The General Algebraic Modeling System is a high-level modeling system for mathematical optimization.
       GAMS is designed for modeling and solving linear, nonlinear, and mixed-integer optimization problems.
     '';
-    homepage = https://www.gams.com/;
-    license = licenses.unfree;
-    maintainers = [ maintainers.Scriptkiddi ];
-    platforms = platforms.linux;
+    homepage = "https://www.gams.com/";
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
+    license = lib.licenses.unfree;
+    maintainers = [ lib.maintainers.Scriptkiddi ];
+    platforms = lib.platforms.linux;
   };
 }
-

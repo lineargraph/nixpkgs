@@ -1,24 +1,43 @@
-{ lib, buildPythonPackage, fetchPypi, cython, numpy, nine, pytest, pytestrunner, python-utils, enum34 }:
+{
+  lib,
+  buildPythonPackage,
+  cython,
+  fetchPypi,
+  numpy,
+  pytestCheckHook,
+  python-utils,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "numpy-stl";
-  name = "${pname}-${version}";
-  version = "2.4.1";
+  version = "3.2.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "33e88013ed2f4f9ec45598f0e0930a0d602ab3c49aa19e92703a867f37ffe520";
+    pname = "numpy_stl";
+    inherit version;
+    hash = "sha256-WiDD95zdqgq8akuZ9Uhqzu1PiBUvKbGaV6zIROGD/U0=";
   };
 
-  checkInputs = [ pytest pytestrunner ];
+  build-system = [ setuptools ];
 
-  checkPhase = "py.test";
+  nativeBuildInputs = [ cython ];
 
-  propagatedBuildInputs = [ cython numpy nine python-utils enum34 ];
+  dependencies = [
+    numpy
+    python-utils
+  ];
 
-  meta = with lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "stl" ];
+
+  meta = {
     description = "Library to make reading, writing and modifying both binary and ascii STL files easy";
     homepage = "https://github.com/WoLpH/numpy-stl/";
-    license = licenses.bsd3;
+    changelog = "https://github.com/wolph/numpy-stl/releases/tag/v${version}";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

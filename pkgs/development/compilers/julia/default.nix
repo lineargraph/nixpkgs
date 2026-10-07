@@ -1,170 +1,163 @@
-{ stdenv, fetchgit, fetchurl
-# build tools
-, gfortran, m4, makeWrapper, patchelf, perl, which, python2, paxctl
-# libjulia dependencies
-, libunwind, llvm, readline, utf8proc, zlib
-# standard library dependencies
-, curl, fftwSinglePrec, fftw, gmp, libgit2, mpfr, openlibm, openspecfun, pcre2
-# linear algebra
-, openblas, arpack, suitesparse
-# Darwin frameworks
-, CoreServices, ApplicationServices
+{
+  stdenv,
+  lib,
+  callPackage,
+  fetchpatch2,
+  gcc14Stdenv,
+  gfortran14,
 }:
 
-with stdenv.lib;
+let
+  juliaWithPackages = callPackage ../../julia-modules { };
 
-# All dependencies must use the same OpenBLAS.
-let
-  arpack_ = arpack;
-  suitesparse_ = suitesparse;
-in
-let
-  arpack = arpack_.override { inherit openblas; };
-  suitesparse = suitesparse_.override { inherit openblas; };
-  llvmShared = if stdenv.isDarwin
-               then llvm.override { enableSharedLibraries = true; }
-               else llvm;
+  wrapJulia =
+    julia:
+    julia.overrideAttrs (oldAttrs: {
+      passthru = (oldAttrs.passthru or { }) // {
+        withPackages = juliaWithPackages.override { inherit julia; };
+      };
+    });
+
 in
 
-let
-  dsfmtVersion = "2.2.3";
-  dsfmt = fetchurl {
-    url = "http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-${dsfmtVersion}.tar.gz";
-    sha256 = "03kaqbjbi6viz0n33dk5jlf6ayxqlsq4804n7kwkndiga9s4hd42";
-  };
-
-  libuvVersion = "efb40768b7c7bd9f173a7868f74b92b1c5a61a0e";
-  libuv = fetchurl {
-    url = "https://api.github.com/repos/JuliaLang/libuv/tarball/${libuvVersion}";
-    sha256 = "1znkxyv1cy9pjap7afypipzsn04533ni3pqjd191fdgw2sv9cal7";
-  };
-
-  rmathVersion = "0.1";
-  rmath-julia = fetchurl {
-    url = "https://api.github.com/repos/JuliaLang/Rmath-julia/tarball/v${rmathVersion}";
-    sha256 = "1qyps217175qhid46l8f5i1v8i82slgp23ia63x2hzxwfmx8617p";
-  };
-in
-
-stdenv.mkDerivation rec {
-  pname = "julia";
-  version = "0.4.7";
-  name = "${pname}-${version}";
-
-  src = fetchurl {
-    url = "https://github.com/JuliaLang/${pname}/releases/download/v${version}/${name}.tar.gz";
-    sha256 = "09f531jhs8pyd1xng5c26x994w7q0sxxr28mr3qfw9wpkbmsc2pf";
-  };
-
-  prePatch = ''
-    cp "${dsfmt}" "./deps/dsfmt-${dsfmtVersion}.tar.gz"
-    cp "${rmath-julia}" "./deps/Rmath-julia-${rmathVersion}.tar.gz"
-    cp "${libuv}" "./deps/libuv-${libuvVersion}.tar.gz"
-  '';
-
-  patches = [
-    ./0001-use-system-utf8proc.patch
-    ./0002-use-system-suitesparse.patch
-    ./0003-no-ldconfig.patch
-  ] ++ stdenv.lib.optional stdenv.needsPax ./0004-hardened-0.4.7.patch;
-
-  postPatch = ''
-    patchShebangs . contrib
-  '';
-
-  buildInputs = [
-    arpack fftw fftwSinglePrec gmp libgit2 libunwind llvmShared mpfr
-    pcre2.dev openblas openlibm openspecfun readline suitesparse utf8proc
-    zlib
-  ] ++
-    stdenv.lib.optionals stdenv.isDarwin [CoreServices ApplicationServices] ;
-
-  nativeBuildInputs = [ curl gfortran m4 makeWrapper patchelf perl python2 which ]
-    ++ stdenv.lib.optional stdenv.needsPax paxctl;
-
-  makeFlags =
-    let
-      arch = head (splitString "-" stdenv.system);
-      march = { "x86_64" = "x86-64"; "i686" = "i686"; }."${arch}"
-              or (throw "unsupported architecture: ${arch}");
-      # Julia requires Pentium 4 (SSE2) or better
-      cpuTarget = { "x86_64" = "x86-64"; "i686" = "pentium4"; }."${arch}"
-                  or (throw "unsupported architecture: ${arch}");
-    in [
-      "ARCH=${arch}"
-      "MARCH=${march}"
-      "JULIA_CPU_TARGET=${cpuTarget}"
-      "PREFIX=$(out)"
-      "prefix=$(out)"
-      "SHELL=${stdenv.shell}"
-
-      "USE_SYSTEM_BLAS=1"
-      "USE_BLAS64=${if openblas.blas64 then "1" else "0"}"
-      "LIBBLAS=-lopenblas"
-      "LIBBLASNAME=libopenblas"
-
-      "USE_SYSTEM_LAPACK=1"
-      "LIBLAPACK=-lopenblas"
-      "LIBLAPACKNAME=libopenblas"
-
-      "USE_SYSTEM_SUITESPARSE=1"
-      "SUITESPARSE_LIB=-lsuitesparse"
-      "SUITESPARSE_INC=-I${suitesparse}/include"
-
-      "USE_SYSTEM_ARPACK=1"
-      "USE_SYSTEM_FFTW=1"
-      "USE_SYSTEM_GMP=1"
-      "USE_SYSTEM_LIBGIT2=1"
-      "USE_SYSTEM_LIBUNWIND=1"
-      "USE_SYSTEM_LLVM=1"
-      "USE_SYSTEM_MPFR=1"
-      "USE_SYSTEM_OPENLIBM=1"
-      "USE_SYSTEM_OPENSPECFUN=1"
-      "USE_SYSTEM_PATCHELF=1"
-      "USE_SYSTEM_PCRE=1"
-      "PCRE_CONFIG=${pcre2.dev}/bin/pcre2-config"
-      "PCRE_INCL_PATH=${pcre2.dev}/include/pcre2.h"
-      "USE_SYSTEM_READLINE=1"
-      "USE_SYSTEM_UTF8PROC=1"
-      "USE_SYSTEM_ZLIB=1"
-    ];
-
-  NIX_CFLAGS_COMPILE = [ "-fPIC" ];
-
-  LD_LIBRARY_PATH = makeLibraryPath [
-    arpack fftw fftwSinglePrec gmp libgit2 mpfr openblas openlibm
-    openspecfun pcre2 suitesparse
-  ];
-
-  NIX_LDFLAGS = optionalString stdenv.isDarwin "-rpath ${llvmShared}/lib";
-
-  dontStrip = true;
-  dontPatchELF = true;
-
-  enableParallelBuilding = true;
-
-  doCheck = true;
-  checkTarget = "testall";
-  # Julia's tests require read/write access to $HOME
-  preCheck = ''
-    export HOME="$NIX_BUILD_TOP"
-  '';
-
-  postInstall = ''
-    for prog in "$out/bin/julia" "$out/bin/julia-debug"; do
-        wrapProgram "$prog" \
-            --prefix LD_LIBRARY_PATH : "$LD_LIBRARY_PATH" \
-            --prefix PATH : "${stdenv.lib.makeBinPath [ curl ]}"
-    done
-  '';
-
-  meta = {
-    description = "High-level performance-oriented dynamical language for technical computing";
-    homepage = https://julialang.org/;
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ raskin ];
-    platforms = [ "i686-linux" "x86_64-linux" "x86_64-darwin" ];
-    #broken = stdenv.isi686;
-    broken = true; # 2018-04-10
-  };
+{
+  julia_110-bin = wrapJulia (
+    callPackage (import ./generic-bin.nix {
+      version = "1.10.12";
+      sha256 = {
+        x86_64-linux = "03dw4zykf09wnzc7mm8yv6k8hfb2pv0f090db34gyxlx6kz0vidh";
+        aarch64-linux = "18p5h0h00320rfc3yhjgp9z4f5xfgpzimphpzqmn8jbhjqhpn9fc";
+        aarch64-darwin = "0gvqmdnqgs2gv72zsnnppfhbsj7qynvimll9hm4nvm905bp2mcak";
+      };
+    }) { }
+  );
+  julia_111-bin = wrapJulia (
+    callPackage (import ./generic-bin.nix {
+      version = "1.11.9";
+      sha256 = {
+        x86_64-linux = "0dfy4wlrz6jbs7kd9r0bjk9d6sqgf4fakrxrnzwfl1bsdlsn6qxk";
+        aarch64-linux = "0gk2zxkwz2yyg3im23jpgaxzixchyywm19nbh51szmniah31y1x2";
+        aarch64-darwin = "1mrvycjlxs225sspdvvq4qbay1riyyjzqjs1d0xgqdkh6c6kv47d";
+      };
+    }) { }
+  );
+  julia_112-bin = wrapJulia (
+    callPackage (import ./generic-bin.nix {
+      version = "1.12.7";
+      sha256 = {
+        x86_64-linux = "1s39x8l6rgp6jw3b4bj3phaszm5h77g7rrhd4lslililcrvrwzjf";
+        aarch64-linux = "1whyfcdf7bncz2n1ixxzf3h30slildgfx8a06a401wy74jsw0hwj";
+        aarch64-darwin = "06b9r4a6zddqr1cg9cv206zmjbdaiz1rb5nr2f69qssvnbgwx3xg";
+      };
+    }) { }
+  );
+  julia_113-bin = wrapJulia (
+    callPackage (import ./generic-bin.nix {
+      version = "1.13.1";
+      sha256 = {
+        x86_64-linux = "0209grj6fn7yjs021rc99cwxza7p2abcv2fh263jq2m6vv41hbhg";
+        aarch64-linux = "1q2wxknfsh681qfsm9dbk4xc49r6qn1m2yd85wffld27w9i1hd3q";
+        aarch64-darwin = "0zqgkb294y2ih643z4fbil229hf6nvak98fbq9vbghkp8yfjbq53";
+      };
+    }) { }
+  );
+  julia_110 = wrapJulia (
+    callPackage
+      (import ./generic.nix {
+        version = "1.10.12";
+        hash = "sha256-KIFenIPyMWflO9SnnAhea5VHrigIrLI0FatcVYqFzuw=";
+        patches = [
+          # Revert https://github.com/JuliaLang/julia/pull/55354
+          # [build] Some improvements to the LLVM build system
+          # Related: https://github.com/JuliaLang/julia/issues/55617
+          (fetchpatch2 {
+            url = "https://github.com/JuliaLang/julia/commit/0be37db8c5b5a440bd9a11960ae9c998027b7337.patch";
+            revert = true;
+            hash = "sha256-gXC3LE3AuHMlSdA4dW+rbAhJpSB6ZMaz9X1qrHDPX7Y=";
+          })
+          # stackwalk: derive glibc longjmp pointer mangling
+          # https://github.com/JuliaLang/julia/pull/62775
+          # Probably not needed after the next release on this branch (1.10.13+)
+          (fetchpatch2 {
+            url = "https://github.com/JuliaLang/julia/commit/cf08907c8fc7ffc64dc664e2dd7469707824b601.patch?full_index=1";
+            hash = "sha256-1Dq5gEo+MiBoIZq8xBHNONwDrwLLQ3Yr6qQh6EJKCCQ=";
+          })
+        ];
+      })
+      {
+        stdenv = gcc14Stdenv;
+        gfortran = gfortran14;
+      }
+  );
+  julia_111 = wrapJulia (
+    callPackage
+      (import ./generic.nix {
+        version = "1.11.9";
+        hash = "sha256-SX5jIfJfxQQfP2P5sCGtglFn+GZlOIyHgnQ3qrr8GSI=";
+        patches = [
+          # stackwalk: derive glibc longjmp pointer mangling
+          # https://github.com/JuliaLang/julia/pull/62776
+          # Probably not needed after the next release on this branch (1.11.10+)
+          (fetchpatch2 {
+            url = "https://github.com/JuliaLang/julia/commit/6144379071697e734d374530c412e6ae3cd4715b.patch?full_index=1";
+            hash = "sha256-BUNCMrduKBQtcovTCvhGKV1+liFkR1V+eKBgYT8bHkE=";
+          })
+        ];
+      })
+      {
+        stdenv = gcc14Stdenv;
+        gfortran = gfortran14;
+      }
+  );
+  julia_112 = wrapJulia (
+    callPackage
+      (import ./generic.nix {
+        version = "1.12.7";
+        hash = "sha256-XH2Ft3HeMYXuyp+8LmFz2Lz2109oQYYiqenEOtdSr1E=";
+        patches = [
+          # stackwalk: derive glibc longjmp pointer mangling
+          # https://github.com/JuliaLang/julia/pull/62777
+          # Probably not needed after the next release on this branch (1.12.8+)
+          (fetchpatch2 {
+            url = "https://github.com/JuliaLang/julia/commit/3e2d8ff4d016f425a894113b7b77cc3b9dcb1cec.patch?full_index=1";
+            hash = "sha256-R5H8Y/jksfo0HF9AzxQaEHWBYX8N7zZjzd5wFsrv4D0=";
+          })
+        ]
+        ++ lib.optionals stdenv.hostPlatform.isDarwin [
+          ./patches/1.12/0001-zlib-rpath.patch
+          ./patches/1.12/0002-lbt-blas-detection.patch
+        ];
+      })
+      (
+        if stdenv.cc.isGNU then
+          {
+            stdenv = gcc14Stdenv;
+            gfortran = gfortran14;
+          }
+        else
+          { }
+      )
+  );
+  julia_113 = wrapJulia (
+    callPackage
+      (import ./generic.nix {
+        version = "1.13.1";
+        hash = "sha256-HCAGvO16H4tsklmO9lt7JPx0rqrcU1NaReTGGXABBXw=";
+        patches = [
+          # Upstream only sets CMAKE_BUILD_RPATH on Darwin (JuliaLang/julia#63103).
+          # On Linux in the Nix sandbox, intermediate build tools like llvm-min-tblgen
+          # need build_shlibdir in RPATH to find bundled libz/libzstd during LLVM compilation.
+          ./patches/1.13/0001-llvm-zlib-rpath.patch
+        ];
+      })
+      (
+        if stdenv.cc.isGNU then
+          {
+            stdenv = gcc14Stdenv;
+            gfortran = gfortran14;
+          }
+        else
+          { }
+      )
+  );
 }

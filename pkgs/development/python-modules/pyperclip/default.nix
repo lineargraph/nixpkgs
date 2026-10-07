@@ -1,19 +1,36 @@
-{ lib, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  python,
+  setuptools,
+}:
 
 buildPythonPackage rec {
-  version = "1.6.1";
+  version = "1.11.0";
   pname = "pyperclip";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "03ce3e66e2a26a085f0e043236dedd78aaabf53a64dab9a216671f74ee272845";
+    hash = "sha256-JEA1lj5EKFMNnjphAaHvlyCcaCXtqxVnvqwUjMwdsbY=";
   };
 
+  build-system = [ setuptools ];
+
+  # https://github.com/asweigart/pyperclip/issues/263
   doCheck = false;
 
-  meta = with lib; {
+  checkPhase = ''
+    ${python.interpreter} tests/test_pyperclip.py
+  '';
+
+  pythonImportsCheck = [ "pyperclip" ];
+
+  meta = {
     homepage = "https://github.com/asweigart/pyperclip";
-    license = licenses.bsdOriginal;
+    license = lib.licenses.bsd3;
     description = "Cross-platform clipboard module";
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

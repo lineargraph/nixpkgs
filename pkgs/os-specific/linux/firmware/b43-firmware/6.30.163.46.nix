@@ -1,29 +1,32 @@
-{ stdenv, fetchurl, b43FirmwareCutter }:
-
-stdenv.mkDerivation rec {
-  name = "b43-firmware-${version}";
+{
+  lib,
+  stdenvNoCC,
+  fetchurl,
+  b43-fwcutter,
+}:
+stdenvNoCC.mkDerivation (finalAttrs: {
+  pname = "b43-firmware";
   version = "6.30.163.46";
 
   src = fetchurl {
-    url = "http://www.lwfinger.com/b43-firmware/broadcom-wl-${version}.tar.bz2";
-    sha256 = "0baw6gcnrhxbb447msv34xg6rmlcj0gm3ahxwvdwfcvq4xmknz50";
+    url = "https://github.com/minios-linux/b43-firmware/releases/download/b43-firmware/broadcom-wl-${finalAttrs.version}.tar.bz2";
+    hash = "sha256-oHw7ayd4M8fb5h2qUR+QjNZsXidj63oIWavDbNkzXC0=";
   };
 
-  buildInputs = [ b43FirmwareCutter ];
-
-  phases = [ "unpackPhase" "installPhase" ];
+  nativeBuildInputs = [ b43-fwcutter ];
 
   sourceRoot = ".";
 
   installPhase = ''
-    mkdir $out
-    b43-fwcutter -w $out *.wl_apsta.o
+    mkdir -p $out/lib/firmware
+    b43-fwcutter -w $out/lib/firmware *.wl_apsta.o
   '';
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Firmware for cards supported by the b43 kernel module";
-    homepage = http://wireless.kernel.org/en/users/Drivers/b43;
-    downloadPage = http://www.lwfinger.com/b43-firmware;
-    license = licenses.unfree;
+    homepage = "https://wireless.wiki.kernel.org/en/users/drivers/b43";
+    downloadPage = "http://www.lwfinger.com/b43-firmware";
+    license = lib.licenses.unfree;
+    sourceProvenance = with lib.sourceTypes; [ binaryFirmware ];
   };
-}
+})

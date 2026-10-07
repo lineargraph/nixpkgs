@@ -1,9 +1,19 @@
-{ config, lib, pkgs }:
-
-with lib;
+{
+  config,
+  lib,
+  pkgs,
+  options,
+  ...
+}:
 
 let
   cfg = config.services.prometheus.exporters.dnsmasq;
+  inherit (lib)
+    mkOption
+    types
+    concatStringsSep
+    escapeShellArg
+    ;
 in
 {
   port = 9153;
@@ -17,21 +27,20 @@ in
     };
     leasesPath = mkOption {
       type = types.path;
-      default = "/var/lib/misc/dnsmasq.leases";
-      example = "/var/lib/dnsmasq/dnsmasq.leases";
+      default = "/var/lib/dnsmasq/dnsmasq.leases";
+      example = "/var/lib/misc/dnsmasq.leases";
       description = ''
-        Path to the <literal>dnsmasq.leases</literal> file.
+        Path to the `dnsmasq.leases` file.
       '';
     };
   };
   serviceOpts = {
     serviceConfig = {
-      DynamicUser = true;
       ExecStart = ''
         ${pkgs.prometheus-dnsmasq-exporter}/bin/dnsmasq_exporter \
           --listen ${cfg.listenAddress}:${toString cfg.port} \
           --dnsmasq ${cfg.dnsmasqListenAddress} \
-          --leases_path ${cfg.leasesPath} \
+          --leases_path ${escapeShellArg cfg.leasesPath} \
           ${concatStringsSep " \\\n  " cfg.extraFlags}
       '';
     };

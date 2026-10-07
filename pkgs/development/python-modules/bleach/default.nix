@@ -1,30 +1,51 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
-, pytestrunner
-, six
-, html5lib
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  setuptools,
+  tinycss2,
+  webencodings,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "bleach";
-  version = "2.1.3";
+  version = "6.4.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "eb7386f632349d10d9ce9d4a838b134d4731571851149f9cc2c05a9a837a9a44";
+  src = fetchFromGitHub {
+    owner = "mozilla";
+    repo = "bleach";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-2HcJIxmH78TIE4q481OZPL5ZempMqka6OChEv+BFctY=";
   };
 
-  checkInputs = [ pytest pytestrunner ];
-  propagatedBuildInputs = [ six html5lib ];
+  pythonRelaxDeps = [
+    # Upstream views pins as known-good versions: https://github.com/mozilla/bleach/pull/741
+    "tinycss2"
+  ];
 
-  postPatch = ''
-    substituteInPlace setup.py --replace ",<3dev" ""
-  '';
+  build-system = [ setuptools ];
+
+  dependencies = [
+    webencodings
+  ];
+
+  optional-dependencies = {
+    css = [ tinycss2 ];
+  };
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTests = [
+    # Disable network tests
+    "protocols"
+  ];
+
+  pythonImportsCheck = [ "bleach" ];
 
   meta = {
-    description = "An easy, HTML5, whitelisting HTML sanitizer";
+    description = "Easy, HTML5, whitelisting HTML sanitizer";
     longDescription = ''
       Bleach is an HTML sanitizing library that escapes or strips markup and
       attributes based on a white list. Bleach can also linkify text safely,
@@ -36,9 +57,10 @@ buildPythonPackage rec {
       to do lots of things, you're probably outside the use cases. Either
       trust those users, or don't.
     '';
-    homepage = https://github.com/mozilla/bleach;
-    downloadPage = https://github.com/mozilla/bleach/releases;
+    homepage = "https://github.com/mozilla/bleach";
+    downloadPage = "https://github.com/mozilla/bleach/releases";
+    changelog = "https://github.com/mozilla/bleach/blob/${finalAttrs.src.tag}/CHANGES";
     license = lib.licenses.asl20;
     maintainers = with lib.maintainers; [ prikhi ];
   };
-}
+})

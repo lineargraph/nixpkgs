@@ -1,24 +1,63 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, py
-, virtualenv
-, pluggy
-, setuptools_scm
-, six
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  packaging,
+  pluggy,
+  virtualenv,
+  filelock,
+  hatchling,
+  hatch-vcs,
+  platformdirs,
+  pyproject-api,
+  colorama,
+  chardet,
+  cachetools,
+  testers,
+  tox,
 }:
 
 buildPythonPackage rec {
   pname = "tox";
-  version = "3.0.0";
+  version = "4.34.1";
+  pyproject = true;
 
-  buildInputs = [ setuptools_scm ];
-  propagatedBuildInputs = [ py virtualenv pluggy six ];
+  src = fetchFromGitHub {
+    owner = "tox-dev";
+    repo = "tox";
+    tag = version;
+    hash = "sha256-pfftPTY7n47tCQFGCZRwsq0vCWZUeukFZO99gj5mTeo=";
+  };
 
-  doCheck = false;
+  build-system = [
+    hatchling
+    hatch-vcs
+  ];
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "96efa09710a3daeeb845561ebbe1497641d9cef2ee0aea30db6969058b2bda2f";
+  dependencies = [
+    cachetools
+    chardet
+    colorama
+    filelock
+    packaging
+    platformdirs
+    pluggy
+    pyproject-api
+    virtualenv
+  ];
+
+  doCheck = false; # infinite recursion via devpi-client
+
+  passthru.tests = {
+    version = testers.testVersion { package = tox; };
+  };
+
+  meta = {
+    changelog = "https://github.com/tox-dev/tox/releases/tag/${src.tag}";
+    description = "Generic virtualenv management and test command line tool";
+    mainProgram = "tox";
+    homepage = "https://github.com/tox-dev/tox";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

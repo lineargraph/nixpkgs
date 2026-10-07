@@ -1,7 +1,11 @@
 { qtModule, qtdeclarative }:
 
 qtModule {
-  name = "qtquickcontrols2";
-  qtInputs = [ qtdeclarative ];
-  outputs = [ "out" "dev" "bin" ];
+  pname = "qtquickcontrols2";
+  propagatedBuildInputs = [ qtdeclarative ];
+  outputs = [
+    "out"
+    "dev"
+    "bin"
+  ];
 }

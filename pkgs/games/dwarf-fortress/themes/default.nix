@@ -1,25 +1,32 @@
-{stdenv, lib, fetchFromGitHub}:
+{ lib, fetchFromGitHub, ... }:
 
-with builtins;
+let
+  inherit (lib)
+    importJSON
+    licenses
+    listToAttrs
+    maintainers
+    platforms
+    ;
+in
 
-listToAttrs (map (v: {
-  inherit (v) name;
-  value = stdenv.mkDerivation {
-    name = "${v.name}-${v.version}";
-    src = fetchFromGitHub {
+listToAttrs (
+  map (v: {
+    inherit (v) name;
+    value = fetchFromGitHub {
+      pname = v.name;
+      version = v.version;
       owner = "DFgraphics";
       repo = v.name;
       rev = v.version;
       sha256 = v.sha256;
+      meta = {
+        platforms = platforms.all;
+        maintainers = [
+          maintainers.shazow
+        ];
+        license = licenses.unfree;
+      };
     };
-    installPhase = ''
-      mkdir -p $out
-      cp -r data raw $out
-    '';
-    meta = with lib; {
-      platforms = platforms.all;
-      maintainers = [ maintainers.matthewbauer ];
-      license = licenses.free;
-    };
-  };
-}) (fromJSON (readFile ./themes.json)))
+  }) (importJSON ./themes.json)
+)

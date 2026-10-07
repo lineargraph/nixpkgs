@@ -1,59 +1,174 @@
-{ gui ? true,
-  buildPythonPackage, fetchFromGitHub, lib,
-  sphinx_1_2, lxml, isodate, numpy, pytest,
-  tkinter ? null, py3to2, isPy3k,
-  ... }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
 
-buildPythonPackage rec {
-  pname = "arelle-${version}${lib.optionalString (!gui) "-headless"}";
-  version = "2017-08-24";
-  name = pname + "-" + version;
+  setuptools,
+  setuptools-scm,
 
-  disabled = !isPy3k;
+  bottle,
+  certifi,
+  filelock,
+  isodate,
+  jaconv,
+  jsonschema,
+  lxml,
+  numpy,
+  openpyxl,
+  pillow,
+  pyparsing,
+  python-dateutil,
+  regex,
+  truststore,
+  typing-extensions,
 
-  # Releases are published at http://arelle.org/download/ but sadly no
-  # tags are published on github.
+  gui ? true,
+  tkinter,
+
+  aniso8601,
+  cheroot,
+  graphviz,
+  holidays,
+  matplotlib,
+  pg8000,
+  pycryptodome,
+  pymysql,
+  pyodbc,
+  pytz,
+  rdflib,
+  tinycss2,
+  tornado,
+
+  sphinxHook,
+  sphinx-autodoc2,
+  myst-parser,
+  sphinx-copybutton,
+  furo,
+
+  writableTmpDirAsHomeHook,
+  pytestCheckHook,
+  boto3,
+}:
+
+buildPythonPackage (finalAttrs: {
+  pname = "arelle${lib.optionalString (!gui) "-headless"}";
+  version = "2.39.10";
+  pyproject = true;
+
   src = fetchFromGitHub {
     owner = "Arelle";
     repo = "Arelle";
-    rev = "cb24e35d57b562a864ae3dd4542c4d9fcf3865fe";
-    sha256 = "1sbvhb3xlfnyvf1xj9dxwpcrfiaf7ikkdwvvap7aaxfxgiz85ip2";
+    tag = finalAttrs.version;
+    hash = "sha256-oMZZCmZyUfCP3qe3FMHmR9IbmtDcKLS5NHmnWQJ8TZQ=";
   };
-  outputs = ["out" "doc"];
-  patches = [
-    ./tests.patch
-  ];
-  postPatch = "rm testParser2.py";
-  buildInputs = [
-    sphinx_1_2
-    pytest
-    py3to2
-  ];
-  propagatedBuildInputs = [
-    lxml
-    isodate
-    numpy
-  ] ++ lib.optional gui [
-    tkinter
+
+  outputs = [
+    "out"
+    "doc"
   ];
 
-  # arelle-gui is useless without gui dependencies, so delete it when !gui.
-  postInstall = lib.optionalString (!gui) ''
-    find $out/bin -name "*arelle-gui*" -delete
+  postPatch = ''
+    substituteInPlace pyproject.toml --replace-fail \
+        'requires = ["setuptools>=82,<83", "wheel>=0.46,<0.47", "setuptools_scm>=10.0,<11.0"]' \
+        'requires = ["setuptools", "wheel", "setuptools_scm[toml]"]'
   '';
 
-  # Documentation
-  postBuild = ''
-    (cd apidocs && make html && cp -r _build $doc)
-    '';
+  pythonRelaxDeps = [
+    "pillow" # pillow's current version is above what arelle officially supports, but it should be fine
+  ];
 
-  doCheck = if gui then true else false;
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
+
+  dependencies = [
+    bottle
+    certifi
+    filelock
+    isodate
+    jaconv
+    jsonschema
+    lxml
+    numpy
+    openpyxl
+    pillow
+    pyparsing
+    python-dateutil
+    regex
+    truststore
+    typing-extensions
+  ]
+  ++ lib.optionals gui [ tkinter ];
+
+  optional-dependencies = {
+    crypto = [ pycryptodome ];
+    db = [
+      # cx-oracle # Unfree
+      pg8000
+      pymysql
+      pyodbc
+      rdflib
+    ];
+    efm = [
+      aniso8601
+      holidays
+      matplotlib
+      pytz
+    ];
+    esef = [ tinycss2 ];
+    objectmaker = [ graphviz ];
+    # viewer = [ ixbrl-viewer ]; # Not yet packaged
+    webserver = [
+      cheroot
+      tornado
+    ];
+    xule = [ aniso8601 ];
+  };
+
+  nativeBuildInputs = [
+    # deps for docs
+    sphinxHook
+    sphinx-autodoc2
+    myst-parser
+    sphinx-copybutton
+    furo
+  ];
+
+  # the arelleGUI executable doesn't work when the gui option is false
+  postInstall = lib.optionalString (!gui) ''
+    find $out/bin -name "*arelleGUI*" -delete
+  '';
+
+  nativeCheckInputs = [
+    writableTmpDirAsHomeHook
+    pytestCheckHook
+    boto3
+  ]
+  ++ lib.concatAttrValues finalAttrs.passthru.optional-dependencies;
+
+  disabledTestPaths = [
+    "tests/integration_tests"
+  ]
+  ++ lib.optionals (!gui) [
+    # these tests import tkinter
+    "tests/unit_tests/arelle/test_updater.py"
+    "tests/unit_tests/arelle/test_import.py"
+  ];
 
   meta = {
-    description = "An open source facility for XBRL, the eXtensible Business Reporting Language supporting various standards, exposed through a python or REST API" + lib.optionalString gui " and a graphical user interface";
-    homepage = http://arelle.org/;
+    description = "Open source XBRL platform";
+    longDescription = ''
+      An open source facility for XBRL, the eXtensible Business Reporting
+      Language supporting various standards, exposed through a Python or
+      REST API ${lib.optionalString gui " and a graphical user interface"}.
+    '';
+    mainProgram = "arelle";
+    homepage = "http://arelle.org/";
     license = lib.licenses.asl20;
-    platforms = lib.platforms.all;
-    maintainers = with lib.maintainers; [ roberth ];
+    maintainers = with lib.maintainers; [
+      tomasajt
+      roberth
+    ];
   };
-}
+})

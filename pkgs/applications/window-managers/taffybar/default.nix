@@ -1,9 +1,23 @@
-{ stdenv, ghcWithPackages, xmessage, makeWrapper, packages ? (x: []) }:
+{
+  stdenv,
+  ghcWithPackages,
+  taffybar,
+  makeWrapper,
+  packages ? (x: [ ]),
+}:
 
 let
-taffybarEnv = ghcWithPackages (self: [ self.taffybar ] ++ packages self);
-in stdenv.mkDerivation {
-  name = "taffybar-with-packages";
+  taffybarEnv = ghcWithPackages (
+    self:
+    [
+      self.taffybar
+    ]
+    ++ packages self
+  );
+in
+stdenv.mkDerivation {
+  pname = "taffybar-with-packages";
+  inherit (taffybar) version;
 
   nativeBuildInputs = [ makeWrapper ];
 
@@ -13,7 +27,14 @@ in stdenv.mkDerivation {
       --set NIX_GHC "${taffybarEnv}/bin/ghc"
   '';
 
-  meta = {
-    platforms = stdenv.lib.platforms.unix;
-  };
+  # Trivial derivation
+  preferLocalBuild = true;
+  allowSubstitutes = false;
+
+  # For hacking purposes
+  passthru.env = taffybarEnv;
+  buildInputs = [ taffybarEnv ];
+  shellHook = "eval $(egrep ^export ${taffybarEnv}/bin/ghc)";
+
+  inherit (taffybar) meta;
 }

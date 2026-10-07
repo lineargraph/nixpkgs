@@ -1,46 +1,79 @@
-{ stdenv, fetchFromGitHub, avrbinutils, avrgcc, avrlibc, libelf, which, git, pkgconfig, freeglut
-, libGLU_combined }:
+{
+  lib,
+  stdenv,
+  makeSetupHook,
+  fetchFromGitHub,
+  libelf,
+  which,
+  pkg-config,
+  libglut,
+  avrgcc,
+  avrlibc,
+  libGLU,
+  libGL,
+}:
 
+let
+  setupHookDarwin = makeSetupHook {
+    name = "darwin-avr-gcc-hook";
+    substitutions = {
+      darwinSuffixSalt = stdenv.cc.suffixSalt;
+      avrSuffixSalt = avrgcc.suffixSalt;
+    };
+    meta.license = lib.licenses.mit;
+  } ./setup-hook-darwin.sh;
+
+in
 stdenv.mkDerivation rec {
-  name = "simavr-${version}";
-  version = "1.5";
+  pname = "simavr";
+  version = "1.7";
 
   src = fetchFromGitHub {
     owner = "buserror";
     repo = "simavr";
-    rev = "e0d4de41a72520491a4076b3ed87beb997a395c0";
-    sha256 = "0b2lh6l2niv80dmbm9xkamvnivkbmqw6v97sy29afalrwfxylxla";
+    rev = "v${version}";
+    sha256 = "0njz03lkw5374x1lxrq08irz4b86lzj2hibx46ssp7zv712pq55q";
   };
 
-  # ld: cannot find -lsimavr
-  enableParallelBuilding = false;
+  makeFlags = [
+    "DESTDIR=$(out)"
+    "PREFIX="
+    "AVR_ROOT=${avrlibc}/avr"
+    "SIMAVR_VERSION=${version}"
+    "AVR=avr-"
+  ];
 
-  preConfigure = ''
-    substituteInPlace Makefile.common --replace "-I../simavr/sim/avr -I../../simavr/sim/avr" \
-    "-I${avrlibc}/avr/include -L${avrlibc}/avr/lib/avr5  -B${avrlibc}/avr/lib -I../simavr/sim/avr -I../../simavr/sim/avr"
+  nativeBuildInputs = [
+    which
+    pkg-config
+    avrgcc
+  ]
+  ++ lib.optional stdenv.hostPlatform.isDarwin setupHookDarwin;
+  buildInputs = [
+    libelf
+    libglut
+    libGLU
+    libGL
+  ];
+
+  # remove forbidden references to $TMPDIR
+  preFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
+    patchelf --shrink-rpath --allowed-rpath-prefixes "$NIX_STORE" "$out"/bin/*
   '';
-  buildFlags = "AVR_ROOT=${avrlibc}/avr SIMAVR_VERSION=${version}";
-  installFlags = buildFlags + " DESTDIR=$(out)";
 
-  
-  # Hack to avoid TMPDIR in RPATHs.
-  preFixup = ''rm -rf "$(pwd)" && mkdir "$(pwd)" '';
+  doCheck = true;
+  checkTarget = "-C tests run_tests";
 
-  postFixup = ''
-    target="$out/bin/simavr"
-    patchelf --set-rpath "$(patchelf --print-rpath "$target"):$out/lib" "$target"
-  '';
+  meta = {
+    description = "Lean and mean Atmel AVR simulator";
+    mainProgram = "simavr";
+    homepage = "https://github.com/buserror/simavr";
+    license = lib.licenses.gpl3;
+    platforms = lib.platforms.unix;
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ which git avrbinutils avrgcc avrlibc libelf freeglut libGLU_combined ];
-
-  meta = with stdenv.lib; {
-    description = "A lean and mean Atmel AVR simulator";
-    homepage    = https://github.com/buserror/simavr;
-    license     = licenses.gpl3;
-    platforms   = platforms.linux;
-    maintainers = with maintainers; [ goodrone ];
+    maintainers = with lib.maintainers; [
+      goodrone
+      patryk27
+    ];
   };
-
 }
-

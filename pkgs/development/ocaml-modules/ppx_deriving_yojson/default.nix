@@ -1,32 +1,70 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, ocamlbuild, topkg, cppo
-, ppx_import, ppx_deriving, yojson, ounit
+{
+  lib,
+  buildDunePackage,
+  fetchFromGitHub,
+  fetchpatch,
+  ocaml,
+  ppxlib,
+  ounit,
+  ounit2,
+  ppx_deriving,
+  result,
+  yojson,
 }:
 
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-ppx_deriving_yojson-${version}";
-  version = "3.1";
+let
+  param =
+    if lib.versionAtLeast ppxlib.version "0.36" then
+      {
+        version = "3.10.0";
+        sha256 = "sha256-Dy9egNpZdxsTPLo2mbpiFTMh5cYUXXOlOZLlQJuAK+E=";
+        checkInputs = [ ounit2 ];
+      }
+    else if lib.versionAtLeast ppxlib.version "0.30" then
+      {
+        version = "3.9.0";
+        sha256 = "sha256-0d6YcBkeFoHXffCYjLIIvruw8B9ZB6NbUijhTv9uyN8=";
+        checkInputs = [ ounit2 ];
+      }
+    else
+      {
+        version = "3.6.1";
+        sha256 = "1icz5h6p3pfj7my5gi7wxpflrb8c902dqa17f9w424njilnpyrbk";
+        checkInputs = [ ounit ];
+        propagatedBuildInputs = [ result ];
+      };
+in
+
+buildDunePackage (finalAttrs: {
+  pname = "ppx_deriving_yojson";
+  inherit (param) version;
+
+  patches = fetchpatch {
+    url = "https://github.com/ocaml-ppx/ppx_deriving_yojson/commit/1bbbe2c4c5822c4297b0b812c59a155cf96c5089.patch";
+    hash = "sha256-jYW2/Ix6T94vfI2mGnIkYSG1rjsWEsnOPA1mufP3sd4=";
+  };
 
   src = fetchFromGitHub {
     owner = "ocaml-ppx";
     repo = "ppx_deriving_yojson";
-    rev = "v${version}";
-    sha256 = "1pwfnq7z60nchba4gnf58918ll11w3gj5i88qhz1p2jm45hxqgnw";
+    rev = "v${finalAttrs.version}";
+    inherit (param) sha256;
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild cppo ounit ppx_import ];
-
-  propagatedBuildInputs = [ ppx_deriving yojson ];
-
-  inherit (topkg) installPhase;
+  propagatedBuildInputs = [
+    ppxlib
+    ppx_deriving
+    yojson
+  ]
+  ++ param.propagatedBuildInputs or [ ];
 
   doCheck = true;
-  checkTarget = "test";
+  inherit (param) checkInputs;
 
   meta = {
-    description = "A Yojson codec generator for OCaml >= 4.02.";
-    inherit (src.meta) homepage;
-    license = stdenv.lib.licenses.mit;
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
-    inherit (ocaml.meta) platforms;
+    description = "Yojson codec generator for OCaml >= 4.04";
+    inherit (finalAttrs.src.meta) homepage;
+    license = lib.licenses.mit;
+    maintainers = [ lib.maintainers.vbgl ];
   };
-}
+})

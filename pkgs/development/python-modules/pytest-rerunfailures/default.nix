@@ -1,24 +1,38 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytest, mock }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  packaging,
+  pytest,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pytest-rerunfailures";
-  version = "4.0";
+  version = "16.4";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "18lpy6d9b4ck8j3jwh4vmxj54is0fwanpmpg70qg4y0fycdqzwks";
+  src = fetchFromGitHub {
+    owner = "pytest-dev";
+    repo = "pytest-rerunfailures";
+    tag = version;
+    hash = "sha256-wdUNGc50Yqrctc8OXBmgRwmHVjSeOq+ADRYcLtKSraM=";
   };
 
-  checkInputs = [ pytest mock ];
+  build-system = [ setuptools ];
 
-  checkPhase = ''
-    py.test
-  '';
+  buildInputs = [ pytest ];
 
-  meta = with stdenv.lib; {
-    description = "pytest plugin to re-run tests to eliminate flaky failures.";
-    homepage = https://github.com/pytest-dev/pytest-rerunfailures;
-    license = licenses.mpl20;
-    maintainers = with maintainers; [ jgeerds ];
+  dependencies = [ packaging ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = {
+    description = "Pytest plugin to re-run tests to eliminate flaky failures";
+    homepage = "https://github.com/pytest-dev/pytest-rerunfailures";
+    changelog = "https://github.com/pytest-dev/pytest-rerunfailures/blob/${src.tag}/CHANGES.rst";
+    license = lib.licenses.mpl20;
+    maintainers = with lib.maintainers; [ das-g ];
   };
 }

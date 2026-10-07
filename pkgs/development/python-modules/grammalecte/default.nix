@@ -1,33 +1,37 @@
-{ lib
-, buildPythonPackage
-, fetchurl
-, bottle
-, isPy3k
+{
+  lib,
+  buildPythonPackage,
+  fetchurl,
+  bottle,
+  isPy3k,
 }:
 
 buildPythonPackage rec {
   pname = "grammalecte";
-  version = "0.6.1";
-  name = "${pname}-${version}";
+  version = "2.1.1";
+  format = "setuptools";
 
   src = fetchurl {
-    url = "http://www.dicollecte.org/grammalecte/zip/Grammalecte-fr-v${version}.zip";
-    sha256 = "0y2ck6pkd2p3cbjlxxvz3x5rnbg3ghfx97n13302rnab66cy4zkh";
+    url = "https://grammalecte.net/grammalecte/zip/Grammalecte-fr-v${version}.zip";
+    sha256 = "076jv3ywdgqqzg92bfbagc7ypy08xjq5zn4vgna6j9350fkfqhzn";
   };
+
+  patchPhase = ''
+    runHook prePatch
+    substituteInPlace grammalecte-server.py --replace sys.version_info.major sys.version_info
+    runHook postPatch
+  '';
 
   propagatedBuildInputs = [ bottle ];
 
-  preBuild = "cd ..";
-  postInstall = ''
-    rm $out/bin/bottle.py
-  '';
+  sourceRoot = ".";
 
   disabled = !isPy3k;
 
   meta = {
-    description = "Grammalecte is an open source grammar checker for the French language";
-    homepage = https://dicollecte.org/grammalecte/;
-    license = with lib.licenses; [ gpl3 ];
+    description = "Open source grammar and typographic corrector for the French language";
+    homepage = "https://grammalecte.net";
+    license = lib.licenses.gpl3Only;
     maintainers = with lib.maintainers; [ apeyroux ];
   };
 }

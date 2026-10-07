@@ -1,70 +1,239 @@
-{ emscriptenVersion, stdenv, fetchFromGitHub, emscriptenfastcomp, python, nodejs, closurecompiler, pkgs
-, jre, binaryen, enableWasm ? true ,  python2Packages, cmake
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  python3,
+  nodejs,
+  closurecompiler,
+  jre,
+  binaryen,
+  llvmPackages,
+  symlinkJoin,
+  makeWrapper,
+  replaceVars,
+  buildNpmPackage,
+  nix-update-script,
+  emscripten,
 }:
 
 let
-  rev = emscriptenVersion;
-  appdir = "share/emscripten";
-  binaryenVersioned = binaryen.override { emscriptenRev = rev; };
+  pythonWithPsutil = python3.withPackages (ps: [ ps.psutil ]);
 in
 
-stdenv.mkDerivation {
-  name = "emscripten-${rev}";
+stdenv.mkDerivation rec {
+  pname = "emscripten";
+  version = "6.0.9";
 
-  src = fetchFromGitHub {
-    owner = "kripken";
-    repo = "emscripten";
-    sha256 = "02p0cp86vd1mydlpq544xbydggpnrq9dhbxx7h08j235frjm5cdc";
-    inherit rev;
+  llvmEnv = symlinkJoin {
+    name = "emscripten-llvm-${version}";
+    paths = with llvmPackages; [
+      clang-unwrapped
+      (lib.getLib clang-unwrapped)
+      lld
+      llvm
+    ];
   };
 
-  buildInputs = [ nodejs cmake python ];
+  nodeModules = buildNpmPackage {
+    name = "emscripten-node-modules-${version}";
+    inherit pname version src;
 
-  buildCommand = ''
-    mkdir -p $out/${appdir}
-    cp -r $src/* $out/${appdir}
-    chmod -R +w $out/${appdir}
-    grep -rl '^#!/usr.*python' $out/${appdir} | xargs sed -i -s 's@^#!/usr.*python.*@#!${python}/bin/python@'
-    sed -i -e "s,EM_CONFIG = '~/.emscripten',EM_CONFIG = '$out/${appdir}/config'," $out/${appdir}/tools/shared.py
-    sed -i -e 's,^.*did not see a source tree above the LLVM.*$,      return True,' $out/${appdir}/tools/shared.py
-    sed -i -e 's,def check_sanity(force=False):,def check_sanity(force=False):\n  return,' $out/${appdir}/tools/shared.py
-    # fixes cmake support
-    sed -i -e "s/print \('emcc (Emscript.*\)/sys.stderr.write(\1); sys.stderr.flush()/g" $out/${appdir}/emcc.py
-    mkdir $out/bin
-    ln -s $out/${appdir}/{em++,em-config,emar,embuilder.py,emcc,emcmake,emconfigure,emlink.py,emmake,emranlib,emrun,emscons} $out/bin
+    npmDepsHash = "sha256-t0ekoKE9LQk6an4Sk51IOqKBOSmA7sbnoYLsOlsEZIo=";
 
-    echo "EMSCRIPTEN_ROOT = '$out/${appdir}'" > $out/${appdir}/config
-    echo "LLVM_ROOT = '${emscriptenfastcomp}/bin'" >> $out/${appdir}/config
-    echo "PYTHON = '${python}/bin/python'" >> $out/${appdir}/config
-    echo "NODE_JS = '${nodejs}/bin/node'" >> $out/${appdir}/config
-    echo "JS_ENGINES = [NODE_JS]" >> $out/${appdir}/config
-    echo "COMPILER_ENGINE = NODE_JS" >> $out/${appdir}/config
-    echo "CLOSURE_COMPILER = '${closurecompiler}/share/java/closure-compiler-v${closurecompiler.version}.jar'" >> $out/${appdir}/config
-    echo "JAVA = '${jre}/bin/java'" >> $out/${appdir}/config
-    # to make the test(s) below work
-    echo "SPIDERMONKEY_ENGINE = []" >> $out/${appdir}/config
-  ''
-  + stdenv.lib.optionalString enableWasm ''
-    echo "BINARYEN_ROOT = '${binaryenVersioned}'" >> $out/share/emscripten/config
-  ''
-  +
-  ''
-    echo "--------------- running test -----------------"
-    # quick hack to get the test working
-    HOME=$TMPDIR
-    cp $out/${appdir}/config $HOME/.emscripten
-    export PATH=$PATH:$out/bin
+    dontBuild = true;
 
-    #export EMCC_DEBUG=2  
-    ${python}/bin/python $src/tests/runner.py test_hello_world
-    echo "--------------- /running test -----------------"
+    # Copy node_modules directly.
+    installPhase = ''
+      cp -r node_modules $out/
+    '';
+  };
+
+  src = fetchFromGitHub {
+    owner = "emscripten-core";
+    repo = "emscripten";
+    hash = "sha256-zfNbudFzII/nc0oyojalEaVppSWbCg7v1yiM7ENYQSE=";
+    rev = version;
+  };
+
+  strictDeps = true;
+
+  nativeBuildInputs = [
+    makeWrapper
+    python3
+  ];
+  buildInputs = [
+    nodejs
+  ];
+
+  patches = [
+    (replaceVars ./0001-emulate-clang-sysroot-include-logic.patch {
+      resourceDir = "${llvmEnv}/lib/clang/${lib.versions.major llvmPackages.llvm.version}/";
+    })
+    # Remove this patch when llvmPackages reaches LLVM 23
+    ./0002-libunwind-restore-Unwind_CallPersonality.patch
+  ];
+
+  buildPhase = ''
+        runHook preBuild
+
+        # Make Python scripts executable so patchShebangs will patch their shebangs
+        chmod +x *.py tools/*.py
+
+        patchShebangs .
+
+        # Emscripten requires an unreleased LLVM version. Set the check to the
+        # LLVM version that this package supplies. The --replace-fail flag stops
+        # the build if Emscripten changes this constant. A sed command for a
+        # fixed version does not give an error. It leaves the check at an LLVM
+        # version that this package does not have.
+        substituteInPlace tools/shared.py \
+          --replace-fail "EXPECTED_LLVM_VERSION = 24" \
+            "EXPECTED_LLVM_VERSION = ${lib.versions.major llvmPackages.llvm.version}"
+
+        # fixes cmake support
+        sed -i -e "s/print \('emcc (Emscript.*\)/sys.stderr.write(\1); sys.stderr.flush()/g" emcc.py
+
+        sed -i "/^def check_sanity/a\\  return" tools/shared.py
+
+        echo "EMSCRIPTEN_ROOT = '$out/share/emscripten'" > .emscripten
+        echo "LLVM_ROOT = '${llvmEnv}/bin'" >> .emscripten
+        echo "NODE_JS = '${nodejs}/bin/node'" >> .emscripten
+        echo "JS_ENGINES = [NODE_JS]" >> .emscripten
+        echo "CLOSURE_COMPILER = ['${closurecompiler}/bin/closure-compiler']" >> .emscripten
+        echo "JAVA = '${jre}/bin/java'" >> .emscripten
+        # to make the test(s) below work
+        # echo "SPIDERMONKEY_ENGINE = []" >> .emscripten
+        echo "BINARYEN_ROOT = '${binaryen}'" >> .emscripten
+
+        # make emconfigure/emcmake use the correct (wrapped) binaries
+        sed -i "s|^EMCC =.*|EMCC='$out/bin/emcc'|" tools/shared.py
+        sed -i "s|^EMXX =.*|EMXX='$out/bin/em++'|" tools/shared.py
+        sed -i "s|^EMAR =.*|EMAR='$out/bin/emar'|" tools/shared.py
+        sed -i "s|^EMRANLIB =.*|EMRANLIB='$out/bin/emranlib'|" tools/shared.py
+
+        # Fix /tmp symlink issue (macOS: /tmp -> /private/tmp) causing relpath miscalculation
+        sed -i 's/os\.path\.relpath(source_dir, build_dir)/os.path.relpath(source_dir, os.path.realpath(build_dir))/' tools/system_libs.py
+        sed -i 's/os\.path\.relpath(src, build_dir)/os.path.relpath(src, os.path.realpath(build_dir))/' tools/system_libs.py
+
+        # Verify the relpath fix was applied
+        grep -q 'os.path.realpath(build_dir)' tools/system_libs.py || (echo "ERROR: relpath fix not applied" && exit 1)
+
+        # Functional test: verify relpath resolves correctly through symlinks
+        ${python3}/bin/python3 -c "
+    import os, tempfile
+    src = os.path.abspath('tools/system_libs.py')
+    with tempfile.TemporaryDirectory() as tmpdir:
+        build_dir_real = os.path.realpath(tmpdir)
+        relpath = os.path.relpath(src, build_dir_real)
+        resolved = os.path.normpath(os.path.join(build_dir_real, relpath))
+        assert resolved == src, f'relpath test failed: {resolved} != {src}'
+    print('relpath symlink fix test passed')
+    "
+
+        runHook postBuild
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/kripken/emscripten;
-    description = "An LLVM-to-JavaScript Compiler";
-    platforms = platforms.all;
-    maintainers = with maintainers; [ qknight matthewbauer ];
-    license = licenses.ncsa;
+  installPhase = ''
+        runHook preInstall
+
+        appdir=$out/share/emscripten
+        mkdir -p $appdir
+        cp -r . $appdir
+        chmod -R +w $appdir
+
+        mkdir -p $appdir/node_modules/.bin
+        cp -r ${nodeModules}/* $appdir/node_modules
+        cp -r ${nodeModules}/* $appdir/node_modules/.bin
+
+        cp ${./locate_cache.sh} $appdir/locate_cache.sh
+        chmod +x $appdir/locate_cache.sh
+
+        export EM_CACHE=$out/share/emscripten/cache
+
+        mkdir -p $out/bin
+
+        # Wrap all tools consistently via their .py entry points
+        for b in em++ emcc em-config emar embuilder emcmake emconfigure emmake emranlib emrun emscons emsize; do
+          makeWrapper $appdir/$b.py $out/bin/$b \
+            --set NODE_PATH ${nodeModules} \
+            --set EM_EXCLUSIVE_CACHE_ACCESS 1 \
+            --set PYTHON ${python3}/bin/python \
+            --run "source $appdir/locate_cache.sh"
+        done
+
+        # Create extensionless aliases for tools that need them (e.g., file_packager)
+        for tool in file_packager; do
+          ln -sf $appdir/tools/$tool.py $appdir/tools/$tool
+        done
+
+        # Symlinks for CMake toolchain (expects tools in share/emscripten/)
+        for tool in emcc em++ em-config emar emranlib emcmake emconfigure; do
+          ln -sf $out/bin/$tool $appdir/$tool
+        done
+
+        # precompile libc (etc.) in all variants:
+        pushd $TMPDIR
+        echo 'int __main_argc_argv( int a, int b ) { return 42; }' >test.c
+        for LTO in -flto ""; do
+          for BIND in "" "--bind"; do
+            for PTHREAD in "" "-pthread"; do
+              $out/bin/emcc $LTO $BIND $PTHREAD test.c || true
+            done
+          done
+        done
+        popd
+
+        export PYTHON=${python3}/bin/python
+        export NODE_PATH=${nodeModules}
+        pushd $appdir
+        ${pythonWithPsutil}/bin/python test/runner.py test_hello_world
+        popd
+
+        # fail if any .py files still have unpatched shebangs
+        if grep -l '#!/usr/bin/env' $appdir/*.py $appdir/tools/*.py 2>/dev/null; then
+          echo "ERROR: unpatched shebangs found in .py files"
+        exit 1
+    fi
+
+        runHook postInstall
+  '';
+
+  doInstallCheck = true;
+
+  # C++ exceptions with -fwasm-exceptions must compile and link
+  # see https://github.com/NixOS/nixpkgs/pull/556385
+  installCheckPhase = ''
+    runHook preInstallCheck
+
+    pushd $TMPDIR
+    echo 'int main() { try { throw 42; } catch (int) { return 0; } return 1; }' > throw.cpp
+    $out/bin/em++ -fwasm-exceptions throw.cpp -o throw.js
+    popd
+
+    runHook postInstallCheck
+  '';
+
+  passthru = {
+    # HACK: Make emscripten look more like a cc-wrapper to GHC
+    # when building the javascript backend.
+    targetPrefix = "em";
+    bintools = emscripten;
+    updateScript = nix-update-script {
+      extraArgs = [
+        "--subpackage"
+        "nodeModules"
+      ];
+    };
+  };
+
+  meta = {
+    homepage = "https://github.com/emscripten-core/emscripten";
+    description = "LLVM-to-JavaScript Compiler";
+    platforms = lib.platforms.all;
+    maintainers = with lib.maintainers; [
+      qknight
+      willcohen
+    ];
+    license = lib.licenses.ncsa;
   };
 }

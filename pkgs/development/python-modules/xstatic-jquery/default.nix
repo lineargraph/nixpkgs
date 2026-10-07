@@ -1,25 +1,34 @@
-{ buildPythonPackage
-, lib
-, fetchPypi
+{
+  buildPythonPackage,
+  lib,
+  fetchPypi,
+  setuptools_80,
 }:
 
-buildPythonPackage rec {
-  pname = "XStatic-jQuery";
-  version = "1.10.2.1";
+buildPythonPackage (finalAttrs: {
+  pname = "xstatic-jquery";
+  version = "3.5.1.1";
+  pyproject = true;
+
+  __structuredAttrs = true;
 
   src = fetchPypi {
-    inherit version pname;
-    sha256 = "018kx4zijflcq8081xx6kmiqf748bsjdq7adij2k91bfp1mnlhc3";
+    pname = "XStatic-jQuery";
+    inherit (finalAttrs) version;
+    hash = "sha256-4K6PjsW70oBFukvKBnZ6OL1fwnz5tx9DRYn1k3Dc0yM=";
   };
+
+  build-system = [ setuptools_80 ];
 
   # no tests implemented
   doCheck = false;
 
-  meta = with lib;{
-    homepage =  http://jquery.org;
-    description = "jquery packaged static files for python";
-    license = licenses.mit;
-    maintainers = with maintainers; [ makefu ];
-  };
+  pythonImportsCheck = [ "xstatic.pkg.jquery" ];
 
-}
+  meta = {
+    homepage = "https://jquery.org";
+    description = "jquery packaged static files for python";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ makefu ];
+  };
+})

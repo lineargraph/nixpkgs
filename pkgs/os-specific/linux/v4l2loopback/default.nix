@@ -1,37 +1,68 @@
-{ stdenv, fetchFromGitHub, kernel, kmod }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  kernel,
+  kmod,
+  kernelModuleMakeFlags,
+  nix-update-script,
+}:
 
 stdenv.mkDerivation rec {
-  name = "v4l2loopback-${version}-${kernel.version}";
-  version = "0.11.0";
+  pname = "v4l2loopback";
+  version = "0.15.4";
 
   src = fetchFromGitHub {
     owner = "umlaeute";
     repo = "v4l2loopback";
-    rev = "v${version}";
-    sha256 = "1wb5qmy13w8rl4279bwp69s4sb1x5hk5d2n563p1yk8yi567p2az";
+    tag = "v${version}";
+    hash = "sha256-+9wJIeEUP6iaGnfKPl06OuPW5oZdQyHuNDN/1SeHw5s=";
   };
 
-  hardeningDisable = [ "format" "pic" ];
-
-  preBuild = ''
-    substituteInPlace Makefile --replace "modules_install" "INSTALL_MOD_PATH=$out modules_install"
-    sed -i '/depmod/d' Makefile
-    export PATH=${kmod}/sbin:$PATH
-  '';
-
-  nativeBuildInputs = kernel.moduleBuildDependencies;
-  buildInputs = [ kmod ];
-
-  makeFlags = [
-    "KERNELRELEASE=${kernel.modDirVersion}"
-    "KERNEL_DIR=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
+  hardeningDisable = [
+    "format"
+    "pic"
   ];
 
-  meta = with stdenv.lib; {
-    description = "A kernel module to create V4L2 loopback devices";
-    homepage = https://github.com/umlaeute/v4l2loopback;
-    license = licenses.gpl2;
-    maintainers = [ maintainers.domenkozar ];
-    platforms = platforms.linux;
+  preBuild = ''
+    substituteInPlace Makefile --replace-fail "modules_install" "INSTALL_MOD_PATH=$out modules_install"
+    sed -i '/depmod/d' Makefile
+  '';
+
+  # Don't use makeFlags for this
+  postBuild = ''
+    make utils
+  '';
+
+  nativeBuildInputs = [ kmod ] ++ kernel.moduleBuildDependencies;
+
+  postInstall = ''
+    make install-utils PREFIX=$bin
+  '';
+
+  outputs = [
+    "out"
+    "bin"
+  ];
+
+  makeFlags = kernelModuleMakeFlags ++ [
+    "KERNELRELEASE=${kernel.modDirVersion}"
+    "KERNEL_DIR=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
+    "v4l2loopback.ko"
+  ];
+
+  passthru.updateScript = nix-update-script { };
+
+  meta = {
+    description = "Kernel module to create V4L2 loopback devices";
+    mainProgram = "v4l2loopback-ctl";
+    homepage = "https://github.com/umlaeute/v4l2loopback";
+    license = lib.licenses.gpl2Only;
+    maintainers = with lib.maintainers; [
+      moni
+      bot-wxt1221
+    ];
+    platforms = lib.platforms.linux;
+    outputsToInstall = [ "out" ];
   };
 }

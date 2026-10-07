@@ -1,55 +1,64 @@
-{ stdenv
-, bootstrapped-pip
-, buildPythonPackage
-, python
-, fetchPypi
-, pari
-, gmp
-, cython
-, cysignals
-, six
+{
+  lib,
+  buildPythonPackage,
+  python,
+  fetchPypi,
+  pari,
+  pkg-config,
+  gmp,
+  meson-python,
+  cython,
+  cysignals,
+
+  # Reverse dependency
+  sage,
 }:
 
 buildPythonPackage rec {
   pname = "cypari2";
-  version = "1.1.4"; # remove six dependency on upgrade to >1.1.4
+  # upgrade may break sage, please test the sage build or ping the sage team on upgrade
+  version = "2.2.4";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0n0mp8qmvvzmfaawg39d3mkyzf65q2zkz7bnqyk4sfjbz4xwc6mb";
+    hash = "sha256-+fDplKmgsGRhkyBBHh2cMDFYhH4FW1gILv2t5ayX9hM=";
   };
 
-  # This differs slightly from the default python installPhase in that it pip-installs
-  # "." instead of "*.whl".
-  # That is because while the default install phase succeeds to build the package,
-  # it fails to generate the file "auto_paridecl.pxd".
-  installPhase = ''
-    mkdir -p "$out/lib/${python.libPrefix}/site-packages"
-    export PYTHONPATH="$out/lib/${python.libPrefix}/site-packages:$PYTHONPATH"
-
-    # install "." instead of "*.whl"
-    ${bootstrapped-pip}/bin/pip install --no-index --prefix=$out --no-cache --build=tmpdir .
+  preConfigure = ''
+    substituteInPlace cypari2/meson.build \
+       --replace-fail "'cypari2.py'" "'cypari2.pc'"
   '';
 
-  buildInputs = [
-    pari
-    gmp
+  build-system = [
+    meson-python
+    cython
+    cysignals
   ];
 
-  propagatedBuildInputs = [
-    cysignals
-    cython
-    six # after 1.1.4: will not be needed
+  nativeBuildInputs = [
+    pari
+    pkg-config
+  ];
+
+  buildInputs = [
+    gmp
+    pari
   ];
 
   checkPhase = ''
+    test -f "$out/${python.sitePackages}/cypari2/auto_paridecl.pxd"
     make check
   '';
 
-  meta = with stdenv.lib; {
+  passthru.tests = {
+    inherit sage;
+  };
+
+  meta = {
     description = "Cython bindings for PARI";
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ timokau ];
-    homepage = https://github.com/defeo/cypari2;
+    license = lib.licenses.gpl2Plus;
+    teams = [ lib.teams.sage ];
+    homepage = "https://github.com/defeo/cypari2";
   };
 }

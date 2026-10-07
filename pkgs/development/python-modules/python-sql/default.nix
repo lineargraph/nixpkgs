@@ -1,17 +1,35 @@
-{ lib, fetchurl, buildPythonPackage }:
+{
+  lib,
+  fetchFromGitLab,
+  buildPythonPackage,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "python-sql";
-  name = "${pname}-${version}";
-  version = "0.9";
-  src = fetchurl {
-    url = "mirror://pypi/p/python-sql/${name}.tar.gz";
-    sha256 = "07b51cc1c977ef5480fe671cae5075ad4b68a6fc67f4569782e06f012456d35c";
+  version = "1.7.0";
+  pyproject = true;
+
+  src = fetchFromGitLab {
+    domain = "foss.heptapod.net";
+    owner = "tryton";
+    repo = "python-sql";
+    tag = version;
+    hash = "sha256-JhMJEng6QftWBmJIC2pYlf9fkHHmSd3k0tSwr35MmVQ=";
   };
+
+  build-system = [ setuptools ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "sql" ];
+
   meta = {
-    homepage = http://python-sql.tryton.org/;
-    description = "A library to write SQL queries in a pythonic way";
-    maintainers = with lib.maintainers; [ johbo ];
+    description = "Library to write SQL queries in a pythonic way";
+    homepage = "https://foss.heptapod.net/tryton/python-sql";
+    changelog = "https://foss.heptapod.net/tryton/python-sql/-/blob/${src.tag}/CHANGELOG";
     license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ johbo ];
   };
 }

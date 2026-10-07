@@ -1,28 +1,82 @@
-{ stdenv, fetchurl, buildPythonPackage, python, pkgconfig, glib, gobjectIntrospection, pycairo, cairo, which, ncurses}:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  buildPythonPackage,
+  pkg-config,
+  glib,
+  gobject-introspection,
+  pycairo,
+  cairo,
+  ncurses,
+  meson,
+  ninja,
+  gnome,
+  python,
+}:
 
 buildPythonPackage rec {
-  major = "3.26";
-  minor = "1";
-  version = "${major}.${minor}";
-  format = "other";
   pname = "pygobject";
-  name = pname + "-" + version;
+  version = "3.56.3";
+
+  outputs = [
+    "out"
+    "dev"
+  ];
+
+  pyproject = false;
 
   src = fetchurl {
-    url = "mirror://gnome/sources/pygobject/${major}/${name}.tar.xz";
-    sha256 = "1afi0jdjd9sanrzjwhv7z1k7qxlb91fqa6yqc2dbpjkhkjdpnmzm";
+    url = "mirror://gnome/sources/pygobject/${lib.versions.majorMinor version}/pygobject-${version}.tar.gz";
+    hash = "sha256-EnYOSg49BLbrleBveifjYsgm1WfqYTNzqSwAO2xw0tY=";
   };
 
-  outputs = [ "out" "dev" ];
+  depsBuildBuild = [ pkg-config ];
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ glib gobjectIntrospection ]
-                 ++ stdenv.lib.optionals stdenv.isDarwin [ which ncurses ];
-  propagatedBuildInputs = [ pycairo cairo ];
+  nativeBuildInputs = [
+    pkg-config
+    meson
+    ninja
+    gobject-introspection
+  ];
+
+  buildInputs = [
+    cairo
+    glib
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [ ncurses ];
+
+  propagatedBuildInputs = [
+    pycairo
+    gobject-introspection # e.g. try building: python3Packages.urwid python3Packages.pydbus
+  ];
+
+  # Fixes https://github.com/NixOS/nixpkgs/issues/378447
+  preConfigure = lib.optionalString (stdenv.hostPlatform != stdenv.targetPlatform) ''
+    export PKG_CONFIG_PATH=${lib.getDev python}/lib/pkgconfig:$PKG_CONFIG_PATH
+    export PKG_CONFIG_PATH_FOR_BUILD=${lib.getDev python}/lib/pkgconfig:$PKG_CONFIG_PATH_FOR_BUILD
+  '';
+
+  mesonFlags = [
+    # This is only used for figuring out what version of Python is in
+    # use, and related stuff like figuring out what the install prefix
+    # should be, but it does need to be able to execute Python code.
+    "-Dpython=${python.pythonOnBuildForHost.interpreter}"
+  ];
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = "pygobject";
+      attrPath = "python3.pkgs.pygobject3";
+      versionPolicy = "odd-unstable";
+    };
+  };
 
   meta = {
-    homepage = https://pygobject.readthedocs.io/;
+    homepage = "https://pygobject.readthedocs.io/";
     description = "Python bindings for Glib";
-    platforms = stdenv.lib.platforms.unix;
+    license = lib.licenses.lgpl21Plus;
+    teams = [ lib.teams.gnome ];
+    platforms = lib.platforms.unix;
   };
 }

@@ -1,41 +1,58 @@
-{ lib
-, fetchPypi
-, buildPythonPackage
-, cython
-, sphinx
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  cython,
+  meson-python,
+  ninja,
+
+  # Reverse dependency
+  sage,
 }:
 
 buildPythonPackage rec {
   pname = "cysignals";
-  version = "1.7.1";
+  version = "1.12.6";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "15nky8siwlc7s8v23vv4m0mnxa1z6jcs2qfr26m2mkw9j9g2na2j";
+  src = fetchFromGitHub {
+    owner = "sagemath";
+    repo = "cysignals";
+    tag = version;
+    hash = "sha256-uZNKmnn1Jf1pERdG4bywpAUClKMw3og+7Q5B0yPlqEY=";
   };
 
-  hardeningDisable = [
-    "fortify"
+  build-system = [
+    cython
+    meson-python
+    ninja
   ];
 
-  # currently fails, probably because of formatting changes in gdb 8.0
+  dontUseCmakeConfigure = true;
+  enableParallelBuilding = true;
+
+  # explicit check:
+  # build/src/cysignals/implementation.c:27:2: error: #error "cysignals must be compiled without _FORTIFY_SOURCE"
+  hardeningDisable = [ "fortify" ];
+
+  # known failure: https://github.com/sagemath/cysignals/blob/582dbf6a7b0f9ade0abe7a7b8720b7fb32435c3c/testgdb.py#L5
   doCheck = false;
+  checkTarget = "check-install";
 
   preCheck = ''
     # Make sure cysignals-CSI is in PATH
     export PATH="$out/bin:$PATH"
   '';
 
-  propagatedBuildInputs = [
-    cython
-  ];
-
-  enableParallelBuilding = true;
+  passthru.tests = {
+    inherit sage;
+  };
 
   meta = {
     description = "Interrupt and signal handling for Cython";
-    homepage = https://github.com/sagemath/cysignals/;
-    maintainers = with lib.maintainers; [ timokau ];
+    mainProgram = "cysignals-CSI";
+    homepage = "https://github.com/sagemath/cysignals/";
+    teams = [ lib.teams.sage ];
     license = lib.licenses.lgpl3Plus;
   };
 }

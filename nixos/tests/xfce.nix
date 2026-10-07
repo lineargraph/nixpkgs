@@ -1,42 +1,89 @@
-import ./make-test.nix ({ pkgs, ...} : {
+{
   name = "xfce";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ eelco chaoflow shlevy ];
-  };
 
-  machine =
-    { config, pkgs, ... }:
+  nodes.machine =
+    { pkgs, ... }:
 
-    { imports = [ ./common/user-account.nix ];
+    {
+      imports = [
+        ./common/user-account.nix
+      ];
 
       services.xserver.enable = true;
+      services.xserver.displayManager.lightdm.enable = true;
 
-      services.xserver.displayManager.auto.enable = true;
-      services.xserver.displayManager.auto.user = "alice";
+      services.displayManager.autoLogin = {
+        enable = true;
+        user = "alice";
+      };
 
       services.xserver.desktopManager.xfce.enable = true;
+      environment.systemPackages = [ pkgs.xfce4-whiskermenu-plugin ];
 
-      environment.systemPackages = [ pkgs.xorg.xmessage ];
+      programs.thunar.plugins = [ pkgs.thunar-archive-plugin ];
+      programs.ydotool.enable = true;
     };
 
+  enableOCR = true;
+
   testScript =
+    { nodes, ... }:
+    let
+      user = nodes.machine.users.users.alice;
+      bus = "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${toString user.uid}/bus";
+    in
     ''
-      $machine->waitForX;
-      $machine->waitForFile("/home/alice/.Xauthority");
-      $machine->succeed("xauth merge ~alice/.Xauthority");
-      $machine->waitForWindow(qr/xfce4-panel/);
-      $machine->sleep(10);
+      with subtest("Wait for login"):
+        machine.wait_for_x()
+        machine.wait_for_file("${user.home}/.Xauthority")
+        machine.succeed("xauth merge ${user.home}/.Xauthority")
 
-      # Check that logging in has given the user ownership of devices.
-      $machine->succeed("getfacl /dev/snd/timer | grep -q alice");
+      with subtest("Check that logging in has given the user ownership of devices"):
+        # Change back to /dev/snd/timer after systemd-258.1
+        machine.succeed("getfacl -p /dev/dri/card0 | grep -q ${user.name}")
 
-      $machine->succeed("su - alice -c 'DISPLAY=:0.0 xfce4-terminal &'");
-      $machine->waitForWindow(qr/Terminal/);
-      $machine->sleep(10);
-      $machine->screenshot("screen");
+      with subtest("Check if Xfce components actually start"):
+        machine.wait_for_window("xfce4-panel")
+        machine.wait_for_window("Desktop")
+        for i in ["xfwm4", "xfsettingsd", "xfdesktop", "xfce4-notifyd", "xfconfd"]:
+          machine.wait_until_succeeds(f"pgrep {i}")
+        machine.wait_until_succeeds("pgrep -xf xfce4-screensaver")
 
-      # Ensure that the X server does proper access control.
-      $machine->mustFail("su - bob -c 'DISPLAY=:0.0 xmessage Foo'");
-      $machine->mustFail("su - bob -c 'DISPLAY=:0 xmessage Foo'");
+      with subtest("Open whiskermenu"):
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 ${bus} xfconf-query -c xfce4-panel -p /plugins/plugin-1 -t string -s whiskermenu -n >&2 &'")
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 ${bus} xfconf-query -c xfce4-panel -p /plugins/plugin-1/stay-on-focus-out -t bool -s true -n >&2 &'")
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 ${bus} xfce4-panel -r >&2 &'")
+        machine.wait_until_succeeds("journalctl -b --grep 'xfce4-panel: Restarting' -t xsession")
+        machine.sleep(5)
+        machine.wait_until_succeeds("pgrep -f libwhiskermenu")
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 ${bus} xfce4-popup-whiskermenu >&2 &'")
+        machine.wait_for_text('Mail Reader')
+        # Close the menu.
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 ${bus} xfce4-popup-whiskermenu >&2 &'")
+
+      with subtest("Open Xfce terminal"):
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 xfce4-terminal >&2 &'")
+        machine.wait_for_window("Terminal")
+
+      with subtest("Lock the screen"):
+        machine.succeed("su - ${user.name} -c '${bus} xflock4 >&2 &'")
+        machine.wait_until_succeeds("su - ${user.name} -c '${bus} xfce4-screensaver-command -q' | grep 'The screensaver is active'")
+        machine.sleep(5)
+        machine.succeed("ydotool click 0xC0")
+        machine.wait_for_text("${user.description}|Unlock")
+        machine.screenshot("screensaver")
+        machine.send_chars("${user.password}\n", delay=0.2)
+        machine.wait_until_succeeds("su - ${user.name} -c '${bus} xfce4-screensaver-command -q' | grep 'The screensaver is inactive'")
+        machine.sleep(2)
+
+      with subtest("Open Thunar"):
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 thunar >&2 &'")
+        machine.wait_for_window("Thunar")
+        machine.wait_for_text('(Pictures|Public|Templates|Videos)')
+
+      with subtest("Check if any coredumps are found"):
+        machine.succeed("(coredumpctl --json=short 2>&1 || true) | grep 'No coredumps found'")
+        machine.sleep(10)
+        machine.screenshot("screen")
     '';
-})
+}

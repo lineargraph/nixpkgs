@@ -1,17 +1,20 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
-  sysctlOption = mkOptionType {
+  sysctlOption = lib.mkOptionType {
     name = "sysctl option value";
-    check = val:
+    check =
+      val:
       let
-        checkType = x: isBool x || isString x || isInt x || isNull x;
+        checkType = x: lib.isBool x || lib.isString x || lib.isInt x || x == null;
       in
-        checkType val || (val._type or "" == "override" && checkType val.content);
-    merge = loc: defs: mergeOneOption loc (filterOverrides defs);
+      checkType val || (val._type or "" == "override" && checkType val.content);
+    merge = loc: defs: lib.mergeOneOption loc defs;
   };
 
 in
@@ -20,50 +23,105 @@ in
 
   options = {
 
-    boot.kernel.sysctl = mkOption {
-      default = {};
-      example = literalExample ''
+    boot.kernel.sysctl = lib.mkOption {
+      type =
+        let
+          highestValueType = lib.types.ints.unsigned // {
+            merge = loc: defs: lib.foldl (a: b: if b.value == null then null else lib.max a b.value) 0 defs;
+          };
+        in
+        lib.types.submodule {
+          freeformType = lib.types.attrsOf sysctlOption;
+          options = {
+            "net.core.rmem_max" = lib.mkOption {
+              type = lib.types.nullOr highestValueType;
+              default = null;
+              description = "The maximum receive socket buffer size in bytes. In case of conflicting values, the highest will be used.";
+            };
+
+            "net.core.wmem_max" = lib.mkOption {
+              type = lib.types.nullOr highestValueType;
+              default = null;
+              description = "The maximum send socket buffer size in bytes. In case of conflicting values, the highest will be used.";
+            };
+          };
+        };
+      default = { };
+      example = lib.literalExpression ''
         { "net.ipv4.tcp_syncookies" = false; "vm.swappiness" = 60; }
       '';
-      type = types.attrsOf sysctlOption;
       description = ''
         Runtime parameters of the Linux kernel, as set by
-        <citerefentry><refentrytitle>sysctl</refentrytitle>
-        <manvolnum>8</manvolnum></citerefentry>.  Note that sysctl
+        {manpage}`sysctl(8)`.  Note that sysctl
         parameters names must be enclosed in quotes
-        (e.g. <literal>"vm.swappiness"</literal> instead of
-        <literal>vm.swappiness</literal>).  The value of each
+        (e.g. `"vm.swappiness"` instead of
+        `vm.swappiness`).  The value of each
         parameter may be a string, integer, boolean, or null
         (signifying the option will not appear at all).
       '';
+
     };
 
   };
 
   config = {
 
-    environment.etc."sysctl.d/nixos.conf".text =
-      concatStrings (mapAttrsToList (n: v:
-        optionalString (v != null) "${n}=${if v == false then "0" else toString v}\n"
-      ) config.boot.kernel.sysctl);
+    environment.etc = {
+      "sysctl.d/55-nixos-aslr-entropy.conf".source =
+        pkgs.runCommand "55-nixos-aslr-entropy.conf"
+          {
+            inherit (config.boot.kernelPackages.kernel) configfile;
+          }
+          (
+            ''
+              set +e
+              mmap_rnd_bits_max=$(grep "^CONFIG_ARCH_MMAP_RND_BITS_MAX=" $configfile | grep --only-matching "[0-9]*$")
+              set -e
+              if [[ -z "$mmap_rnd_bits_max" ]]; then
+                echo "Unable to determine mmap_rnd_bits_max. Check your kernel configfile is valid."
+                exit 1
+              fi
+              echo "vm.mmap_rnd_bits=$mmap_rnd_bits_max" >> $out
+            ''
+            # HAVE_ARCH_MMAP_RND_COMPAT_BITS is not defined on 32-bit architectures or LoongArch64
+            + lib.optionalString (with pkgs.stdenv.hostPlatform; (!is32bit && !isLoongArch64)) ''
+              set +e
+              mmap_rnd_compat_bits_max=$(grep "^CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MAX=" $configfile | grep --only-matching "[0-9]*$")
+              set -e
+              if [[ -z "$mmap_rnd_compat_bits_max" ]]; then
+                echo "Unable to determine mmap_rnd_compat_bits_max. Check your kernel configfile is valid."
+                exit 1
+              fi
+              echo "vm.mmap_rnd_compat_bits=$mmap_rnd_compat_bits_max" >> $out
+            ''
+          );
+      "sysctl.d/60-nixos.conf".text = lib.concatStrings (
+        lib.mapAttrsToList (
+          n: v: lib.optionalString (v != null) "${n}=${if v == false then "0" else toString v}\n"
+        ) config.boot.kernel.sysctl
+      );
+    };
 
-    systemd.services.systemd-sysctl =
-      { wantedBy = [ "multi-user.target" ];
-        restartTriggers = [ config.environment.etc."sysctl.d/nixos.conf".source ];
-      };
+    systemd.services.systemd-sysctl = {
+      wantedBy = [ "multi-user.target" ];
+      restartTriggers = [ config.environment.etc."sysctl.d/60-nixos.conf".source ];
+    };
 
-    # Enable hardlink and symlink restrictions.  See
-    # https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/?id=800179c9b8a1e796e441674776d11cd4c05d61d7
-    # for details.
-    boot.kernel.sysctl."fs.protected_hardlinks" = true;
-    boot.kernel.sysctl."fs.protected_symlinks" = true;
+    # NixOS wide defaults
+    boot.kernel.sysctl = {
+      # Hide kernel pointers (e.g. in /proc/modules) for unprivileged
+      # users as these make it easier to exploit kernel vulnerabilities.
+      "kernel.kptr_restrict" = lib.mkDefault 1;
 
-    # Hide kernel pointers (e.g. in /proc/modules) for unprivileged
-    # users as these make it easier to exploit kernel vulnerabilities.
-    boot.kernel.sysctl."kernel.kptr_restrict" = 1;
+      # Improve compatibility with applications that allocate
+      # a lot of memory, like modern games
+      "vm.max_map_count" = lib.mkDefault 1048576;
 
-    # Disable YAMA by default to allow easy debugging.
-    boot.kernel.sysctl."kernel.yama.ptrace_scope" = mkDefault 0;
-
+      # The default max inotify watches is 8192.
+      # Nowadays most apps require a good number of inotify watches,
+      # the value below is used by default on several other distros.
+      "fs.inotify.max_user_instances" = lib.mkDefault 524288;
+      "fs.inotify.max_user_watches" = lib.mkDefault 524288;
+    };
   };
 }

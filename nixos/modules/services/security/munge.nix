@@ -1,7 +1,9 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.munge;
@@ -15,11 +17,11 @@ in
   options = {
 
     services.munge = {
-      enable = mkEnableOption "munge service";
+      enable = lib.mkEnableOption "munge service";
 
-      password = mkOption {
+      password = lib.mkOption {
         default = "/etc/munge/munge.key";
-        type = types.string;
+        type = lib.types.path;
         description = ''
           The path to a daemon's secret key.
         '';
@@ -31,41 +33,47 @@ in
 
   ###### implementation
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
 
     environment.systemPackages = [ pkgs.munge ];
 
     users.users.munge = {
-      description   = "Munge daemon user";
-      isSystemUser  = true;
-      group         = "munge";
+      description = "Munge daemon user";
+      isSystemUser = true;
+      group = "munge";
     };
 
-    users.groups.munge = {};
+    users.groups.munge = { };
 
     systemd.services.munged = {
+      documentation = [
+        "man:munged(8)"
+        "man:mungekey(8)"
+      ];
       wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
+      wants = [
+        "network-online.target"
+        "time-sync.target"
+      ];
+      after = [
+        "network-online.target"
+        "time-sync.target"
+      ];
 
-      path = [ pkgs.munge pkgs.coreutils ];
-
-      preStart = ''
-        chmod 0700 ${cfg.password}
-        mkdir -p /var/lib/munge -m 0711
-        chown -R munge:munge /var/lib/munge
-        mkdir -p /var/log/munge -m 0700
-        chown -R munge:munge /var/log/munge
-        mkdir -p /run/munge -m 0755
-        chown -R munge:munge /run/munge
-      '';
+      path = [
+        pkgs.munge
+        pkgs.coreutils
+      ];
 
       serviceConfig = {
-        ExecStart = "${pkgs.munge}/bin/munged --syslog --key-file ${cfg.password}";
-        PIDFile = "/run/munge/munged.pid";
-        ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
-        PermissionsStartOnly = "true";
+        ExecStartPre = "+${pkgs.coreutils}/bin/chmod 0400 ${cfg.password}";
+        ExecStart = "${pkgs.munge}/bin/munged --foreground --key-file ${cfg.password}";
         User = "munge";
         Group = "munge";
+        StateDirectory = "munge";
+        StateDirectoryMode = "0711";
+        Restart = "on-failure";
+        RuntimeDirectory = "munge";
       };
 
     };

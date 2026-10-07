@@ -1,23 +1,67 @@
-{ stdenv, fetchPypi, buildPythonPackage, hidapi
-, pycrypto, pillow, protobuf, future, ecpy
+{
+  lib,
+  stdenv,
+  bleak,
+  buildPythonPackage,
+  ecpy,
+  fetchPypi,
+  future,
+  hidapi,
+  nfcpy,
+  pillow,
+  protobuf,
+  pycrypto,
+  pycryptodomex,
+  pyelftools,
+  python-gnupg,
+  python-u2flib-host,
+  setuptools,
+  setuptools-scm,
+  websocket-client,
 }:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "ledgerblue";
-  version = "0.1.17";
+  version = "0.1.55";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "ac403b074337b9b58cae97ea00b3d94fc8efeea1717a80c49e79dc8aad6fc58f";
+    hash = "sha256-6s2V8cXik6jEg8z3UK49qVwodPbwXMIkWk7iJ7OY0rM=";
   };
 
-  buildInputs = [ hidapi pycrypto pillow protobuf future ecpy ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
-  meta = with stdenv.lib; {
+  pythonRelaxDeps = [ "protobuf" ];
+
+  dependencies = [
+    ecpy
+    future
+    hidapi
+    nfcpy
+    pillow
+    protobuf
+    pycrypto
+    pycryptodomex
+    pyelftools
+    python-gnupg
+    python-u2flib-host
+    websocket-client
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isLinux [ bleak ];
+
+  # No tests
+  doCheck = false;
+
+  pythonImportsCheck = [ "ledgerblue" ];
+
+  meta = {
     description = "Python library to communicate with Ledger Blue/Nano S";
-    homepage = https://github.com/LedgerHQ/blue-loader-python;
-    license = licenses.asl20;
-    maintainers = with maintainers; [ np ];
+    homepage = "https://github.com/LedgerHQ/blue-loader-python";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ np ];
   };
 }

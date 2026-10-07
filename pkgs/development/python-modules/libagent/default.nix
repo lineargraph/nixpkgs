@@ -1,34 +1,89 @@
-{ stdenv, fetchPypi, buildPythonPackage, ed25519, ecdsa
-, semver, keepkey, trezor, mnemonic, ledgerblue, unidecode, mock, pytest
+{
+  lib,
+  fetchFromGitHub,
+  backports-shutil-which,
+  bech32,
+  buildPythonPackage,
+  setuptools,
+  cryptography,
+  docutils,
+  ecdsa,
+  gnupg,
+  pinentry-curses,
+  semver,
+  mnemonic,
+  unidecode,
+  mock,
+  pytestCheckHook,
+  configargparse,
+  python-daemon,
+  pymsgbox,
+  pynacl,
+  nix-update-script,
 }:
 
-buildPythonPackage rec {
-  name = "${pname}-${version}";
-  pname = "libagent";
-  version = "0.9.8";
+# When changing this package, please test packages {onlykey,trezor}-agent
 
-  src = fetchPypi{
-    inherit pname version;
-    sha256 = "7e7d62cedef9d1291b8e77abc463d50b3d685dfd953611d55a0414c12276aa78";
+buildPythonPackage (finalAttrs: {
+  pname = "libagent";
+  version = "0.16.1";
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "romanz";
+    repo = "trezor-agent";
+    tag = "libagent/${finalAttrs.version}";
+    hash = "sha256-JFHBE2o5VSJaz5yeCiXmBchm4/1gA+dZ/PRt3+WENdA=";
   };
 
-  buildInputs = [
-    ed25519 ecdsa semver keepkey
-    trezor mnemonic ledgerblue
-  ];
-
-  propagatedBuildInputs = [ unidecode ];
-
-  checkInputs = [ mock pytest ];
-
-  checkPhase = ''
-    py.test libagent/tests
+  # hardcode the path to gpgconf and pinentry in the libagent library
+  postPatch = ''
+    substituteInPlace libagent/gpg/keyring.py \
+      --replace "util.which('gpgconf')" "'${gnupg}/bin/gpgconf'" \
+      --replace "'gpg-connect-agent'" "'${gnupg}/bin/gpg-connect-agent'" \
+      --replace "get_gnupg_components(sp=sp)['pinentry']" "'${(lib.getExe pinentry-curses)}'"
   '';
 
-  meta = with stdenv.lib; {
-    description = "Using hardware wallets as SSH/GPG agent";
-    homepage = https://github.com/romanz/trezor-agent;
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ np ];
+  build-system = [ setuptools ];
+
+  # https://github.com/romanz/trezor-agent/pull/481
+  pythonRemoveDeps = [ "backports.shutil-which" ];
+
+  dependencies = [
+    backports-shutil-which
+    unidecode
+    configargparse
+    python-daemon
+    pymsgbox
+    ecdsa
+    docutils
+    mnemonic
+    semver
+    pynacl
+    bech32
+    cryptography
+  ];
+
+  pythonImportsCheck = [ "libagent" ];
+
+  nativeCheckInputs = [
+    mock
+    pytestCheckHook
+  ];
+
+  disabledTests = [
+    # test fails in sandbox
+    "test_get_agent_sock_path"
+  ];
+
+  passthru.updateScript = nix-update-script {
+    extraArgs = [ "--version-regex=libagent/(.*)" ];
   };
-}
+
+  meta = {
+    description = "Using hardware wallets as SSH/GPG agent";
+    homepage = "https://github.com/romanz/trezor-agent";
+    license = lib.licenses.lgpl3Only;
+    maintainers = with lib.maintainers; [ np ];
+  };
+})

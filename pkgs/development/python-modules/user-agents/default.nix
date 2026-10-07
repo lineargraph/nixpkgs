@@ -1,24 +1,37 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, ua-parser }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  ua-parser,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "user-agents";
-  version = "1.1.0";
+  version = "2.2.0";
+  pyproject = true;
+
+  __structuredAttrs = true;
 
   # PyPI is missing devices.json
   src = fetchFromGitHub {
     owner = "selwin";
     repo = "python-user-agents";
-    rev = "v${version}";
-    sha256 = "14kxd780zhp8718xr1z63xffaj3bvxgr4pldh9sv943m4hvi0gw5";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-qhBMQY9T3WAVx35e918MHkU4ERRwkUAo7FGwICSWi10=";
   };
 
-  propagatedBuildInputs = [ ua-parser ];
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "A Python library to identify devices by parsing user agent strings";
-    homepage = https://github.com/selwin/python-user-agents;
-    license = licenses.mit;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ dotlambda ];
+  dependencies = [ ua-parser ];
+
+  pythonImportsCheck = [ "user_agents" ];
+
+  meta = {
+    description = "Python library to identify devices by parsing user agent strings";
+    homepage = "https://github.com/selwin/python-user-agents";
+    license = lib.licenses.mit;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
-}
+})

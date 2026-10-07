@@ -1,30 +1,45 @@
-{ stdenv, fetchurl, autoreconfHook, pkgconfig, fftw }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  autoreconfHook,
+  pkg-config,
+  fftw,
+  withFftw3 ? (!stdenv.hostPlatform.isMinGW),
+}:
 
 stdenv.mkDerivation rec {
-  name = "speexdsp-1.2rc3";
+  pname = "speexdsp";
+  version = "1.2.1";
 
   src = fetchurl {
-    url = "http://downloads.us.xiph.org/releases/speex/${name}.tar.gz";
-    sha256 = "1wcjyrnwlkayb20zdhp48y260rfyzg925qpjpljd5x9r01h8irja";
+    url = "https://downloads.xiph.org/releases/speex/${pname}-${version}.tar.gz";
+    sha256 = "sha256-jHdzQ+SmOZVpxyq8OKlbJNtWiCyD29tsZCSl9K61TT0=";
   };
 
   patches = [ ./build-fix.patch ];
   postPatch = "sed '3i#include <stdint.h>' -i ./include/speex/speexdsp_config_types.h.in";
 
-  outputs = [ "out" "dev" "doc" ];
+  outputs = [
+    "out"
+    "dev"
+    "doc"
+  ];
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
-  buildInputs = [ fftw ];
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ];
+  buildInputs = lib.optionals withFftw3 [ fftw ];
 
-  configureFlags = [
-    "--with-fft=gpl-fftw3"
-  ] ++ stdenv.lib.optional stdenv.isAarch64 "--disable-neon";
+  configureFlags =
+    lib.optionals withFftw3 [ "--with-fft=gpl-fftw3" ]
+    ++ lib.optional stdenv.hostPlatform.isAarch64 "--disable-neon";
 
-  meta = with stdenv.lib; {
-    homepage = http://www.speex.org/;
-    description = "An Open Source/Free Software patent-free audio compression format designed for speech";
-    license = licenses.bsd3;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ wkennington ];
+  meta = {
+    homepage = "https://www.speex.org/";
+    description = "Open Source/Free Software patent-free audio compression format designed for speech";
+    license = lib.licenses.bsd3;
+    platforms = lib.platforms.unix ++ lib.platforms.windows;
   };
 }

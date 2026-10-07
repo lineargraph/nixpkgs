@@ -1,21 +1,27 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+}:
 
-buildPythonPackage rec {
-  version = "1.0.3";
+buildPythonPackage {
   pname = "python-editor";
-  name = "${pname}-${version}";
+  version = "1.0.4";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "a3c066acee22a1c94f63938341d4fb374e3fdd69366ed6603d7b24bed1efc565";
+  src = fetchFromGitHub {
+    owner = "fmoo";
+    repo = "python-editor";
+    rev = "c6cd09069371781b2b9381839849a524d25db07f";
+    hash = "sha256-TjfY7ustZaNPmndHPVwmQ8zkYPmDs/C5SNJl1zXjprc=";
   };
 
   # No proper tests
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "A library that provides the `editor` module for programmatically";
-    homepage = https://github.com/fmoo/python-editor;
-    license = licenses.asl20;
+  meta = {
+    description = "Library that provides the `editor` module for programmatically";
+    homepage = "https://github.com/fmoo/python-editor";
+    license = lib.licenses.asl20;
   };
 }

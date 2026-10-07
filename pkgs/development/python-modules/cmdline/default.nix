@@ -1,21 +1,34 @@
-{ stdenv, buildPythonPackage, fetchPypi, pyyaml }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  pyyaml,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "cmdline";
-  version = "0.1.8";
+  version = "0.2.0";
+  pyproject = true;
+
+  __structuredAttrs = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "324cc8fc6580f221824821c47232c297ed1f7cc737186a57305a8c08fc902dd7";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-fPavU1SYkrIhjC9WoZnf9UpzO+XFUVwP1iaBIHCwqGo=";
   };
+
+  build-system = [ setuptools ];
 
   # No tests, https://github.com/rca/cmdline/issues/1
   doCheck = false;
-  propagatedBuildInputs = [ pyyaml ];
+  dependencies = [ pyyaml ];
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "cmdline" ];
+
+  meta = {
     description = "Utilities for consistent command line tools";
-    homepage = https://github.com/rca/cmdline;
-    license = licenses.asl20;
+    homepage = "https://github.com/rca/cmdline";
+    license = lib.licenses.asl20;
   };
-}
+})

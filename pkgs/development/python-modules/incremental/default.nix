@@ -1,19 +1,54 @@
-{ stdenv, buildPythonPackage, fetchurl }:
+{
+  buildPythonPackage,
+  fetchFromGitHub,
+  hatchling,
+  lib,
+  packaging,
+  twisted,
+}:
 
-buildPythonPackage rec {
-  name = "${pname}-${version}";
-  pname = "incremental";
-  version = "17.5.0";
+let
+  incremental = buildPythonPackage rec {
+    pname = "incremental";
+    version = "24.11.0";
+    pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/i/${pname}/${name}.tar.gz";
-    sha256 = "7b751696aaf36eebfab537e458929e194460051ccad279c72b755a167eebd4b3";
+    src = fetchFromGitHub {
+      owner = "twisted";
+      repo = "incremental";
+      tag = "incremental-${version}";
+      hash = "sha256-GkTCQYGrgCUzizSgKhWeqJ25pfaYA7eUJIHt0q/iO0E=";
+    };
+
+    build-system = [ hatchling ];
+
+    dependencies = [ packaging ];
+
+    # escape infinite recursion with twisted
+    doCheck = false;
+
+    nativeCheckInputs = [ twisted ];
+
+    checkPhase = ''
+      trial incremental
+    '';
+
+    passthru.tests = {
+      check = incremental.overridePythonAttrs (_: {
+        doCheck = true;
+      });
+    };
+
+    pythonImportsCheck = [ "incremental" ];
+
+    meta = {
+      changelog = "https://github.com/twisted/incremental/blob/${src.tag}/NEWS.rst";
+      homepage = "https://github.com/twisted/incremental";
+      description = "Small library that versions your Python projects";
+      license = lib.licenses.mit;
+      mainProgram = "incremental";
+      maintainers = with lib.maintainers; [ dotlambda ];
+    };
   };
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/twisted/treq;
-    description = "Incremental is a small library that versions your Python projects";
-    license = licenses.mit;
-    maintainers = with maintainers; [ nand0p ];
-  };
-}
+in
+incremental

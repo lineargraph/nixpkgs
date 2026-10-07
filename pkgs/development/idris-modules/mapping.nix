@@ -1,15 +1,11 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  lib,
 }:
-
-build-idris-package  {
-  name = "mapping";
+build-idris-package {
+  pname = "mapping";
   version = "2018-02-27";
-
-  idrisDeps = [ prelude ];
 
   src = fetchFromGitHub {
     owner = "zaoqi";
@@ -20,9 +16,8 @@ build-idris-package  {
 
   meta = {
     description = "Idris mapping library";
-    homepage = https://github.com/zaoqi/Mapping.idr;
-    license = lib.licenses.agpl3;
+    homepage = "https://github.com/zaoqi/Mapping.idr";
+    license = lib.licenses.agpl3Plus;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

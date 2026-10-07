@@ -1,8 +1,22 @@
-{ qtModule, qtbase, qtdeclarative, bluez }:
+{
+  qtModule,
+  lib,
+  stdenv,
+  qtbase,
+  qtdeclarative,
+  bluez,
+}:
 
 qtModule {
-  name = "qtconnectivity";
-  qtInputs = [ qtbase qtdeclarative ];
-  buildInputs = [ bluez ];
-  outputs = [ "out" "dev" "bin" ];
+  pname = "qtconnectivity";
+  buildInputs = lib.optional stdenv.hostPlatform.isLinux bluez;
+  propagatedBuildInputs = [
+    qtbase
+    qtdeclarative
+  ];
+  outputs = [
+    "out"
+    "dev"
+    "bin"
+  ];
 }

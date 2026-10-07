@@ -1,65 +1,103 @@
-{ stdenv, ghc, pkgconfig, glibcLocales, cacert, stack }@depArgs:
+{
+  stdenv,
+  ghc,
+  pkg-config,
+  glibcLocales,
+  cacert,
+  stack,
+  makeSetupHook,
+  lib,
+}@depArgs:
 
-with stdenv.lib;
-
-{ buildInputs ? []
-, extraArgs ? []
-, LD_LIBRARY_PATH ? []
-, ghc ? depArgs.ghc
-, stack ? depArgs.stack
-, ...
+{
+  buildInputs ? [ ],
+  nativeBuildInputs ? [ ],
+  extraArgs ? [ ],
+  LD_LIBRARY_PATH ? [ ],
+  ghc ? depArgs.ghc,
+  stack ? depArgs.stack,
+  ...
 }@args:
 
-let stackCmd = "stack --internal-re-exec-version=${stack.version}";
+let
 
-    # Add all dependencies in buildInputs including propagated ones to
-    # STACK_IN_NIX_EXTRA_ARGS.
-    addStackArgsHook = ''
-for pkg in ''${pkgsHostHost[@]} ''${pkgsHostBuild[@]} ''${pkgsHostTarget[@]}
-do
-  [ -d "$pkg/lib" ] && \
-    export STACK_IN_NIX_EXTRA_ARGS+=" --extra-lib-dirs=$pkg/lib"
-  [ -d "$pkg/include" ] && \
-    export STACK_IN_NIX_EXTRA_ARGS+=" --extra-include-dirs=$pkg/include"
-done
+  stackCmd = "stack --internal-re-exec-version=${stack.version}";
+
+  # Add all dependencies in buildInputs including propagated ones to
+  # STACK_IN_NIX_EXTRA_ARGS.
+  stackHook = makeSetupHook {
+    name = "stack-hook";
+
+    meta.license = lib.licenses.mit;
+  } ./stack-hook.sh;
+
+in
+stdenv.mkDerivation (
+  args
+  // {
+
+    # Doesn't work in the sandbox. Pass `--option sandbox relaxed` or
+    # `--option sandbox false` to be able to build this
+    __noChroot = true;
+
+    buildInputs = buildInputs ++ lib.optional (stdenv.hostPlatform.libc == "glibc") glibcLocales;
+
+    nativeBuildInputs = nativeBuildInputs ++ [
+      ghc
+      pkg-config
+      stack
+      stackHook
+    ];
+
+    env = {
+      STACK_PLATFORM_VARIANT = "nix";
+      STACK_IN_NIX_SHELL = 1;
+      STACK_IN_NIX_EXTRA_ARGS = extraArgs;
+
+      # XXX: workaround for https://ghc.haskell.org/trac/ghc/ticket/11042.
+      LD_LIBRARY_PATH = lib.makeLibraryPath (LD_LIBRARY_PATH ++ buildInputs);
+      # ^^^ Internally uses `getOutput "lib"` (equiv. to getLib)
+
+      # Non-NixOS git needs cert
+      GIT_SSL_CAINFO = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+
+      # Fixes https://github.com/commercialhaskell/stack/issues/2358 krank:ignore-line
+      LANG = "en_US.UTF-8";
+    };
+
+    preferLocalBuild = true;
+
+    preConfigure = ''
+      export STACK_ROOT=$NIX_BUILD_TOP/.stack
     '';
-in stdenv.mkDerivation (args // {
 
-  buildInputs =
-    buildInputs ++
-    optional stdenv.isLinux glibcLocales ++
-    [ ghc pkgconfig stack ];
+    buildPhase =
+      args.buildPhase or ''
+        runHook preBuild
 
-  STACK_PLATFORM_VARIANT="nix";
-  STACK_IN_NIX_SHELL=1;
-  STACK_IN_NIX_EXTRA_ARGS = extraArgs;
-  shellHook = addStackArgsHook;
+        ${stackCmd} build
 
+        runHook postBuild
+      '';
 
-  # XXX: workaround for https://ghc.haskell.org/trac/ghc/ticket/11042.
-  LD_LIBRARY_PATH = makeLibraryPath (LD_LIBRARY_PATH ++ buildInputs);
-                    # ^^^ Internally uses `getOutput "lib"` (equiv. to getLib)
+    checkPhase =
+      args.checkPhase or ''
+        runHook preCheck
 
-  # Non-NixOS git needs cert
-  GIT_SSL_CAINFO = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+        ${stackCmd} test
 
-  # Fixes https://github.com/commercialhaskell/stack/issues/2358
-  LANG = "en_US.UTF-8";
+        runHook postCheck
+      '';
 
-  preferLocalBuild = true;
+    doCheck = args.doCheck or true;
 
-  configurePhase = args.configurePhase or ''
-    export STACK_ROOT=$NIX_BUILD_TOP/.stack
-    ${addStackArgsHook}
-  '';
+    installPhase =
+      args.installPhase or ''
+        runHook preInstall
 
-  buildPhase = args.buildPhase or "${stackCmd} build";
+        ${stackCmd} --local-bin-path=$out/bin build --copy-bins
 
-  checkPhase = args.checkPhase or "${stackCmd} test";
-
-  doCheck = args.doCheck or true;
-
-  installPhase = args.installPhase or ''
-    ${stackCmd} --local-bin-path=$out/bin build --copy-bins
-  '';
-})
+        runHook postInstall
+      '';
+  }
+)

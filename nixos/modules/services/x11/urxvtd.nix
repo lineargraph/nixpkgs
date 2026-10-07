@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 # maintainer: siddharthist
 
@@ -6,43 +11,39 @@ with lib;
 
 let
   cfg = config.services.urxvtd;
-in {
+in
+{
+  options.services.urxvtd = {
+    enable = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Enable urxvtd, the urxvt terminal daemon. To use urxvtd, run
+        "urxvtc".
+      '';
+    };
 
-  options.services.urxvtd.enable = mkOption {
-    type = types.bool;
-    default = false;
-    description = ''
-      Enable urxvtd, the urxvt terminal daemon. To use urxvtd, run
-      "urxvtc".
-    '';
+    package = mkPackageOption pkgs "rxvt-unicode" { };
   };
 
   config = mkIf cfg.enable {
-    systemd.user = {
-      sockets.urxvtd = {
-        description = "socket for urxvtd, the urxvt terminal daemon";
-        wantedBy = [ "graphical-session.target" ];
-        partOf = [ "graphical-session.target" ];
-        socketConfig = {
-          ListenStream = "%t/urxvtd-socket";
-        };
+    systemd.user.services.urxvtd = {
+      description = "urxvt terminal daemon";
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
+      path = [ pkgs.xsel ];
+      serviceConfig = {
+        ExecStart = "${cfg.package}/bin/urxvtd -o";
+        Environment = "RXVT_SOCKET=%t/urxvtd-socket";
+        Restart = "on-failure";
+        RestartSec = "5s";
       };
-
-      services.urxvtd = {
-        description = "urxvt terminal daemon";
-        path = [ pkgs.xsel ];
-        serviceConfig = {
-          ExecStart = "${pkgs.rxvt_unicode-with-plugins}/bin/urxvtd -o";
-          Environment = "RXVT_SOCKET=%t/urxvtd-socket";
-          Restart = "on-failure";
-          RestartSec = "5s";
-        };
-      };
-
     };
 
-    environment.systemPackages = [ pkgs.rxvt_unicode-with-plugins ];
+    environment.systemPackages = [ cfg.package ];
     environment.variables.RXVT_SOCKET = "/run/user/$(id -u)/urxvtd-socket";
   };
+
+  meta.maintainers = with lib.maintainers; [ rnhmjoj ];
 
 }

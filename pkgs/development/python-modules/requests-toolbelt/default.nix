@@ -1,32 +1,52 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, requests
-, betamax
-, mock
-, pytest
+{
+  lib,
+  betamax,
+  buildPythonPackage,
+  fetchPypi,
+  pyopenssl,
+  pytestCheckHook,
+  requests,
+  setuptools,
+  trustme,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "requests-toolbelt";
-  version = "0.8.0";
-  name = "${pname}-${version}";
+  version = "1.0.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "f6a531936c6fa4c6cfce1b9c10d5c4f498d16528d2a54a22ca00011205a187b5";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-doGgo9BHAStb3A7jfX+PB+vnarCMrsz8OSHOI8iNW8Y=";
   };
 
-  checkInputs = [ betamax mock pytest ];
-  propagatedBuildInputs = [ requests ];
+  build-system = [ setuptools ];
+  dependencies = [ requests ];
 
-  checkPhase = ''
-    py.test tests
-  '';
+  nativeCheckInputs = [
+    betamax
+    pyopenssl
+    pytestCheckHook
+    trustme
+  ];
+
+  disabledTests = [
+    # incompatible with urllib3 2.0
+    "test_dump_response"
+    "test_dump_all"
+    "test_prepared_request_override_base"
+    "test_prepared_request_with_base"
+    "test_request_override_base"
+    "test_request_with_base"
+  ];
+
+  pythonImportsCheck = [ "requests_toolbelt" ];
 
   meta = {
-    description = "A toolbelt of useful classes and functions to be used with python-requests";
-    homepage = http://toolbelt.rtfd.org;
-    maintainers = with lib.maintainers; [ jgeerds ];
+    description = "Toolbelt of useful classes and functions to be used with requests";
+    homepage = "http://toolbelt.rtfd.org";
+    changelog = "https://github.com/requests/toolbelt/blob/${finalAttrs.version}/HISTORY.rst";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ matthiasbeyer ];
   };
-}
+})

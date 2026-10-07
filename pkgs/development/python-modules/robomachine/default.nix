@@ -1,29 +1,44 @@
-{ stdenv, fetchPypi, buildPythonPackage, pyparsing, argparse, robotframework, allpairspy }:
+{
+  lib,
+  allpairspy,
+  buildPythonPackage,
+  fetchPypi,
+  pyparsing,
+  robotframework,
+  setuptools,
+}:
 
 buildPythonPackage rec {
-  pname = "RoboMachine";
-  version = "0.8.0";
+  pname = "robomachine";
+  version = "0.10.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "242cfd9be0f7591138eaeba03c9c190f894ce045e1767ab7b90eca330259fc45";
+    pname = "RoboMachine";
+    inherit version;
+    hash = "sha256-XrxHaV9U7mZ2TvySHGm6qw1AsoukppzwPq4wufIjL+k=";
   };
 
-  propagatedBuildInputs = [ pyparsing argparse robotframework allpairspy ];
+  nativeBuildInputs = [
+    setuptools
+  ];
 
-  # Remove Windows .bat files
-  postInstall = ''
-    rm "$out/bin/"*.bat
-  '';
+  propagatedBuildInputs = [
+    pyparsing
+    robotframework
+    allpairspy
+  ];
 
-  postPatch = ''
-    substituteInPlace setup.py --replace "argparse" ""
-  '';
+  pythonRemoveDeps = [ "argparse" ];
 
-  meta = with stdenv.lib; {
+  pythonRelaxDeps = [ "pyparsing" ];
+
+  pythonImportsCheck = [ "robomachine" ];
+
+  meta = {
     description = "Test data generator for Robot Framework";
-    homepage = https://github.com/mkorpela/RoboMachine;
-    license = licenses.asl20;
-    maintainers = with maintainers; [ bjornfor ];
+    homepage = "https://github.com/mkorpela/RoboMachine";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ bjornfor ];
   };
 }

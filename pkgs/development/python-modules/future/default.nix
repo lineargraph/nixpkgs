@@ -1,25 +1,40 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, isPy26
-, importlib
-, argparse
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonAtLeast,
+
+  # build-system
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "future";
-  version = "0.16.0";
-  name = "${pname}-${version}";
+  version = "1.0.0";
+  pyproject = true;
+
+  # https://github.com/PythonCharmers/python-future/issues/640
+  disabled = pythonAtLeast "3.13";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1nzy1k4m9966sikp0qka7lirh8sqrsyainyf8rk97db7nwdfv773";
+    hash = "sha256-vSloMJMHhh7a4UWKT4pPNZjAO+Q7l1IQdq6/XZTAewU=";
   };
 
-  propagatedBuildInputs = lib.optionals isPy26 [ importlib argparse ];
+  nativeBuildInputs = [ setuptools ];
+
+  pythonImportsCheck = [
+    "future.builtins"
+    "future.moves"
+    "future.standard_library"
+    "past.builtins"
+    "past.translation"
+  ];
+
   doCheck = false;
 
   meta = {
+    changelog = "https://github.com/PythonCharmers/python-future/blob/v${version}/docs/whatsnew.rst";
     description = "Clean single-source support for Python 3 and 2";
     longDescription = ''
       python-future is the missing compatibility layer between Python 2 and
@@ -32,9 +47,9 @@ buildPythonPackage rec {
       either Py2 or Py3 code easily to support both Python 2 and 3 in a
       single clean Py3-style codebase, module by module.
     '';
-    homepage = https://python-future.org;
-    downloadPage = https://github.com/PythonCharmers/python-future/releases;
-    license = with lib.licenses; [ mit ];
+    homepage = "https://python-future.org";
+    downloadPage = "https://github.com/PythonCharmers/python-future/releases";
+    license = lib.licenses.mit;
     maintainers = with lib.maintainers; [ prikhi ];
   };
 }

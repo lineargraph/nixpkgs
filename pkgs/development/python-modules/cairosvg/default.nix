@@ -1,25 +1,58 @@
-{ stdenv, buildPythonPackage, fetchPypi, isPy3k
-, cairocffi, cssselect2, defusedxml, pillow, tinycss2
-, pytestrunner, pytestcov, pytest-flake8, pytest-isort }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  cairocffi,
+  cssselect2,
+  defusedxml,
+  pillow,
+  tinycss2,
+
+  # testing
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
-  pname = "CairoSVG";
-  version = "2.1.3";
+  pname = "cairosvg";
+  version = "2.9.0";
+  pyproject = true;
 
-  disabled = !isPy3k;
-
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "e512f555f576b6462b04b585c4ba4c09a43f3a8fec907b60ead21d7d00c550e9";
+  src = fetchFromGitHub {
+    owner = "Kozea";
+    repo = "CairoSVG";
+    tag = version;
+    hash = "sha256-WtMFOYaN/cRrL1Q4ma/UkR3kNFObNhp0Gm7i9NQAqz8=";
   };
 
-  propagatedBuildInputs = [ cairocffi cssselect2 defusedxml pillow tinycss2 ];
+  build-system = [ setuptools ];
 
-  checkInputs = [ pytestrunner pytestcov pytest-flake8 pytest-isort ];
+  dependencies = [
+    cairocffi
+    cssselect2
+    defusedxml
+    pillow
+    tinycss2
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://cairosvg.org;
-    license = licenses.lgpl3;
+  nativeBuildInputs = [ cairocffi ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  enabledTestPaths = [ "cairosvg/test_api.py" ];
+
+  pythonImportsCheck = [ "cairosvg" ];
+
+  meta = {
+    homepage = "https://cairosvg.org";
+    changelog = "https://github.com/Kozea/CairoSVG/releases/tag/${version}";
+    license = lib.licenses.lgpl3Plus;
     description = "SVG converter based on Cairo";
+    mainProgram = "cairosvg";
+    maintainers = [ lib.maintainers.sarahec ];
   };
 }

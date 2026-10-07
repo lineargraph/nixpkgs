@@ -1,24 +1,43 @@
-{ lib
-, buildPythonPackage
-, mecab
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  mecab,
+  swig,
+  setuptools-scm,
 }:
 
 buildPythonPackage rec {
   pname = "mecab-python3";
-  version = "0.7";
+  version = "1.0.12";
+  format = "setuptools";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "007dg4f5fby2yl7cc44x6xwvcrf2w2ifmn0rmk56ss33mhs8l6qy";
+    pname = "mecab_python3";
+    inherit version;
+    hash = "sha256-mroeVu+A3ZcUfcv441CBR68Sn7Rs7A5DK4X5apvapLk=";
   };
 
-  propagatedBuildInputs = [ mecab ];
+  nativeBuildInputs = [
+    mecab # for mecab-config
+    swig
+    setuptools-scm
+  ];
 
-  meta = with lib; {
-    description = "A python wrapper for mecab: Morphological Analysis engine";
-    homepage =  https://github.com/LuminosoInsight/wordfreq/;
-    license = licenses.bsd0;
-    maintainers = with maintainers; [ ixxie ];
+  buildInputs = [ mecab ];
+
+  doCheck = false;
+
+  pythonImportsCheck = [ "MeCab" ];
+
+  meta = {
+    description = "Python wrapper for mecab: Morphological Analysis engine";
+    homepage = "https://github.com/SamuraiT/mecab-python3";
+    changelog = "https://github.com/SamuraiT/mecab-python3/releases/tag/v${version}";
+    license = with lib.licenses; [
+      gpl2
+      lgpl21
+      bsd3
+    ]; # any of the three
   };
 }

@@ -1,33 +1,71 @@
-{ stdenv, fetchurl, fetchzip, ocaml, findlib, ocamlbuild, erm_xml, cryptokit, camlp4 }:
-
-let
-  version = "0.2";
-  disable-tests = fetchurl {
-    url = https://raw.githubusercontent.com/ocaml/opam-repository/master/packages/erm_xmpp/erm_xmpp.0.2/files/disable_tests.patch;
-    sha256 = "09d8630nmx2x8kb8ap1zmsb93zs14cqg7ga1gmdl92jvsjxbhgc1";
-  };
-in
+{
+  stdenv,
+  lib,
+  fetchFromGitHub,
+  ocaml,
+  findlib,
+  camlp4,
+  cstruct,
+  ocamlbuild,
+  erm_xml,
+  mirage-crypto,
+  mirage-crypto-rng,
+  base64,
+  digestif,
+}:
 
 stdenv.mkDerivation {
-  name = "ocaml-erm_xmpp-${version}";
+  version = "0.3+20241009";
+  pname = "ocaml${ocaml.version}-erm_xmpp";
 
-  src = fetchzip {
-    url = "https://github.com/ermine/xmpp/archive/v${version}.tar.gz";
-    sha256 = "0saw2dmrzv2aadrznvyvchnhivvcwm78x9nwf6flq5v0pqddapk2";
+  src = fetchFromGitHub {
+    owner = "hannesm";
+    repo = "xmpp";
+    rev = "54418f77abf47b175e9c1b68a4f745a12b640d6a";
+    sha256 = "sha256-AbzZjNkW1VH/FOnzNruvelZeo3IYg/Usr3enQEknTQs=";
   };
 
-  patches = [ disable-tests ];
+  nativeBuildInputs = [
+    ocaml
+    findlib
+    ocamlbuild
+    camlp4
+  ];
+  buildInputs = [ camlp4 ];
+  propagatedBuildInputs = [
+    cstruct
+    erm_xml
+    mirage-crypto
+    mirage-crypto-rng
+    base64
+    digestif
+  ];
 
-  buildInputs = [ ocaml findlib ocamlbuild camlp4 ];
-  propagatedBuildInputs = [ erm_xml cryptokit ];
+  strictDeps = true;
+
+  configurePhase = ''
+    runHook preConfigure
+    ocaml setup.ml -configure --prefix $out
+    runHook postConfigure
+  '';
+  buildPhase = ''
+    runHook preBuild
+    ocaml setup.ml -build
+    runHook postBuild
+  '';
+  installPhase = ''
+    runHook preInstall
+    ocaml setup.ml -install
+    runHook postInstall
+  '';
 
   createFindlibDestdir = true;
 
   meta = {
-    homepage = https://github.com/ermine/xmpp;
-    description = "OCaml based XMPP implementation";
-    platforms = ocaml.meta.platforms or [];
-    license = stdenv.lib.licenses.bsd3;
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
+    homepage = "https://github.com/hannesm/xmpp";
+    description = "OCaml based XMPP implementation (fork)";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ sternenseemann ];
+    inherit (ocaml.meta) platforms;
   };
 }

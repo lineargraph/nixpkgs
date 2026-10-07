@@ -1,60 +1,174 @@
-{ stdenv, fetchurl, pkgconfig, meson, ninja
-, libevdev, mtdev, udev, libwacom
-, documentationSupport ? false, doxygen ? null, graphviz ? null # Documentation
-, eventGUISupport ? false, cairo ? null, glib ? null, gtk3 ? null # GUI event viewer support
-, testsSupport ? false, check ? null, valgrind ? null, python3Packages ? null
+{
+  lib,
+  stdenv,
+  fetchFromGitLab,
+  gitUpdater,
+  pkg-config,
+  meson,
+  ninja,
+  libevdev,
+  mtdev,
+  udev,
+  wacomSupport ? stdenv.hostPlatform.isLinux,
+  libwacom,
+  documentationSupport ? false,
+  doxygen,
+  graphviz,
+  runCommand,
+  eventGUISupport ? false,
+  cairo,
+  glib,
+  gtk3,
+  luaSupport ? true,
+  lua5_4,
+  testsSupport ? false,
+  check,
+  valgrind,
+  python3,
+  nixosTests,
+  wayland-scanner,
+  udevCheckHook,
+  epoll-shim,
+  libudev-devd,
 }:
 
-assert documentationSupport -> doxygen != null && graphviz != null;
-assert eventGUISupport -> cairo != null && glib != null && gtk3 != null;
-assert testsSupport -> check != null && valgrind != null && python3Packages != null;
-
 let
-  mkFlag = optSet: flag: "-D${flag}=${stdenv.lib.boolToString optSet}";
+  sphinx-build =
+    let
+      env = python3.withPackages (
+        pp: with pp; [
+          sphinx
+          recommonmark
+          sphinx-rtd-theme
+        ]
+      );
+    in
+    # Expose only the sphinx-build binary to avoid contaminating
+    # everything with Sphinx’s Python environment.
+    runCommand "sphinx-build" { } ''
+      mkdir -p "$out/bin"
+      ln -s "${env}/bin/sphinx-build" "$out/bin"
+    '';
 in
 
-with stdenv.lib;
 stdenv.mkDerivation rec {
-  name = "libinput-${version}";
-  version = "1.10.3";
+  pname = "libinput";
+  version = "1.31.3";
 
-  src = fetchurl {
-    url = "http://www.freedesktop.org/software/libinput/${name}.tar.xz";
-    sha256 = "0002xk9cqzpqrlhgav1wp8nimsbp9d2w8rd8mgygczq2hjar0lhd";
-  };
-
-  outputs = [ "out" "dev" ];
-
-  mesonFlags = [
-    (mkFlag documentationSupport "documentation")
-    (mkFlag eventGUISupport "debug-gui")
-    (mkFlag testsSupport "tests")
+  outputs = [
+    "bin"
+    "out"
+    "dev"
   ];
 
-  nativeBuildInputs = [ pkgconfig meson ninja ]
-    ++ optionals documentationSupport [ doxygen graphviz ]
-    ++ optionals testsSupport [ check valgrind python3Packages.pyparsing ];
+  propagatedBuildOutputs = [ "out" ];
 
-  buildInputs = [ libevdev mtdev libwacom ]
-    ++ optionals eventGUISupport [ cairo glib gtk3 ];
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = "libinput";
+    repo = "libinput";
+    rev = version;
+    hash = "sha256-2l+YGD1AFTwJRouMg0d3nQX+2me6A4yOB4g2WE2H//g=";
+  };
 
-  propagatedBuildInputs = [ udev ];
+  nativeBuildInputs = [
+    pkg-config
+    meson
+    ninja
+    udevCheckHook
+  ]
+  ++ lib.optionals documentationSupport [
+    doxygen
+    graphviz
+    sphinx-build
+  ];
 
-  patches = [ ./udev-absolute-path.patch ];
+  buildInputs = [
+    libevdev
+    mtdev
+    (python3.withPackages (
+      pp: with pp; [
+        pp.libevdev # already in scope
+        pyudev
+        pyyaml
+        setuptools
+      ]
+    ))
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isFreeBSD [
+    epoll-shim
+  ]
+  ++ lib.optionals wacomSupport [
+    libwacom
+  ]
+  ++ lib.optionals luaSupport [
+    lua5_4
+  ]
+  ++ lib.optionals eventGUISupport [
+    # GUI event viewer
+    cairo
+    glib
+    gtk3
+    wayland-scanner
+  ];
 
-   preBuild = ''
-    # meson setup-hook changes the directory so the files are located one level up
-    patchShebangs ../udev/parse_hwdb.py
-    patchShebangs ../test/symbols-leak-test.in
+  propagatedBuildInputs =
+    lib.optional stdenv.hostPlatform.isLinux udev
+    ++ lib.optional stdenv.hostPlatform.isFreeBSD libudev-devd;
+
+  nativeCheckInputs = [
+    check
+    valgrind
+  ];
+
+  mesonFlags = [
+    (lib.mesonBool "documentation" documentationSupport)
+    (lib.mesonBool "debug-gui" eventGUISupport)
+    (lib.mesonBool "tests" testsSupport)
+    (lib.mesonBool "libwacom" wacomSupport)
+    (lib.mesonEnable "lua-plugins" luaSupport)
+    "--sysconfdir=/etc"
+    "--libexecdir=${placeholder "bin"}/libexec"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isBSD [
+    "-Depoll-dir=${epoll-shim}"
+  ];
+
+  doCheck = testsSupport && stdenv.hostPlatform == stdenv.buildPlatform;
+
+  doInstallCheck = true;
+
+  postPatch = ''
+    patchShebangs \
+      test/symbols-leak-test \
+      test/check-leftover-udev-rules.sh \
+      test/helper-copy-and-exec-from-tmp.sh
+
+    # Don't create an empty directory under /etc.
+    sed -i "/install_emptydir(dir_etc \/ 'libinput')/d" meson.build
   '';
 
-  doCheck = testsSupport;
+  passthru = {
+    tests = {
+      libinput-module = nixosTests.libinput;
+    };
+    updateScript = gitUpdater {
+      patchlevel-unstable = true;
+    };
+  };
 
   meta = {
     description = "Handles input devices in Wayland compositors and provides a generic X.Org input driver";
-    homepage    = http://www.freedesktop.org/wiki/Software/libinput;
-    license     = licenses.mit;
-    platforms   = platforms.unix;
-    maintainers = with maintainers; [ codyopel wkennington ];
+    mainProgram = "libinput";
+    homepage = "https://www.freedesktop.org/wiki/Software/libinput/";
+    license = lib.licenses.mit;
+    platforms = lib.platforms.linux ++ lib.platforms.freebsd;
+    maintainers = [ ];
+    teams = [ lib.teams.freedesktop ];
+    changelog = "https://gitlab.freedesktop.org/libinput/libinput/-/releases/${version}";
+    badPlatforms = [
+      # Mandatory shared library.
+      lib.systems.inspect.platformPatterns.isStatic
+    ];
   };
 }

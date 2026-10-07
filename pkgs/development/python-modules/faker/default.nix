@@ -1,38 +1,53 @@
-{ lib, buildPythonPackage, fetchPypi, pythonOlder,
-  # Build inputs
-  dateutil, six, text-unidecode, ipaddress ? null,
-  # Test inputs
-  email_validator, nose, mock, ukpostcodeparser }:
-
-assert pythonOlder "3.3" -> ipaddress != null;
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  freezegun,
+  pillow,
+  pytestCheckHook,
+  python-dateutil,
+  setuptools,
+  typing-extensions,
+  tzdata,
+  ukpostcodeparser,
+  validators,
+}:
 
 buildPythonPackage rec {
-  pname = "Faker";
-  version = "0.8.15";
+  pname = "faker";
+  version = "40.28.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "a77a1a2223a8e0d32618878350bbd2171040f32b526ba2cddfab8864704bb370";
+    hash = "sha256-KmP7Uaurh5BjbUAwoJTPlCQEy8zJwojRytcOLj6ezVg=";
   };
 
-  checkInputs = [
-    email_validator
-    nose
-    mock
-    ukpostcodeparser
+  build-system = [ setuptools ];
+
+  dependencies = [
+    python-dateutil
+    typing-extensions
+    tzdata
   ];
 
-  propagatedBuildInputs = [
-    dateutil
-    six
-    text-unidecode
-  ] ++ lib.optional (pythonOlder "3.3") ipaddress;
+  nativeCheckInputs = [
+    freezegun
+    pillow
+    pytestCheckHook
+    ukpostcodeparser
+    validators
+  ];
 
-  meta = with lib; {
-    description = "A Python library for generating fake user data";
-    homepage    = http://faker.rtfd.org;
-    license     = licenses.mit;
-    maintainers = with maintainers; [ lovek323 ];
-    platforms   = platforms.unix;
+  # avoid tests which import random2, an abandoned library
+  disabledTestPaths = [ "tests/providers/test_ssn.py" ];
+  pythonImportsCheck = [ "faker" ];
+
+  meta = {
+    description = "Python library for generating fake user data";
+    mainProgram = "faker";
+    homepage = "http://faker.rtfd.org";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

@@ -1,21 +1,31 @@
-{ stdenv, fetchPypi, buildPythonPackage, pytest, tox }:
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  setuptools,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
-  version = "0.5";
   pname = "pluginbase";
-
-  buildInputs = [ pytest tox ];
+  version = "1.0.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1palagrlszs4f4f5j6npzl4d195vclrlza3qr524z2h758j31y5l";
+    hash = "sha256-/2wzqY/OIy6cc4QdeHpkPeV0k3Bp8NGBRwKNcNfe4oc=";
   };
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mitsuhiko/pluginbase;
-    description = "A support library for building plugins sytems in Python";
-    license = licenses.bsd3;
-    platforms = platforms.all;
+  build-system = [ setuptools ];
+
+  # https://github.com/mitsuhiko/pluginbase/issues/24
+  doCheck = false;
+
+  pythonImportsCheck = [ "pluginbase" ];
+
+  meta = {
+    description = "Support library for building plugins systems in Python";
+    homepage = "https://github.com/mitsuhiko/pluginbase";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

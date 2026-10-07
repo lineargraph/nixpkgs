@@ -1,30 +1,68 @@
-{ stdenv, buildPythonPackage , fetchPypi
-, pytest, jupyter_core, pandas }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  altair,
+  ipytablewidgets,
+  ipywidgets,
+  jupyter,
+  jupyter-core,
+  jupyterlab,
+  pandas,
+  poetry-core,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "vega";
-  version = "0.5.0";
-  name = "${pname}-${version}";
+  version = "4.1.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "9871bce3a00bb775d9f7f8212aa237f99f11ca7cfe6ecf246773f5559f20c38c";
+    hash = "sha256-8lrmhCvwczqBpiQRCkPjmiYsJPHEFnZab/Azkh+i7ls=";
   };
 
-  buildInputs = [ pytest ];
-  propagatedBuildInputs = [ jupyter_core pandas ];
+  nativeBuildInputs = [
+    poetry-core
+  ];
 
-  meta = with stdenv.lib; {
-    description = "An IPython/Jupyter widget for Vega and Vega-Lite";
+  pythonRelaxDeps = [ "pandas" ];
+
+  propagatedBuildInputs = [
+    ipytablewidgets
+    jupyter
+    jupyter-core
+    pandas
+  ];
+
+  optional-dependencies = {
+    widget = [ ipywidgets ];
+    jupyterlab = [ jupyterlab ];
+  };
+
+  nativeCheckInputs = [
+    altair
+    pytestCheckHook
+  ];
+
+  disabledTestPaths = [
+    # these tests are broken with jupyter-notebook >= 7
+    "vega/tests/test_entrypoint.py"
+  ];
+
+  pythonImportsCheck = [ "vega" ];
+
+  meta = {
+    description = "IPython/Jupyter widget for Vega and Vega-Lite";
     longDescription = ''
       To use this you have to enter a nix-shell with vega. Then run:
 
       jupyter nbextension install --user --py vega
       jupyter nbextension enable --user vega
     '';
-    homepage = https://github.com/vega/ipyvega;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ teh ];
-    platforms = platforms.linux;
+    homepage = "https://github.com/vega/ipyvega";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ teh ];
   };
 }

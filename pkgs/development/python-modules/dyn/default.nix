@@ -1,34 +1,32 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytest, pytestcov, mock, pytestpep8
-, pytest_xdist, covCore, glibcLocales }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "dyn";
-  version = "1.8.1";
-  name  = "${pname}-${version}";
+  version = "1.8.6";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "e112149d48b4500c18b3cfb6e0e6e780bb5aa0e56ff87cac412280200b9ec8bf";
+    hash = "sha256-933etYrKRgSqJfOMIuIDL4Uv4/RdSEFMNWFtW5qiPpA=";
   };
 
-  buildInputs = [ glibcLocales ];
+  build-system = [ setuptools ];
 
-  checkInputs = [
-    pytest
-    pytestcov
-    mock
-    pytestpep8
-    pytest_xdist
-    covCore
-  ];
-  # Disable checks because they are not stateless and require internet access.
+  # Module has no tests
   doCheck = false;
 
-  LC_ALL="en_US.UTF-8";
+  pythonImportsCheck = [ "dyn" ];
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Dynect dns lib";
-    homepage = "http://dyn.readthedocs.org/en/latest/intro.html";
-    license = licenses.bsd3;
+    homepage = "https://dyn.readthedocs.org";
+    changelog = "https://github.com/dyninc/dyn-python/blob/${version}/HISTORY.rst";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

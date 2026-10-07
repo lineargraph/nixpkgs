@@ -1,24 +1,34 @@
-{ stdenv, buildPythonApplication, fetchPypi
-, pytest, nose }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+}:
 
-buildPythonApplication rec {
-  pname   = "sybil";
-  version = "1.0.8";
+buildPythonPackage rec {
+  pname = "sybil";
+  version = "9.3.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1e17e10bac4c56ef5b6752866a7d100f5ae856ff97d805c4d6cac73be80863d3";
+  src = fetchFromGitHub {
+    owner = "simplistix";
+    repo = "sybil";
+    tag = version;
+    hash = "sha256-rr6zVY1yJVL/s/Wg5S4pSljj9Zq+jo7CZ6TZvtPpxow=";
   };
 
-  checkInputs = [ pytest nose ];
+  build-system = [ setuptools ];
 
-  checkPhase = ''
-    py.test tests
-  '';
+  # Circular dependency with testfixtures
+  doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "Automated testing for the examples in your documentation.";
-    homepage    = https://github.com/cjw296/sybil/;
-    license     = licenses.mit;
+  pythonImportsCheck = [ "sybil" ];
+
+  meta = {
+    description = "Automated testing for the examples in your documentation";
+    homepage = "https://github.com/cjw296/sybil";
+    changelog = "https://github.com/simplistix/sybil/blob/${src.tag}/CHANGELOG.rst";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

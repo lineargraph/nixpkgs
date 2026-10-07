@@ -1,15 +1,23 @@
-{ mkDerivation, lib
-, extra-cmake-modules
-, hunspell, qtbase, qttools
+{
+  mkDerivation,
+  cmake,
+  extra-cmake-modules,
+  aspell,
+  hunspell,
+  qtbase,
+  qttools,
 }:
 
 mkDerivation {
-  name = "sonnet";
-  meta = {
-    maintainers = [ lib.maintainers.ttuegel ];
-    broken = builtins.compareVersions qtbase.version "5.7.0" < 0;
-  };
-  nativeBuildInputs = [ extra-cmake-modules ];
-  buildInputs = [ hunspell qttools ];
+  pname = "sonnet";
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
+  ];
+  buildInputs = [
+    aspell
+    hunspell
+    qttools
+  ];
   propagatedBuildInputs = [ qtbase ];
 }

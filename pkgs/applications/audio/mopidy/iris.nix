@@ -1,34 +1,65 @@
-{ stdenv, pythonPackages, mopidy, mopidy-local-images }:
+{
+  lib,
+  pythonPackages,
+  fetchFromGitHub,
+  fetchNpmDeps,
+  mopidy,
+  nodejs,
+  npmHooks,
+}:
 
-pythonPackages.buildPythonApplication rec {
-  pname = "Mopidy-Iris";
-  version = "3.21.1";
+pythonPackages.buildPythonApplication (finalAttrs: {
+  pname = "mopidy-iris";
+  version = "3.70.0";
+  pyproject = true;
 
-  src = pythonPackages.fetchPypi {
-    inherit pname version;
-    sha256 = "10d97rkqk5qbrninrahn0gr90yd47ivw2zafb24sp7a2g0mm07md";
+  src = fetchFromGitHub {
+    owner = "jaedb";
+    repo = "Iris";
+    tag = finalAttrs.version;
+    hash = "sha256-Fc0LktN8pCRnrvk9uudXu10J3XfrRbdGlcDKXFNQzmQ=";
   };
 
-  propagatedBuildInputs = [
-    mopidy
-    mopidy-local-images
-  ] ++ (with pythonPackages; [
-    configobj
-    pylast
-    spotipy
-    raven
-    tornado
-  ]);
+  postPatch = ''
+    # turn off Google Analytics per default
+    substituteInPlace src/js/store/index.js \
+      --replace-fail 'allow_reporting: true' 'allow_reporting: false'
+  '';
 
-  postPatch = "sed -i /tornado/d setup.py";
+  npmDeps = fetchNpmDeps {
+    inherit (finalAttrs) src;
+    hash = "sha256-aQHq80SLaOPOANYV+aDTWC/bxfc1it5iDeRJ8L5iuEU=";
+  };
+
+  nativeBuildInputs = [
+    nodejs
+    npmHooks.npmConfigHook
+  ];
+
+  preBuild = ''
+    npm run prod
+  '';
+
+  build-system = [
+    pythonPackages.setuptools
+  ];
+
+  dependencies = [
+    mopidy
+    pythonPackages.configobj
+    pythonPackages.requests
+    pythonPackages.tornado
+  ];
 
   # no tests implemented
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/jaedb/Iris;
-    description = "A fully-functional Mopidy web client encompassing Spotify and many other backends";
-    license = licenses.asl20;
-    maintainers = [ maintainers.rvolosatovs ];
+  pythonImportsCheck = [ "mopidy_iris" ];
+
+  meta = {
+    homepage = "https://github.com/jaedb/Iris";
+    description = "Fully-functional Mopidy web client encompassing Spotify and many other backends";
+    license = lib.licenses.asl20;
+    maintainers = [ lib.maintainers.rvolosatovs ];
   };
-}
+})

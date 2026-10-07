@@ -1,16 +1,89 @@
-{ stdenv, fetchurl, pkgconfig, atk, cairo, glib, gtk3, pango, vala_0_40
-, libxml2, perl, gettext, gnome3, gobjectIntrospection, dbus, xvfb_run, shared-mime-info }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  fetchpatch2,
+  meson,
+  ninja,
+  pkg-config,
+  atk,
+  cairo,
+  glib,
+  gtk3,
+  pango,
+  fribidi,
+  vala,
+  libxml2,
+  perl,
+  gettext,
+  gnome,
+  gobject-introspection,
+  dbus,
+  xvfb-run,
+  shared-mime-info,
+  testers,
+}:
 
-let
-  checkInputs = [ xvfb_run dbus ];
-in stdenv.mkDerivation rec {
-  name = "gtksourceview-${version}";
-  version = "4.0.0";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "gtksourceview";
+  version = "4.8.4";
 
-  src = fetchurl {
-    url = "mirror://gnome/sources/gtksourceview/${gnome3.versionBranch version}/${name}.tar.xz";
-    sha256 = "0amkspjsvxr3rjznmnwjwsgw030hayf6bw49ya4nligslwl7lp3f";
-  };
+  __structuredAttrs = true;
+  strictDeps = true;
+
+  outputs = [
+    "out"
+    "dev"
+  ];
+
+  src =
+    let
+      inherit (finalAttrs) pname version;
+    in
+    fetchurl {
+      url = "mirror://gnome/sources/gtksourceview/${lib.versions.majorMinor version}/gtksourceview-${version}.tar.xz";
+      sha256 = "fsnRj7KD0fhKOj7/O3pysJoQycAGWXs/uru1lYQgqH0=";
+    };
+
+  patches = [
+    # By default, the library loads syntaxes from XDG_DATA_DIRS and user directory
+    # but not from its own datadr (it assumes it will be in XDG_DATA_DIRS).
+    # Since this is not generally true with Nix, let’s add $out/share unconditionally.
+    ./4.x-nix_share_path.patch
+
+    # nix.lang: Add Nix syntax highlighting
+    # https://gitlab.gnome.org/GNOME/gtksourceview/-/merge_requests/303
+    (fetchpatch2 {
+      url = "https://gitlab.gnome.org/GNOME/gtksourceview/-/commit/685b3bd08869c2aefe33fad696a7f5f2dc831016.patch";
+      hash = "sha256-yeYXJ2l/QS857C4UXOnMFyh0JsptA0TQt0lfD7wN5ic=";
+    })
+
+    # nix.lang: fix section name
+    (fetchpatch2 {
+      url = "https://gitlab.gnome.org/GNOME/gtksourceview/-/commit/1dbbb01da98140e0b2d5d0c6c2df29247650ed83.patch";
+      hash = "sha256-6HxLKQyI5DDvmKhmldQlwVPV62RfFa2gwWbcHA2cICs=";
+    })
+  ];
+
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gettext
+    perl
+    gobject-introspection
+    vala
+    libxml2 # xmllint
+  ];
+
+  buildInputs = [
+    atk
+    cairo
+    glib
+    pango
+    fribidi
+    libxml2
+  ];
 
   propagatedBuildInputs = [
     # Required by gtksourceview-4.0.pc
@@ -19,36 +92,48 @@ in stdenv.mkDerivation rec {
     shared-mime-info
   ];
 
-  outputs = [ "out" "dev" ];
+  nativeCheckInputs = [
+    xvfb-run
+    dbus
+  ];
 
-  nativeBuildInputs = [ pkgconfig gettext perl gobjectIntrospection vala_0_40 ]
-    ++ stdenv.lib.optionals doCheck checkInputs;
+  postPatch = ''
+    # https://gitlab.gnome.org/GNOME/gtksourceview/-/merge_requests/295
+    # build: drop unnecessary vapigen check
+    substituteInPlace meson.build \
+      --replace "if generate_vapi" "if false"
+  '';
 
-  buildInputs = [ atk cairo glib pango libxml2 ];
+  doCheck = stdenv.hostPlatform.isLinux;
 
-  patches = [ ./4.x-nix_share_path.patch ];
-
-  enableParallelBuilding = true;
-
-  doCheck = stdenv.isLinux;
   checkPhase = ''
-    export NO_AT_BRIDGE=1
+    runHook preCheck
+
+    XDG_DATA_DIRS="$XDG_DATA_DIRS:${shared-mime-info}/share" \
     xvfb-run -s '-screen 0 800x600x24' dbus-run-session \
-      --config-file=${dbus.daemon}/share/dbus-1/session.conf \
-      make check
+      --config-file=${dbus}/share/dbus-1/session.conf \
+      meson test --no-rebuild --print-errorlogs
+
+    runHook postCheck
   '';
 
   passthru = {
-    updateScript = gnome3.updateScript {
+    updateScript = gnome.updateScript {
       packageName = "gtksourceview";
-      attrPath = "gnome3.gtksourceview";
+      attrPath = "gtksourceview4";
+      versionPolicy = "odd-unstable";
+      freeze = true;
     };
   };
 
-  meta = with stdenv.lib; {
-    homepage = https://wiki.gnome.org/Projects/GtkSourceView;
-    platforms = with platforms; linux ++ darwin;
-    license = licenses.lgpl21;
-    maintainers = gnome3.maintainers;
+  passthru.tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
+
+  meta = {
+    description = "Source code editing widget for GTK";
+    homepage = "https://gitlab.gnome.org/GNOME/gtksourceview";
+    pkgConfigModules = [ "gtksourceview-4" ];
+    platforms = lib.platforms.unix;
+    license = lib.licenses.lgpl21Plus;
+    teams = [ lib.teams.gnome ];
   };
-}
+})

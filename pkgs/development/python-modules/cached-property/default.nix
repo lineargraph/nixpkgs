@@ -1,33 +1,51 @@
-{ lib
-, buildPythonPackage
-, fetchFromGitHub
-, pytest
-, freezegun
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  freezegun,
+  pytestCheckHook,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "cached-property";
-  version = "1.4.2";
+  version = "2.0.1";
+  pyproject = true;
 
-  # conftest.py is missing in PyPI tarball
   src = fetchFromGitHub {
     owner = "pydanny";
-    repo = pname;
-    rev = version;
-    sha256 = "0gjmgfilhljkx2b60cjikwh55jg2jwxhwi8hgkrzdnzk465ywhrw";
+    repo = "cached-property";
+    tag = version;
+    hash = "sha256-sOThFJs18DR9aBgIpqkORU4iRmhCVKehyM3DLYUt/Wc=";
   };
 
-  checkInputs = [ pytest freezegun ];
+  patches = [
+    # fix Python 3.14, replace deprecated asyncio.iscoroutinefunction
+    # https://github.com/pydanny/cached-property/pull/359
+    # vendoring because the PR is not yet merged
+    ./python-3.14-compat.patch
+  ];
 
-  checkPhase = ''
-    py.test
-  '';
+  build-system = [ setuptools ];
+
+  nativeCheckInputs = [
+    freezegun
+    pytestCheckHook
+  ];
+
+  disabledTests = [
+    # https://github.com/pydanny/cached-property/issues/131
+    "test_threads_ttl_expiry"
+  ];
+
+  pythonImportsCheck = [ "cached_property" ];
 
   meta = {
-    description = "A decorator for caching properties in classes";
-    homepage = https://github.com/pydanny/cached-property;
+    description = "Decorator for caching properties in classes";
+    homepage = "https://github.com/pydanny/cached-property";
+    changelog = "https://github.com/pydanny/cached-property/releases/tag/${version}";
     license = lib.licenses.bsd3;
     platforms = lib.platforms.unix;
-    maintainers = with lib.maintainers; [ ericsagnes ];
+    maintainers = [ ];
   };
 }

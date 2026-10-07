@@ -1,30 +1,125 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, urllib3, certifi
-, gevent, geventhttpclient, mock, fastimport
-, git, glibcLocales }:
+{
+  lib,
+  buildPythonPackage,
+  cargo,
+  fastimport,
+  fetchFromGitHub,
+  gevent,
+  geventhttpclient,
+  git,
+  glibcLocales,
+  gnupg,
+  gpg,
+  merge3,
+  nix-update-script,
+  openssh,
+  paramiko,
+  pytestCheckHook,
+  rich,
+  rustPlatform,
+  rustc,
+  setuptools,
+  setuptools-rust,
+  urllib3,
+}:
 
-buildPythonPackage rec {
-  version = "0.19.2";
+buildPythonPackage (finalAttrs: {
   pname = "dulwich";
+  version = "1.2.15";
+  pyproject = true;
+  __structuredAttrs = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "c51e10c260543240e0806052af046e1a78b98cbe1ac1ef3880a78d2269e09da4";
+  src = fetchFromGitHub {
+    owner = "jelmer";
+    repo = "dulwich";
+    tag = "dulwich-${finalAttrs.version}";
+    hash = "sha256-ZLTgVeY9seeElnRc0G7M+0bFx8b/9i5dMj4/61A/maY=";
   };
 
-  LC_ALL = "en_US.UTF-8";
-
-  propagatedBuildInputs = [ urllib3 certifi ];
-
-  # Only test dependencies
-  checkInputs = [ git glibcLocales gevent geventhttpclient mock fastimport ];
-
-  doCheck = !stdenv.isDarwin;
-
-  meta = with stdenv.lib; {
-    description = "Simple Python implementation of the Git file formats and protocols";
-    homepage = http://samba.org/~jelmer/dulwich/;
-    license = licenses.gpl2Plus;
-    maintainers = with maintainers; [ koral ];
+  cargoDeps = rustPlatform.fetchCargoVendor {
+    inherit (finalAttrs) pname version src;
+    hash = "sha256-X8sKVLTPQVjAcW+h1X/AsHW7UgwSOUbAa4VRZfhepM0=";
   };
-}
+
+  nativeBuildInputs = [
+    rustPlatform.cargoSetupHook
+    cargo
+    rustc
+  ];
+
+  build-system = [
+    setuptools
+    setuptools-rust
+  ];
+
+  dependencies = [
+    urllib3
+  ];
+
+  optional-dependencies = {
+    colordiff = [ rich ];
+    fastimport = [ fastimport ];
+    https = [ urllib3 ];
+    merge = [ merge3 ];
+    pgp = [
+      gpg
+      gnupg
+    ];
+    paramiko = [ paramiko ];
+  };
+
+  nativeCheckInputs = [
+    gevent
+    geventhttpclient
+    git
+    glibcLocales
+    openssh # for ssh-keygen
+    pytestCheckHook
+  ]
+  ++ lib.concatAttrValues finalAttrs.passthru.optional-dependencies;
+
+  enabledTestPaths = [ "tests" ];
+
+  disabledTests = [
+    # Depends on setuid which is not available in sandboxed environments
+    "SharedRepositoryTests"
+  ];
+
+  preCheck = ''
+    export TMPDIR=$(mktemp -d)
+  '';
+
+  disabledTestPaths = [
+    # AssertionError: GPGMEError not raised
+    "tests/test_signature.py::GPGSignatureVendorTests::test_verify_invalid_signature"
+  ];
+
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [ "dulwich" ];
+
+  passthru.updateScript = nix-update-script {
+    extraArgs = [
+      "--version-regex"
+      "^dulwich-([1-9][0-9.]+)$"
+    ];
+  };
+
+  meta = {
+    description = "Implementation of the Git file formats and protocols";
+    longDescription = ''
+      Dulwich is a Python implementation of the Git file formats and protocols, which
+      does not depend on Git itself. All functionality is available in pure Python.
+    '';
+    homepage = "https://www.dulwich.io/";
+    changelog = "https://github.com/jelmer/dulwich/blob/dulwich-${finalAttrs.src.tag}/NEWS";
+    license = with lib.licenses; [
+      asl20
+      gpl2Plus
+    ];
+    maintainers = with lib.maintainers; [
+      koral
+      sarahec
+    ];
+  };
+})

@@ -1,25 +1,46 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  hatch-vcs,
+  hatchling,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "apipkg";
-  version = "1.4";
-  name = "${pname}-${version}";
+  version = "3.0.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "2e38399dbe842891fe85392601aab8f40a8f4cc5a9053c326de35a1cc0297ac6";
+  src = fetchFromGitHub {
+    owner = "pytest-dev";
+    repo = "apipkg";
+    tag = "v${version}";
+    hash = "sha256-ANLD7fUMKN3RmAVjVkcpwUH6U9ASalXdwKtPpoC8Urs=";
   };
 
-  buildInputs = [ pytest ];
-
-  checkPhase = ''
-    py.test
+  # support pytest 9: https://github.com/pytest-dev/apipkg/pull/58
+  postPatch = ''
+    substituteInPlace conftest.py \
+      --replace-fail 'def pytest_report_header(startdir):' 'def pytest_report_header():'
   '';
 
-  meta = with stdenv.lib; {
+  build-system = [
+    hatch-vcs
+    hatchling
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  enabledTestPaths = [ "test_apipkg.py" ];
+
+  pythonImportsCheck = [ "apipkg" ];
+
+  meta = {
+    changelog = "https://github.com/pytest-dev/apipkg/blob/main/CHANGELOG";
     description = "Namespace control and lazy-import mechanism";
-    homepage = https://bitbucket.org/hpk42/apipkg;
-    license = licenses.mit;
+    homepage = "https://github.com/pytest-dev/apipkg";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

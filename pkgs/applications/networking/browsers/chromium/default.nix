@@ -1,136 +1,195 @@
-{ newScope, stdenv, makeWrapper, makeDesktopItem, ed
-, glib, gtk3, gnome3, gsettings-desktop-schemas
+{
+  newScope,
+  config,
+  stdenv,
+  makeWrapper,
+  buildPackages,
+  ed,
+  gnugrep,
+  coreutils,
+  xdg-utils,
+  glib,
+  gtk3,
+  gtk4,
+  adwaita-icon-theme,
+  gsettings-desktop-schemas,
+  gn,
+  fetchgit,
+  libva,
+  pipewire,
+  wayland,
+  runCommand,
+  lib,
+  libkrb5,
+  widevine-cdm,
 
-# package customization
-, channel ? "stable"
-, enableNaCl ? false
-, enableHotwording ? false
-, gnomeSupport ? false, gnome ? null
-, gnomeKeyringSupport ? false
-, proprietaryCodecs ? true
-, enablePepperFlash ? false
-, enableWideVine ? false
-, cupsSupport ? true
-, pulseSupport ? false
-, commandLineArgs ? ""
+  # package customization
+  # Note: enable* flags should not require full rebuilds (i.e. only affect the wrapper)
+  upstream-info ?
+    (lib.importJSON ./info.json).${if !ungoogled then "chromium" else "ungoogled-chromium"},
+  proprietaryCodecs ? true,
+  enableWideVine ? false,
+  ungoogled ? false, # Whether to build chromium or ungoogled-chromium
+  cupsSupport ? true,
+  commandLineArgs ? "",
+  pkgsBuildBuild,
+  pkgs,
 }:
 
 let
+  stdenv = pkgs.rustc.llvmPackages.stdenv;
+
+  # Helper functions for changes that depend on specific versions:
+  chromiumVersionAtLeast = min-version: lib.versionAtLeast upstream-info.version min-version;
+  versionRange =
+    min-version: upto-version:
+    lib.versionAtLeast upstream-info.version min-version
+    && lib.versionOlder upstream-info.version upto-version;
+
   callPackage = newScope chromium;
 
-  chromium = {
-    upstream-info = (callPackage ./update.nix {}).getChannel channel;
+  chromium = rec {
+    inherit stdenv upstream-info;
 
     mkChromiumDerivation = callPackage ./common.nix {
-      inherit enableNaCl enableHotwording gnomeSupport gnome
-              gnomeKeyringSupport proprietaryCodecs cupsSupport pulseSupport
-              enableWideVine;
+      inherit chromiumVersionAtLeast versionRange;
+      inherit
+        proprietaryCodecs
+        cupsSupport
+        ungoogled
+        ;
+      gnChromium = buildPackages.gn.override upstream-info.deps.gn;
     };
 
-    browser = callPackage ./browser.nix { inherit channel; };
-
-    plugins = callPackage ./plugins.nix {
-      inherit enablePepperFlash enableWideVine;
+    browser = callPackage ./browser.nix {
+      inherit chromiumVersionAtLeast enableWideVine ungoogled;
     };
-  };
 
-  desktopItem = makeDesktopItem {
-    name = "chromium-browser";
-    exec = "chromium %U";
-    icon = "chromium";
-    comment = "An open source web browser from Google";
-    desktopName = "Chromium";
-    genericName = "Web browser";
-    mimeType = stdenv.lib.concatStringsSep ";" [
-      "text/html"
-      "text/xml"
-      "application/xhtml+xml"
-      "x-scheme-handler/http"
-      "x-scheme-handler/https"
-      "x-scheme-handler/ftp"
-      "x-scheme-handler/mailto"
-      "x-scheme-handler/webcal"
-      "x-scheme-handler/about"
-      "x-scheme-handler/unknown"
-    ];
-    categories = "Network;WebBrowser";
-    extraEntries = ''
-      StartupWMClass=chromium-browser
-    '';
+    # ungoogled-chromium is, contrary to its name, not a build of
+    # chromium.  It is a patched copy of chromium's *source code*.
+    # Therefore, it needs to come from buildPackages, because it
+    # contains python scripts which get /nix/store/.../bin/python3
+    # patched into their shebangs.
+    ungoogled-chromium = pkgsBuildBuild.callPackage ./ungoogled.nix { };
   };
-
-  suffix = if channel != "stable" then "-" + channel else "";
 
   sandboxExecutableName = chromium.browser.passthru.sandboxExecutableName;
 
-  version = chromium.browser.version;
+  # We want users to be able to enableWideVine without rebuilding all of
+  # chromium, so we have a separate derivation here that copies chromium
+  # and adds the unfree WidevineCdm.
+  chromiumWV =
+    let
+      browser = chromium.browser;
+    in
+    if enableWideVine then
+      runCommand (browser.name + "-wv") { version = browser.version; } ''
+        mkdir -p $out
+        cp -a ${browser}/* $out/
+        chmod u+w $out/libexec/chromium
+        cp -a ${widevine-cdm}/share/google/chrome/WidevineCdm $out/libexec/chromium/
+      ''
+    else
+      browser;
 
-  inherit (stdenv.lib) versionAtLeast;
+in
+stdenv.mkDerivation {
+  pname = lib.optionalString ungoogled "ungoogled-" + "chromium";
+  inherit (chromium.browser) version;
 
-in stdenv.mkDerivation {
-  name = "chromium${suffix}-${version}";
-  inherit version;
-
-  buildInputs = [
-    makeWrapper ed
-
-    # needed for GSETTINGS_SCHEMAS_PATH
-    gsettings-desktop-schemas glib gtk3
-
-    # needed for XDG_ICON_DIRS
-    gnome3.defaultIconTheme
+  nativeBuildInputs = [
+    makeWrapper
+    ed
   ];
 
-  outputs = ["out" "sandbox"];
+  buildInputs = [
+    # needed for GSETTINGS_SCHEMAS_PATH
+    gsettings-desktop-schemas
+    glib
+    gtk3
+    gtk4
 
-  buildCommand = let
-    browserBinary = "${chromium.browser}/libexec/chromium/chromium";
-    getWrapperFlags = plugin: "$(< \"${plugin}/nix-support/wrapper-flags\")";
-  in with stdenv.lib; ''
-    mkdir -p "$out/bin"
+    # needed for XDG_ICON_DIRS
+    adwaita-icon-theme
 
-    eval makeWrapper "${browserBinary}" "$out/bin/chromium" \
-      --add-flags ${escapeShellArg (escapeShellArg commandLineArgs)} \
-      ${concatMapStringsSep " " getWrapperFlags chromium.plugins.enabled}
+    # Needed for kerberos at runtime
+    libkrb5
+  ];
 
-    ed -v -s "$out/bin/chromium" << EOF
-    2i
+  outputs = [
+    "out"
+    "sandbox"
+  ];
 
-    if [ -x "/run/wrappers/bin/${sandboxExecutableName}" ]
-    then
-      export CHROME_DEVEL_SANDBOX="/run/wrappers/bin/${sandboxExecutableName}"
-    else
-      export CHROME_DEVEL_SANDBOX="$sandbox/bin/${sandboxExecutableName}"
-    fi
+  buildCommand =
+    let
+      browserBinary = "${chromiumWV}/libexec/chromium/chromium";
+      libPath = lib.makeLibraryPath [
+        libva
+        pipewire
+        wayland
+        gtk3
+        gtk4
+        libkrb5
+      ];
 
-    # libredirect causes chromium to deadlock on startup
-    export LD_PRELOAD="\$(echo -n "\$LD_PRELOAD" | tr ':' '\n' | grep -v /lib/libredirect\\\\.so$ | tr '\n' ':')"
+    in
+    ''
+      mkdir -p "$out/bin"
 
-    export XDG_DATA_DIRS=$XDG_ICON_DIRS:$GSETTINGS_SCHEMAS_PATH\''${XDG_DATA_DIRS:+:}\$XDG_DATA_DIRS
+      makeWrapper "${browserBinary}" "$out/bin/chromium" \
+        --add-flags "\''${NIXOS_OZONE_WL:+\''${WAYLAND_DISPLAY:+--ozone-platform-hint=auto --enable-features=WaylandWindowDecorations --enable-wayland-ime=true}}" \
+        --add-flags ${lib.escapeShellArg commandLineArgs}
 
-    .
-    w
-    EOF
+      ed -v -s "$out/bin/chromium" << EOF
+      2i
 
-    ln -sv "${chromium.browser.sandbox}" "$sandbox"
+      if [ -x "/run/wrappers/bin/${sandboxExecutableName}" ]
+      then
+        export CHROME_DEVEL_SANDBOX="/run/wrappers/bin/${sandboxExecutableName}"
+      else
+        export CHROME_DEVEL_SANDBOX="$sandbox/bin/${sandboxExecutableName}"
+      fi
 
-    ln -s "$out/bin/chromium" "$out/bin/chromium-browser"
+      # Make generated desktop shortcuts have a valid executable name.
+      export CHROME_WRAPPER='chromium'
 
-    mkdir -p "$out/share/applications"
-    for f in '${chromium.browser}'/share/*; do # hello emacs */
-      ln -s -t "$out/share/" "$f"
-    done
-    cp -v "${desktopItem}/share/applications/"* "$out/share/applications"
-  '';
+    ''
+    + lib.optionalString (libPath != "") ''
+      # To avoid loading .so files from cwd, LD_LIBRARY_PATH here must not
+      # contain an empty section before or after a colon.
+      export LD_LIBRARY_PATH="\$LD_LIBRARY_PATH\''${LD_LIBRARY_PATH:+:}${libPath}"
+    ''
+    + ''
+
+      # libredirect causes chromium to deadlock on startup
+      export LD_PRELOAD="\$(echo -n "\$LD_PRELOAD" | ${coreutils}/bin/tr ':' '\n' | ${gnugrep}/bin/grep -v /lib/libredirect\\\\.so$ | ${coreutils}/bin/tr '\n' ':')"
+
+      export XDG_DATA_DIRS=$XDG_ICON_DIRS:$GSETTINGS_SCHEMAS_PATH\''${XDG_DATA_DIRS:+:}\$XDG_DATA_DIRS
+
+    ''
+    + lib.optionalString (!xdg-utils.meta.broken) ''
+      # Mainly for xdg-open but also other xdg-* tools (this is only a fallback; \$PATH is suffixed so that other implementations can be used):
+      export PATH="\$PATH\''${PATH:+:}${xdg-utils}/bin"
+    ''
+    + ''
+
+      .
+      w
+      EOF
+
+      ln -sv "${chromium.browser.sandbox}" "$sandbox"
+
+      ln -s "$out/bin/chromium" "$out/bin/chromium-browser"
+
+      mkdir -p "$out/share"
+      for f in '${chromiumWV}'/share/*; do
+        ln -s -t "$out/share/" "$f"
+      done
+    '';
 
   inherit (chromium.browser) packageName;
-  meta = chromium.browser.meta // {
-    broken = if enableWideVine then
-          builtins.trace "WARNING: WideVine is not functional, please only use for testing"
-             true
-        else false;
-  };
-
+  meta = chromium.browser.meta;
   passthru = {
     inherit (chromium) upstream-info browser;
     mkDerivation = chromium.mkChromiumDerivation;

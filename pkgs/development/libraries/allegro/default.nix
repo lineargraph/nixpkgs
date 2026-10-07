@@ -1,36 +1,78 @@
-{ stdenv, fetchurl, texinfo, libXext, xextproto, libX11, xproto
-, libXpm, libXt, libXcursor, alsaLib, cmake, zlib, libpng, libvorbis
-, libXxf86dga, libXxf86misc, xf86dgaproto, xf86miscproto
-, xf86vidmodeproto, libXxf86vm, openal, libGLU_combined }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  texinfo,
+  libxext,
+  xorgproto,
+  libx11,
+  libxpm,
+  libxt,
+  libxcursor,
+  alsa-lib,
+  cmake,
+  pkg-config,
+  zlib,
+  libpng,
+  libvorbis,
+  libxxf86dga,
+  libxxf86misc,
+  libxxf86vm,
+  openal,
+  libGLU,
+  libGL,
+}:
 
 stdenv.mkDerivation rec {
-  name = "allegro-${version}";
-  version="4.4.2";
+  pname = "allegro";
+  version = "4.4.3.1";
 
   src = fetchurl {
-    url = "http://download.gna.org/allegro/allegro/${version}/${name}.tar.gz";
-    sha256 = "1p0ghkmpc4kwij1z9rzxfv7adnpy4ayi0ifahlns1bdzgmbyf88v";
+    url = "https://github.com/liballeg/allegro5/releases/download/${version}/allegro-${version}.tar.gz";
+    sha256 = "1m6lz35nk07dli26kkwz3wa50jsrxs1kb6w1nj14a911l34xn6gc";
   };
 
   patches = [
     ./nix-unstable-sandbox-fix.patch
+    ./encoding.patch
   ];
 
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+  ];
   buildInputs = [
-    texinfo libXext xextproto libX11 xproto libXpm libXt libXcursor
-    alsaLib cmake zlib libpng libvorbis libXxf86dga libXxf86misc
-    xf86dgaproto xf86miscproto xf86vidmodeproto libXxf86vm openal libGLU_combined
+    texinfo
+    libxext
+    xorgproto
+    libx11
+    libxpm
+    libxt
+    libxcursor
+    alsa-lib
+    zlib
+    libpng
+    libvorbis
+    libxxf86dga
+    libxxf86misc
+    libxxf86vm
+    openal
+    libGLU
+    libGL
   ];
 
   hardeningDisable = [ "format" ];
 
-  cmakeFlags = [ "-DCMAKE_SKIP_RPATH=ON" ];
+  cmakeFlags = [
+    "-DCMAKE_SKIP_RPATH=ON"
+    "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+  ];
 
-  meta = with stdenv.lib; {
-    description = "A game programming library";
-    homepage = http://liballeg.org/;
-    license = licenses.free; # giftware
-    maintainers = [ maintainers.raskin ];
-    platforms = platforms.linux;
+  meta = {
+    description = "Game programming library";
+    homepage = "https://liballeg.org/";
+    license = lib.licenses.giftware;
+    maintainers = [ lib.maintainers.raskin ];
+    platforms = lib.platforms.linux;
   };
 }

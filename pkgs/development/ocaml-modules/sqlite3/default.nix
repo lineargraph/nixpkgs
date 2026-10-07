@@ -1,26 +1,34 @@
-{ stdenv, fetchurl, sqlite, ocaml, findlib, ocamlbuild, pkgconfig }:
+{
+  lib,
+  fetchurl,
+  sqlite,
+  pkg-config,
+  buildDunePackage,
+  dune-configurator,
+}:
 
-stdenv.mkDerivation rec {
-  name = "ocaml-sqlite3-${version}";
-  version = "2.0.9";
+buildDunePackage (finalAttrs: {
+  pname = "sqlite3";
+  version = "5.4.2";
+  minimalOCamlVersion = "4.12";
 
   src = fetchurl {
-    url = "https://github.com/mmottl/sqlite3-ocaml/releases/download/v${version}/sqlite3-ocaml-${version}.tar.gz";
-    sha256 = "0rwsx1nfa3xqmbygim2qx45jqm1gwf08m70wmcwkx50f1qk3l551";
+    url = "https://github.com/mmottl/sqlite3-ocaml/releases/download/${finalAttrs.version}/sqlite3-${finalAttrs.version}.tbz";
+    hash = "sha256-MvaPB49L6u1R68J5/vRhRSBf2Yz2x5/pVSGGAfICYhw=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ ocaml findlib ocamlbuild sqlite ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [
+    dune-configurator
+    sqlite
+  ];
 
-  createFindlibDestdir = true;
-
-  meta = with stdenv.lib; {
-    homepage = http://mmottl.github.io/sqlite3-ocaml/;
+  meta = {
+    homepage = "http://mmottl.github.io/sqlite3-ocaml/";
     description = "OCaml bindings to the SQLite 3 database access library";
-    license = licenses.mit;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = with maintainers; [
-      z77z vbgl
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [
+      vbgl
     ];
   };
-}
+})

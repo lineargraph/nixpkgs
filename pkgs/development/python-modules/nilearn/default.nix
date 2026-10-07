@@ -1,31 +1,87 @@
-{ stdenv, buildPythonPackage, fetchPypi, nose, nibabel, numpy, scikitlearn
-, scipy, matplotlib }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
 
-buildPythonPackage rec {
+  # build-system
+  hatch-vcs,
+  hatchling,
+
+  # dependencies
+  joblib,
+  nibabel,
+  numpy,
+  pandas,
+  requests,
+  scikit-learn,
+  jinja2,
+  scipy,
+  packaging,
+
+  pytestCheckHook,
+  pytest-timeout,
+  pytest-rerunfailures,
+  numpydoc,
+  polars,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "nilearn";
-  version = "0.4.1";
-  name = pname + "-" + version;
+  version = "0.14.1";
+  pyproject = true;
+  __structuredAttrs = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "c2ef16d357d24699abced07e89a50d465c8fbaa8537f1a9d4d5cb8a612926dbc";
+  src = fetchFromGitHub {
+    owner = "nilearn";
+    repo = "nilearn";
+    tag = finalAttrs.version;
+    hash = "sha256-z/U2ZfAuyFYhkSCv0X2ZRqUPFt8HM4X8NBntELccBO4=";
   };
 
-  checkPhase = "nosetests --exclude with_expand_user nilearn/tests";
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace-fail " --template=maint_tools/templates/index.html" ""
+  '';
 
-  buildInputs = [ nose ];
-
-  propagatedBuildInputs = [
-    matplotlib
-    nibabel
-    numpy
-    scikitlearn
-    scipy
+  build-system = [
+    hatchling
+    hatch-vcs
   ];
 
-  meta = with stdenv.lib; {
-    homepage = http://nilearn.github.io;
-    description = "A module for statistical learning on neuroimaging data";
-    license = licenses.bsd3;
+  # nilearn excludes scikit-learn 1.9.0 due to a sluggish HTML repr bug,
+  # which is fixed by the patch applied to python3Packages.scikit-learn.
+  pythonRelaxDeps = [
+    "scikit-learn"
+  ];
+
+  dependencies = [
+    joblib
+    nibabel
+    numpy
+    pandas
+    requests
+    scikit-learn
+    jinja2
+    scipy
+    packaging
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-timeout
+    pytest-rerunfailures
+    numpydoc
+    polars
+  ];
+
+  # do subset of tests which don't fetch resources
+  enabledTestPaths = [ "nilearn/connectome/tests" ];
+
+  meta = {
+    description = "Module for statistical learning on neuroimaging data";
+    homepage = "https://nilearn.github.io";
+    changelog = "https://github.com/nilearn/nilearn/releases/tag/${finalAttrs.src.tag}";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ GaetanLepage ];
   };
-}
+})

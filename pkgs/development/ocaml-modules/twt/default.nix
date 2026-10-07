@@ -1,32 +1,47 @@
-{ stdenv, fetchzip, ocaml, findlib }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  ocaml,
+  findlib,
+}:
 
-stdenv.mkDerivation {
-  name = "ocaml${ocaml.version}-twt-0.94.0";
+stdenv.mkDerivation rec {
+  pname = "ocaml${ocaml.version}-twt";
+  version = "0.94.0";
 
-  src = fetchzip {
-    url = https://github.com/mlin/twt/archive/v0.94.0.tar.gz;
-    sha256 = "0298gdgzl4cifxnc1d8sbrvz1lkiq5r5ifkq1fparm6gvqywpf65";
+  src = fetchFromGitHub {
+    owner = "mlin";
+    repo = "twt";
+    rev = "v${version}";
+    sha256 = "sha256-xbjLPd7P1KyuC3i6WHLBcdLwd14atcBsd5ER+l97KAk=";
   };
 
-  buildInputs = [ ocaml findlib ];
+  nativeBuildInputs = [
+    ocaml
+    findlib
+  ];
 
-  createFindlibDestdir = true;
+  strictDeps = true;
 
-  configurePhase = ''
-    mkdir $out/bin
+  preInstall = ''
+    mkdir -p $out/bin
+    mkdir -p $OCAMLFIND_DESTDIR
   '';
 
   dontBuild = true;
 
-  installFlags = "PREFIX=$(out)";
+  installFlags = [ "PREFIX=$(out)" ];
 
   dontStrip = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://people.csail.mit.edu/mikelin/ocaml+twt/;
+  meta = {
     description = "“The Whitespace Thing” for OCaml";
-    license = licenses.mit;
-    maintainers = [ maintainers.vbgl ];
-    platforms = ocaml.meta.platforms or [];
+    homepage = "http://people.csail.mit.edu/mikelin/ocaml+twt/";
+    license = lib.licenses.mit;
+    maintainers = [ lib.maintainers.vbgl ];
+    mainProgram = "ocaml+twt";
+    broken = lib.versionAtLeast ocaml.version "5.0";
+    inherit (ocaml.meta) platforms;
   };
 }

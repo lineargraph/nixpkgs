@@ -1,11 +1,32 @@
-{ name, stdenv, perl, makeWrapper, sqitchModule, databaseModule }:
+{
+  stdenv,
+  lib,
+  perlPackages,
+  makeWrapper,
+  mysqlSupport ? false,
+  postgresqlSupport ? false,
+  sqliteSupport ? false,
+  templateToolkitSupport ? false,
+}:
+
+let
+  sqitch = perlPackages.AppSqitch;
+  modules =
+    with perlPackages;
+    [ AlgorithmBackoff ]
+    ++ lib.optional mysqlSupport DBDmysql
+    ++ lib.optional postgresqlSupport DBDPg
+    ++ lib.optional sqliteSupport DBDSQLite
+    ++ lib.optional templateToolkitSupport TemplateToolkit;
+in
 
 stdenv.mkDerivation {
-  name = "${name}-${sqitchModule.version}";
+  pname = "sqitch";
+  version = sqitch.version;
 
-  buildInputs = [ perl makeWrapper sqitchModule databaseModule ];
+  nativeBuildInputs = [ makeWrapper ];
 
-  src = sqitchModule;
+  src = sqitch;
   dontBuild = true;
 
   installPhase = ''
@@ -13,15 +34,23 @@ stdenv.mkDerivation {
     for d in bin/sqitch etc lib share ; do
       # make sure dest alreay exists before symlink
       # this prevents installing a broken link into the path
-      if [ -e ${sqitchModule}/$d ]; then
-        ln -s ${sqitchModule}/$d $out/$d
+      if [ -e ${sqitch}/$d ]; then
+        ln -s ${sqitch}/$d $out/$d
       fi
     done
   '';
   dontStrip = true;
-  postFixup = "wrapProgram $out/bin/sqitch --prefix PERL5LIB : $PERL5LIB";
+  postFixup = ''
+    wrapProgram $out/bin/sqitch --prefix PERL5LIB : ${lib.escapeShellArg (perlPackages.makeFullPerlPath modules)}
+  '';
 
   meta = {
-    platforms = stdenv.lib.platforms.unix;
+    inherit (sqitch.meta)
+      description
+      homepage
+      license
+      platforms
+      ;
+    mainProgram = "sqitch";
   };
 }

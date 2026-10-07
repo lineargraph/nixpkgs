@@ -1,20 +1,33 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytest, pytestflakes, pytestpep8, tox }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytest,
+  pytestCheckHook,
+  pytest-flakes,
+}:
+
 buildPythonPackage rec {
   pname = "pytest-quickcheck";
-  version = "0.8.3";
-  name = "${pname}-${version}";
+  version = "0.9.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "17vly6fg0s95lbg620g9dp9jjf12sj4hpbi7cg579kswabl6304g";
+    hash = "sha256-UFF8ldnaImXU6al4kGjf720mbwXE6Nut9VlvNVrMVoY=";
   };
 
-  buildInputs = [ pytest ];
-  propagatedBuildInputs = [ pytestflakes pytestpep8 tox ];
+  propagatedBuildInputs = [ pytest ];
 
-  meta = with stdenv.lib; {
-    license = licenses.asl20;
-    homepage = "https://pypi.python.org/pypi/pytest-quickcheck";
-    description = "pytest plugin to generate random data inspired by QuickCheck";
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-flakes
+  ];
+
+  meta = {
+    license = lib.licenses.asl20;
+    homepage = "https://pypi.org/project/pytest-quickcheck/";
+    description = "Pytest plugin to generate random data inspired by QuickCheck";
+    maintainers = with lib.maintainers; [ onny ];
   };
 }

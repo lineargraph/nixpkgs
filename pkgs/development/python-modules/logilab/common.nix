@@ -1,24 +1,50 @@
-{ stdenv, buildPythonPackage, fetchPypi, unittest2, six }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitLab,
+  mypy-extensions,
+  pytestCheckHook,
+  pytz,
+  setuptools,
+  typing-extensions,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "logilab-common";
-  version = "1.4.1";
-  name = "${pname}-${version}";
+  version = "2.1.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "02in5555iak50gzn35bnnha9s85idmh0wwxaxz13v81z5krn077d";
+  src = fetchFromGitLab {
+    domain = "forge.extranet.logilab.fr";
+    owner = "open-source";
+    repo = "logilab-common";
+    tag = finalAttrs.version;
+    hash = "sha256-cKodCj9m3n4P54CZ2X+BXN62ewd9nHSZBMENlo8S1iY=";
   };
 
-  propagatedBuildInputs = [ unittest2 six ];
+  build-system = [ setuptools ];
 
-  # package supports 3.x but tests require egenix-mx-base which is python 2.x only
-  # and is not currently in nixos
-  doCheck = false;
+  dependencies = [
+    setuptools
+    mypy-extensions
+    typing-extensions
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Python packages and modules used by Logilab ";
-    homepage = https://www.logilab.org/project/logilab-common;
-    license = licenses.lgpl21;
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytz
+  ];
+
+  preCheck = ''
+    export COLLECT_DEPRECATION_WARNINGS_PACKAGE_NAME=true
+  '';
+
+  meta = {
+    description = "Python packages and modules used by Logilab";
+    homepage = "https://logilab-common.readthedocs.io/";
+    changelog = "https://forge.extranet.logilab.fr/open-source/logilab-common/-/blob/${finalAttrs.src.tag}/CHANGELOG.md";
+    license = lib.licenses.lgpl21Plus;
+    maintainers = [ ];
+    mainProgram = "logilab-pytest";
   };
-}
+})

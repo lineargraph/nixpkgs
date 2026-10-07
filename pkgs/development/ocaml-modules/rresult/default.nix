@@ -1,24 +1,42 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg }:
+{
+  stdenv,
+  lib,
+  fetchurl,
+  ocaml,
+  findlib,
+  ocamlbuild,
+  topkg,
+  result,
+}:
 
 stdenv.mkDerivation rec {
-	name = "ocaml${ocaml.version}-rresult-${version}";
-	version = "0.5.0";
-	src = fetchurl {
-		url = "http://erratique.ch/software/rresult/releases/rresult-${version}.tbz";
-		sha256 = "1xxycxhdhaq8p9vhwi93s2mlxjwgm44fcxybx5vghzgbankz9yhm";
-	};
+  pname = "ocaml${ocaml.version}-rresult";
+  version = "0.7.0";
+  src = fetchurl {
+    url = "https://erratique.ch/software/rresult/releases/rresult-${version}.tbz";
+    sha256 = "sha256-Eap/W4NGDmBDHjFU4+MsBx1G4VHqV2DPJDd4Bb+XVUA=";
+  };
 
-	unpackCmd = "tar xjf $src";
+  nativeBuildInputs = [
+    ocaml
+    findlib
+    ocamlbuild
+    topkg
+  ];
+  buildInputs = [ topkg ];
 
-	buildInputs = [ ocaml findlib ocamlbuild topkg ];
+  propagatedBuildInputs = [ result ];
 
-	inherit (topkg) buildPhase installPhase;
+  strictDeps = true;
 
-	meta = {
-		license = stdenv.lib.licenses.isc;
-		homepage = http://erratique.ch/software/rresult;
-		description = "Result value combinators for OCaml";
-		maintainers = [ stdenv.lib.maintainers.vbgl ];
-		inherit (ocaml.meta) platforms;
-	};
+  inherit (topkg) buildPhase installPhase;
+
+  meta = {
+    license = lib.licenses.isc;
+    homepage = "https://erratique.ch/software/rresult";
+    description = "Result value combinators for OCaml";
+    maintainers = [ lib.maintainers.vbgl ];
+    inherit (ocaml.meta) platforms;
+    broken = !(lib.versionAtLeast ocaml.version "4.07");
+  };
 }

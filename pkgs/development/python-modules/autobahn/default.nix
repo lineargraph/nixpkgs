@@ -1,35 +1,151 @@
-{ stdenv, buildPythonPackage, fetchurl, isPy3k, isPy33,
-  unittest2, mock, pytest, trollius, asyncio,
-  pytest-asyncio, futures,
-  six, twisted, txaio, zope_interface
-}:
-buildPythonPackage rec {
-  name = "${pname}-${version}";
-  pname = "autobahn";
-  version = "18.3.1";
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
 
-  src = fetchurl {
-    url = "mirror://pypi/a/${pname}/${name}.tar.gz";
-    sha256 = "fc1d38227bb44a453b54cffa48de8b2e6ce48ddc5e97fb5950b0faa27576f385";
+  # build-system
+  cffi,
+  hatchling,
+  setuptools,
+
+  # dependencies
+  cryptography,
+  hyperlink,
+  pynacl,
+  txaio,
+
+  # optional-dependencies
+  # compress
+  python-snappy,
+  # encryption
+  base58,
+  pyopenssl,
+  qrcode,
+  service-identity,
+  # scram
+  argon2-cffi,
+  passlib,
+  # serialization
+  cbor2,
+  flatbuffers,
+  msgpack,
+  ujson,
+  py-ubjson,
+  # twisted
+  attrs,
+  twisted,
+  zope-interface,
+  # ui
+  pygobject3,
+
+  # tests
+  mock,
+  pytest-asyncio_0,
+  pytestCheckHook,
+}:
+
+buildPythonPackage (finalAttrs: {
+  pname = "autobahn";
+  version = "25.12.2";
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "crossbario";
+    repo = "autobahn-python";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-vSS7DpfGfNwQT8OsgEXJaP5J40QFIopdAD94/y7/jFY=";
   };
 
-  # Upstream claim python2 support, but tests require pytest-asyncio which
-  # is pythn3 only. Therefore, tests are skipped for python2.
-  doCheck = isPy3k;
-  buildInputs = stdenv.lib.optionals isPy3k [ unittest2 mock pytest pytest-asyncio ];
-  propagatedBuildInputs = [ six twisted zope_interface txaio ] ++
-    (stdenv.lib.optional isPy33 asyncio) ++
-    (stdenv.lib.optionals (!isPy3k) [ trollius futures ]);
+  build-system = [
+    cffi
+    hatchling
+    setuptools
+  ];
 
-  checkPhase = ''
-    py.test $out
+  dependencies = [
+    cryptography
+    hyperlink
+    pynacl
+    txaio
+  ];
+
+  optional-dependencies = lib.fix (self: {
+    all =
+      self.accelerate
+      ++ self.compress
+      ++ self.encryption
+      ++ self.nvx
+      ++ self.serialization
+      ++ self.scram
+      ++ self.twisted
+      ++ self.ui;
+    accelerate = [
+      # wsaccel
+    ];
+    compress = [ python-snappy ];
+    encryption = [
+      base58
+      # ecdsa (marked as insecure)
+      pynacl
+      pyopenssl
+      qrcode # pytrie
+      service-identity
+    ];
+    nvx = [ cffi ];
+    scram = [
+      argon2-cffi
+      cffi
+      passlib
+    ];
+    serialization = [
+      cbor2
+      flatbuffers
+      msgpack
+      ujson
+      py-ubjson
+    ];
+    twisted = [
+      attrs
+      twisted
+      zope-interface
+    ];
+    ui = [ pygobject3 ];
+  });
+
+  pythonImportsCheck = [ "autobahn" ];
+
+  nativeCheckInputs = [
+    mock
+    pytest-asyncio_0
+    pytestCheckHook
+  ]
+  ++ finalAttrs.passthru.optional-dependencies.encryption
+  ++ finalAttrs.passthru.optional-dependencies.scram
+  ++ finalAttrs.passthru.optional-dependencies.serialization;
+
+  preCheck = ''
+    # Run asyncio tests (requires twisted)
+    export USE_ASYNCIO=1
+    rm src/autobahn/__init__.py
   '';
 
-  meta = with stdenv.lib; {
-    description = "WebSocket and WAMP in Python for Twisted and asyncio.";
-    homepage    = "https://crossbar.io/autobahn";
-    license     = licenses.mit;
-    maintainers = with maintainers; [ nand0p ];
-    platforms   = platforms.all;
+  enabledTestPaths = [
+    "src/autobahn"
+  ];
+
+  disabledTestPaths = [
+    "src/autobahn/twisted"
+
+    # Requires insecure ecdsa library
+    "src/autobahn/wamp/test/test_wamp_cryptosign.py"
+  ];
+
+  meta = {
+    description = "WebSocket and WAMP in Python for Twisted and asyncio";
+    homepage = "https://crossbar.io/autobahn";
+    downloadPage = "https://github.com/crossbario/autobahn-python";
+    changelog = "https://github.com/crossbario/autobahn-python/blob/${finalAttrs.src.tag}/docs/changelog.rst";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
-}
+})

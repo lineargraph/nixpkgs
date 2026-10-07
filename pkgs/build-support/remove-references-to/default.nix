@@ -3,32 +3,23 @@
 # non-existent path (/nix/store/eeee...).  This is useful for getting rid of
 # dependencies that you know are not actually needed at runtime.
 
-{ stdenv, writeScriptBin }:
-
-writeScriptBin "remove-references-to" ''
-#! ${stdenv.shell} -e
-
-# References to remove
-targets=()
-while getopts t: o; do
-    case "$o" in
-        t) storeId=$(echo "$OPTARG" | sed -n "s|^$NIX_STORE/\\([a-z0-9]\{32\}\\)-.*|\1|p")
-           if [ -z "$storeId" ]; then
-               echo "-t argument must be a Nix store path"
-               exit 1
-           fi
-           targets+=("$storeId")
-    esac
-done
-shift $(($OPTIND-1))
-
-# Files to remove the references from
-regions=()
-for i in "$@"; do
-    test ! -L "$i" -a -f "$i" && regions+=("$i")
-done
-
-for target in "''${targets[@]}" ; do
-    sed -i -e "s|$NIX_STORE/$target-|$NIX_STORE/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-|g" "''${regions[@]}"
-done
-''
+{
+  lib,
+  replaceVarsWith,
+  signingUtils,
+  stdenvNoCC,
+  shell ? stdenvNoCC.shell,
+}:
+replaceVarsWith {
+  src = ./remove-references-to;
+  replacements = {
+    inherit (builtins) storeDir;
+    shell = lib.getBin shell + (shell.shellPath or "");
+    signingUtils = lib.optionalString (
+      stdenvNoCC.targetPlatform.isDarwin && stdenvNoCC.targetPlatform.isAarch64
+    ) signingUtils;
+  };
+  dir = "bin";
+  isExecutable = true;
+  meta.mainProgram = "remove-references-to";
+}

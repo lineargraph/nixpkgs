@@ -1,15 +1,15 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, idrisscript
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  idrisscript,
+  lib,
 }:
-build-idris-package  {
-  name = "hrtime";
+build-idris-package {
+  pname = "hrtime";
   version = "2017-04-16";
 
-  idrisDeps = [ prelude idrisscript ];
+  ipkgName = "hrTime";
+  idrisDeps = [ idrisscript ];
 
   src = fetchFromGitHub {
     owner = "pierrebeaucamp";
@@ -20,9 +20,8 @@ build-idris-package  {
 
   meta = {
     description = "Idris library for high resolution time";
-    homepage = https://github.com/pierrebeaucamp/idris-hrtime;
+    homepage = "https://github.com/pierrebeaucamp/idris-hrtime";
     license = lib.licenses.asl20;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

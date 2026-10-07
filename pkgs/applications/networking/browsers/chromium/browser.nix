@@ -1,26 +1,44 @@
-{ stdenv, mkChromiumDerivation, channel }:
-
-with stdenv.lib;
+{
+  lib,
+  mkChromiumDerivation,
+  chromiumVersionAtLeast,
+  enableWideVine,
+  ungoogled,
+}:
 
 mkChromiumDerivation (base: rec {
   name = "chromium-browser";
   packageName = "chromium";
-  buildTargets = [ "mksnapshot" "chrome_sandbox" "chrome" ];
+  buildTargets = [
+    "chrome_sandbox"
+    "chrome"
+  ];
 
-  outputs = ["out" "sandbox"];
+  outputs = [
+    "out"
+    "sandbox"
+  ];
 
   sandboxExecutableName = "__chromium-suid-sandbox";
 
   installPhase = ''
     mkdir -p "$libExecPath"
-    cp -v "$buildPath/"*.pak "$buildPath/"*.bin "$libExecPath/"
+    cp -v "$buildPath/"*.so "$buildPath/"*.pak "$buildPath/"*.bin "$libExecPath/"
+    cp -v "$buildPath/libvulkan.so.1" "$libExecPath/"
+    cp -v "$buildPath/vk_swiftshader_icd.json" "$libExecPath/"
     cp -v "$buildPath/icudtl.dat" "$libExecPath/"
     cp -vLR "$buildPath/locales" "$buildPath/resources" "$libExecPath/"
+    cp -v "$buildPath/chrome_crashpad_handler" "$libExecPath/"
     cp -v "$buildPath/chrome" "$libExecPath/$packageName"
 
-    if [ -e "$buildPath/libwidevinecdmadapter.so" ]; then
-      cp -v "$buildPath/libwidevinecdmadapter.so" \
-            "$libExecPath/libwidevinecdmadapter.so"
+    # Swiftshader
+    # See https://stackoverflow.com/a/4264351/263061 for the find invocation.
+    if [ -n "$(find "$buildPath/swiftshader/" -maxdepth 1 -name '*.so' -print -quit)" ]; then
+      echo "Swiftshader files found; installing"
+      mkdir -p "$libExecPath/swiftshader"
+      cp -v "$buildPath/swiftshader/"*.so "$libExecPath/swiftshader/"
+    else
+      echo "Swiftshader files not found"
     fi
 
     mkdir -p "$sandbox/bin"
@@ -38,6 +56,29 @@ mkChromiumDerivation (base: rec {
       mkdir -vp "$logo_output_path"
       cp -v "$icon_file" "$logo_output_path/$packageName.png"
     done
+
+    # Install Desktop Entry
+    install -D chrome/installer/linux/common/desktop.template \
+      $out/share/applications/chromium-browser.desktop
+
+    substituteInPlace $out/share/applications/chromium-browser.desktop \
+      --replace-fail "@@MENUNAME" "Chromium" \
+      --replace-fail "${
+        if chromiumVersionAtLeast "154" then "@@desktop_icon" else "@@PACKAGE"
+      }" "chromium" \
+      --replace-fail "${
+        if chromiumVersionAtLeast "154" then "@@desktop_exec" else "/usr/bin/@@usr_bin_symlink_name"
+      }" "chromium" \
+      --replace-fail "@@uri_scheme" "x-scheme-handler/chromium;" \
+      --replace-fail "@@startup_wm_class" "chromium-browser" \
+      --replace-fail "@@extra_desktop_entries" ""
+
+  ''
+  + ''
+    if grep -F '@@' $out/share/applications/chromium-browser.desktop ; then
+      echo "error: chromium-browser.desktop contains unsubstituted placeholders" >&2
+      exit 1
+    fi
   '';
 
   passthru = { inherit sandboxExecutableName; };
@@ -45,12 +86,41 @@ mkChromiumDerivation (base: rec {
   requiredSystemFeatures = [ "big-parallel" ];
 
   meta = {
-    description = "An open source web browser from Google";
-    homepage = http://www.chromium.org/;
-    maintainers = with maintainers; [ chaoflow bendlas ];
-    license = licenses.bsd3;
-    platforms = platforms.linux;
-    hydraPlatforms = if channel == "stable" then ["aarch64-linux" "x86_64-linux"] else [];
-    timeout = 86400; # 24 hours
+    description =
+      "Open source web browser from Google"
+      + lib.optionalString ungoogled ", with dependencies on Google web services removed";
+    longDescription = ''
+      Chromium is an open source web browser from Google that aims to build a
+      safer, faster, and more stable way for all Internet users to experience
+      the web. It has a minimalist user interface and provides the vast majority
+      of source code for Google Chrome (which has some additional features).
+    '';
+    homepage =
+      if ungoogled then
+        "https://github.com/ungoogled-software/ungoogled-chromium"
+      else
+        "https://www.chromium.org/";
+    # Maintainer pings for this derivation are highly unreliable.
+    # If you add yourself as maintainer here, please also add yourself as CODEOWNER.
+    maintainers =
+      with lib.maintainers;
+      if ungoogled then
+        [
+          networkexception
+          emilylange
+        ]
+      else
+        [
+          networkexception
+          emilylange
+        ];
+    license = if enableWideVine then lib.licenses.unfree else lib.licenses.bsd3;
+    platforms = lib.platforms.linux;
+    mainProgram = "chromium";
+    hydraPlatforms = [
+      "aarch64-linux"
+      "x86_64-linux"
+    ];
+    timeout = 172800; # 48 hours (increased from the Hydra default of 10h)
   };
 })

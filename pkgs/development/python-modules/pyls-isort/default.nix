@@ -1,29 +1,40 @@
-{ lib, buildPythonPackage, fetchFromGitHub
-, python-language-server, isort
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  python-lsp-server,
+  isort,
 }:
 
 buildPythonPackage rec {
   pname = "pyls-isort";
-  version = "0.1.1";
+  version = "0.2.2";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "paradoxxxzero";
     repo = "pyls-isort";
-    rev = version;
-    sha256 = "0mf8c6dw5lsj9np20p0vrhr1yfycq2awjk2pil28l579xj9nr0dc";
+    tag = "v${version}";
+    sha256 = "0xba0aiyjfdi9swjzxk26l94dwlwvn17kkfjfscxl8gvspzsn057";
   };
 
   # no tests
   doCheck = false;
 
-  propagatedBuildInputs = [
-    isort python-language-server
+  pythonImportsCheck = [ "pyls_isort" ];
+
+  build-system = [ setuptools ];
+
+  dependencies = [
+    isort
+    python-lsp-server
   ];
 
-  meta = with lib; {
-    homepage = https://github.com/palantir/python-language-server;
-    description = "An implementation of the Language Server Protocol for Python";
-    license = licenses.mit;
-    maintainers = [ maintainers.mic92 ];
+  meta = {
+    homepage = "https://github.com/paradoxxxzero/pyls-isort";
+    description = "Isort plugin for python-lsp-server";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ cpcloud ];
   };
 }

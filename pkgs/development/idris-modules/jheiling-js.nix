@@ -1,17 +1,19 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, contrib
-, jheiling-extras
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  contrib,
+  jheiling-extras,
+  lib,
 }:
-
-build-idris-package  {
-  name = "jheiling-js";
+build-idris-package {
+  pname = "jheiling-js";
   version = "2016-03-09";
 
-  idrisDeps = [ prelude contrib jheiling-extras ];
+  ipkgName = "js";
+  idrisDeps = [
+    contrib
+    jheiling-extras
+  ];
 
   src = fetchFromGitHub {
     owner = "jheiling";
@@ -22,9 +24,8 @@ build-idris-package  {
 
   meta = {
     description = "Js library for Idris";
-    homepage = https://github.com/jheiling/idris-js;
+    homepage = "https://github.com/jheiling/idris-js";
     license = lib.licenses.unlicense;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

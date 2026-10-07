@@ -1,34 +1,62 @@
-{ stdenv, fetchFromGitHub, ocamlPackages }:
+{
+  lib,
+  fetchFromGitHub,
+  ocamlPackages,
+}:
 
-assert stdenv.lib.versionAtLeast ocamlPackages.ocaml.version "4.02.2";
+with ocamlPackages;
 
-stdenv.mkDerivation rec {
-  version = "2017-12-24";
-  name = "jackline-${version}";
+buildDunePackage {
+  pname = "jackline";
+  version = "0.1.0-unstable-2024-10-21";
+
+  minimalOCamlVersion = "4.13";
 
   src = fetchFromGitHub {
-    owner  = "hannesm";
-    repo   = "jackline";
-    rev    = "8678e8a1a06e641218a31ae25150040202f89289";
-    sha256 = "05z9kvd7gwr59ic7hnmbayhwyyqd41xxz01cvdlcgplk3z7zlwg5";
+    owner = "hannesm";
+    repo = "jackline";
+    rev = "cf6b26e37e37b0b48be9fd2e74fc563375f757f0";
+    hash = "sha256-6QZZ77C1G3x/GOJsUEQMrCatVsyyxNjq36ez/TgeHSY=";
   };
 
-  patches = [ ./tls-0.9.0.patch ];
+  postPatch = ''
+    substituteInPlace cli/dune --replace-warn 'notty notty.lwt' 'notty-community.lwt'
+  '';
 
-  buildInputs = with ocamlPackages; [
-                  ocaml ocamlbuild findlib topkg ppx_sexp_conv
-                  erm_xmpp_0_3 tls nocrypto x509 ocaml_lwt otr astring
-                  ptime notty sexplib hex uutf
-                ];
+  nativeBuildInputs = [
+    ppx_sexp_conv
+    ppx_deriving
+  ];
 
-  buildPhase = "${ocamlPackages.topkg.run} build --pinned true";
+  buildInputs = [
+    erm_xmpp
+    tls
+    tls-lwt
+    mirage-crypto-pk
+    x509
+    domain-name
+    lwt
+    otr
+    astring
+    ptime
+    notty-community
+    sexplib
+    hex
+    uchar
+    uucp
+    uuseg
+    uutf
+    dns-client
+    base64
+    happy-eyeballs-lwt
+    ppx_sexp_conv
+  ];
 
-  inherit (ocamlPackages.topkg) installPhase;
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/hannesm/jackline;
-    description = "Terminal-based XMPP client in OCaml";
-    license = licenses.bsd2;
-    maintainers = with maintainers; [ sternenseemann ];
+  meta = {
+    homepage = "https://github.com/hannesm/jackline";
+    description = "Minimalistic secure XMPP client in OCaml";
+    mainProgram = "jackline";
+    license = lib.licenses.bsd2;
+    maintainers = with lib.maintainers; [ sternenseemann ];
   };
 }

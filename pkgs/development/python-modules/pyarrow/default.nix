@@ -1,65 +1,213 @@
-{ lib, buildPythonPackage, python, isPy3k, fetchurl, arrow-cpp, cmake, cython, futures, numpy, pandas, pytest, pytestrunner, parquet-cpp, pkgconfig, setuptools_scm, six }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  python,
+  pythonAtLeast,
+  arrow-cpp,
+  cffi,
+  cloudpickle,
+  cmake,
+  cython,
+  fsspec,
+  hypothesis,
+  libcst,
+  ninja,
+  numpy,
+  pandas,
+  pytestCheckHook,
+  pytest-lazy-fixture,
+  pkg-config,
+  scikit-build-core,
+  setuptools,
+  setuptools-scm,
+  tzdata,
+}:
 
 let
-  _arrow-cpp = arrow-cpp.override { inherit python;};
-  _parquet-cpp = parquet-cpp.override { arrow-cpp = _arrow-cpp; };
+  zero_or_one = cond: if cond then 1 else 0;
 in
 
 buildPythonPackage rec {
   pname = "pyarrow";
-  version = "0.9.0";
+  inherit (arrow-cpp) version src;
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://apache/arrow/arrow-${version}/apache-arrow-${version}.tar.gz";
-    sha256 = "16l91fixb5dgx3v6xc73ipn1w1hjgbmijyvs81j7ywzpna2cdcdy";
+  sourceRoot = "${src.name}/python";
+
+  build-system = [
+    scikit-build-core
+    cmake
+    cython
+    libcst
+    ninja
+    numpy
+    pkg-config
+    setuptools
+    setuptools-scm
+  ];
+
+  buildInputs = [ arrow-cpp ];
+
+  dependencies = [
+    cffi
+    numpy
+  ];
+
+  checkInputs = [
+    cloudpickle
+    fsspec
+  ];
+
+  nativeCheckInputs = [
+    hypothesis
+    pandas
+    pytestCheckHook
+    pytest-lazy-fixture
+  ];
+
+  env = {
+    PYARROW_BUILD_TYPE = "release";
+
+    PYARROW_WITH_DATASET = zero_or_one true;
+    PYARROW_WITH_FLIGHT = zero_or_one arrow-cpp.enableFlight;
+    PYARROW_WITH_HDFS = zero_or_one true;
+    PYARROW_WITH_PARQUET = zero_or_one true;
+    PYARROW_WITH_PARQUET_ENCRYPTION = zero_or_one true;
+    PYARROW_WITH_S3 = zero_or_one arrow-cpp.enableS3;
+    PYARROW_WITH_GCS = zero_or_one arrow-cpp.enableGcs;
+    PYARROW_BUNDLE_ARROW_CPP_HEADERS = zero_or_one false;
+
+    PYARROW_CMAKE_OPTIONS = toString [
+      "-DCMAKE_INSTALL_RPATH=${arrow-cpp}/lib"
+    ];
+
+    ARROW_HOME = arrow-cpp;
+    PARQUET_HOME = arrow-cpp;
+
+  }
+  // lib.optionalAttrs doCheck {
+    ARROW_TEST_DATA = arrow-cpp.env.ARROW_TEST_DATA;
   };
 
-  sourceRoot = "apache-arrow-${version}/python";
+  doCheck = true;
 
-  nativeBuildInputs = [ cmake cython pkgconfig setuptools_scm ];
-  propagatedBuildInputs = [ numpy six ] ++ lib.optionals (!isPy3k) [ futures ];
-  checkInputs = [ pandas pytest pytestrunner ];
+  dontUseCmakeConfigure = true;
 
-  PYARROW_BUILD_TYPE = "release";
-  PYARROW_CMAKE_OPTIONS = "-DCMAKE_INSTALL_RPATH=${ARROW_HOME}/lib;${PARQUET_HOME}/lib";
+  __darwinAllowLocalNetworking = true;
 
   preBuild = ''
-    substituteInPlace CMakeLists.txt --replace "\''${ARROW_ABI_VERSION}" '"0.0.0"'
-    substituteInPlace CMakeLists.txt --replace "\''${ARROW_SO_VERSION}" '"0"'
-
-    # fix the hardcoded value
-    substituteInPlace cmake_modules/FindParquet.cmake --replace 'set(PARQUET_ABI_VERSION "1.0.0")' 'set(PARQUET_ABI_VERSION "${_parquet-cpp.version}")'
+    export PYARROW_PARALLEL=$NIX_BUILD_CORES
   '';
+
+  postInstall = ''
+    # copy the pyarrow C++ header files to the appropriate location
+    pyarrow_include="$out/${python.sitePackages}/pyarrow/include"
+    mkdir -p "$pyarrow_include/arrow/python"
+    find "$PWD/pyarrow/src/arrow" -type f -name '*.h' -exec cp {} "$pyarrow_include/arrow/python" \;
+  '';
+
+  disabledTestPaths = [
+    # These tests require access to s3 via the internet.
+    "pyarrow/tests/test_fs.py::test_resolve_s3_region"
+    "pyarrow/tests/test_fs.py::test_s3_finalize"
+    "pyarrow/tests/test_fs.py::test_s3_finalize_region_resolver"
+    "pyarrow/tests/test_fs.py::test_s3_real_aws"
+    "pyarrow/tests/test_fs.py::test_s3_real_aws_region_selection"
+    "pyarrow/tests/test_fs.py::test_s3_options"
+    # Flaky test
+    "pyarrow/tests/test_flight.py::test_roundtrip_errors"
+    "pyarrow/tests/test_pandas.py::test_threaded_pandas_import"
+    # Flaky test, works locally but not on Hydra.
+    "pyarrow/tests/test_csv.py::TestThreadedCSVTableRead::test_cancellation"
+    # expects arrow-cpp headers to be bundled.
+    "pyarrow/tests/test_cpp_internals.py::test_pyarrow_include"
+    # AssertionError: assert 'Europe/Monaco' == 'Europe/Paris'
+    "pyarrow/tests/test_types.py::test_dateutil_tzinfo_to_string"
+    # These fail with xxx_fixture not found.
+    # xxx = unary_func, unary_agg_func, varargs_agg_func
+    "pyarrow/tests/test_substrait.py::test_udf_via_substrait"
+    "pyarrow/tests/test_substrait.py::test_scalar_aggregate_udf_basic"
+    "pyarrow/tests/test_substrait.py::test_hash_aggregate_udf_basic"
+    "pyarrow/tests/test_udf.py::test_hash_agg_basic"
+    "pyarrow/tests/test_udf.py::test_hash_agg_empty"
+    "pyarrow/tests/test_udf.py::test_input_lifetime"
+    "pyarrow/tests/test_udf.py::test_scalar_agg_basic"
+    "pyarrow/tests/test_udf.py::test_scalar_agg_empty"
+    "pyarrow/tests/test_udf.py::test_scalar_agg_varargs"
+    "pyarrow/tests/test_udf.py::test_scalar_input"
+    "pyarrow/tests/test_udf.py::test_scalar_udf_context"
+    "pyarrow/tests/test_udf.py::test_udf_array_unary"
+    # CSV pickle mismatches
+    "pyarrow/tests/test_csv.py::TestThreadedStreamingCSVRead::test_invalid_row_handler["
+    "pyarrow/tests/test_csv.py::TestThreadedStreamingCSVRead::test_row_number_offset_in_errors"
+    "pyarrow/tests/test_csv.py::TestThreadedStreamingCSVRead::test_row_number_offset_in_errors"
+    # Does not raise NotImplementedError
+    "pyarrow/tests/test_table.py::test_table_group_by_first"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    # Requires loopback networking.
+    "pyarrow/tests/test_ipc.py::test_socket_"
+    "pyarrow/tests/test_flight.py::test_never_sends_data"
+    "pyarrow/tests/test_flight.py::test_large_descriptor"
+    "pyarrow/tests/test_flight.py::test_large_metadata_client"
+    "pyarrow/tests/test_flight.py::test_none_action_side_effect"
+    # Fails to compile.
+    "pyarrow/tests/test_cython.py::test_cython_api"
+  ]
+  ++ lib.optionals (pythonAtLeast "3.11") [
+    # Repr output is printing number instead of enum name so these tests fail
+    "pyarrow/tests/test_fs.py::test_get_file_info"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isLinux [
+    # This test requires local networking.
+    "pyarrow/tests/test_fs.py::test_filesystem_from_uri_gcs"
+  ];
+
+  disabledTests = [ "GcsFileSystem" ];
 
   preCheck = ''
-    rm pyarrow/tests/test_hdfs.py
+    # Prepare r/w zoneinfo that test_orc can then copy and modify.
+    export TZDIR="$TMPDIR/zoneinfo"
+    cp -R "${tzdata}/${python.sitePackages}/tzdata/zoneinfo" "$TZDIR"
+    chmod -R u+w "$TZDIR"
+    substituteInPlace pyarrow/tests/test_orc.py \
+      --replace-fail "Path('/usr/share/zoneinfo')" "Path('$TZDIR')"
 
-    # fails: "ArrowNotImplementedError: Unsupported numpy type 22"
-    substituteInPlace pyarrow/tests/test_feather.py --replace "test_timedelta_with_nulls" "_disabled"
-
-    # runs out of memory on @grahamcofborg linux box
-    substituteInPlace pyarrow/tests/test_feather.py --replace "test_large_dataframe" "_disabled"
-
-    # probably broken on python2
-    substituteInPlace pyarrow/tests/test_feather.py --replace "test_unicode_filename" "_disabled"
-
-    # fails "error: [Errno 2] No such file or directory: 'test'" because
-    # nix_run_setup invocation somehow manages to import deserialize_buffer.py
-    # when it is not intended to be imported at all
-    rm pyarrow/tests/deserialize_buffer.py
-    substituteInPlace pyarrow/tests/test_feather.py --replace "test_deserialize_buffer_in_different_process" "_disabled"
+    export PARQUET_TEST_DATA="${arrow-cpp.env.PARQUET_TEST_DATA}"
+    shopt -s extglob
+    rm -r pyarrow/!(conftest.py|tests)
+    mv pyarrow/conftest.py pyarrow/tests/parent_conftest.py
+    substituteInPlace pyarrow/tests/conftest.py --replace-fail ..conftest .parent_conftest
+  ''
+  + lib.optionalString stdenv.hostPlatform.isDarwin ''
+    # OSError: [Errno 24] Too many open files
+    ulimit -n 1024
   '';
 
-  ARROW_HOME = _arrow-cpp;
-  PARQUET_HOME = _parquet-cpp;
+  pythonImportsCheck = [
+    "pyarrow"
+  ]
+  ++ map (module: "pyarrow.${module}") [
+    "compute"
+    "csv"
+    "dataset"
+    "feather"
+    "flight"
+    "fs"
+    "json"
+    "orc"
+    "parquet"
+  ];
 
-  setupPyBuildFlags = ["--with-parquet" ];
-
-  meta = with lib; {
-    description = "A cross-language development platform for in-memory data";
-    homepage = https://arrow.apache.org/;
+  meta = {
+    description = "Cross-language development platform for in-memory data";
+    homepage = "https://arrow.apache.org/";
     license = lib.licenses.asl20;
-    platforms = platforms.unix;
-    maintainers = with lib.maintainers; [ veprbl ];
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [
+      veprbl
+      cpcloud
+    ];
   };
 }

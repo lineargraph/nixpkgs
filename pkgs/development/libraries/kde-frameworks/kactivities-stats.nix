@@ -1,14 +1,29 @@
 {
-  mkDerivation, lib,
+  mkDerivation,
+  lib,
+  cmake,
   extra-cmake-modules,
-  boost, kactivities, kconfig, qtbase,
+  boost,
+  kactivities,
+  kconfig,
+  qtbase,
 }:
 
 mkDerivation {
-  name = "kactivities-stats";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ extra-cmake-modules ];
-  buildInputs = [ boost kactivities kconfig ];
+  pname = "kactivities-stats";
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
+  ];
+  buildInputs = [
+    boost
+    kactivities
+    kconfig
+  ];
   propagatedBuildInputs = [ qtbase ];
-  outputs = [ "out" "dev" ];
+  outputs = [
+    "out"
+    "dev"
+  ];
+  meta.platforms = lib.platforms.linux ++ lib.platforms.freebsd;
 }

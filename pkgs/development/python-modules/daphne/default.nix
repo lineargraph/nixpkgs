@@ -1,34 +1,57 @@
-{ stdenv, buildPythonPackage, isPy3k, fetchFromGitHub
-, asgiref, autobahn, twisted, pytestrunner
-, hypothesis, pytest, pytest-asyncio
+{
+  lib,
+  stdenv,
+  asgiref,
+  autobahn,
+  buildPythonPackage,
+  django,
+  fetchFromGitHub,
+  hypothesis,
+  pytest-asyncio,
+  pytestCheckHook,
+  setuptools,
+  twisted,
 }:
-buildPythonPackage rec {
-  pname = "daphne";
-  version = "2.1.0";
 
-  disabled = !isPy3k;
+buildPythonPackage (finalAttrs: {
+  pname = "daphne";
+  version = "4.2.3";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "django";
-    repo = pname;
-    rev = version;
-    sha256 = "1lbpn0l796ar77amqy8dap30zxmsn6as8y2lbmp4lk8m9awscwi8";
+    repo = "daphne";
+    tag = finalAttrs.version;
+    hash = "sha256-xdHvJZ+JfVYBpSvZ83mCgLSYgiIxZUS0Yx6Kg706aN4=";
   };
 
-  nativeBuildInputs = [ pytestrunner ];
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [ asgiref autobahn twisted ];
+  dependencies = [
+    asgiref
+    autobahn
+    twisted
+  ]
+  ++ twisted.optional-dependencies.tls;
 
-  checkInputs = [ hypothesis pytest pytest-asyncio ];
+  nativeCheckInputs = [
+    django
+    hypothesis
+    pytest-asyncio
+    pytestCheckHook
+  ];
 
-  checkPhase = ''
-    # Other tests fail, seems to be due to filesystem access
-    py.test -k "test_cli or test_utils"
-  '';
+  # Most tests fail on darwin
+  doCheck = !stdenv.hostPlatform.isDarwin;
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "daphne" ];
+
+  meta = {
     description = "Django ASGI (HTTP/WebSocket) server";
-    license = licenses.bsd3;
-    homepage = https://github.com/django/daphne;
+    homepage = "https://github.com/django/daphne";
+    changelog = "https://github.com/django/daphne/blob/${finalAttrs.src.tag}/CHANGELOG.txt";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
+    mainProgram = "daphne";
   };
-}
+})

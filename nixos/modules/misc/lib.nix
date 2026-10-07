@@ -1,9 +1,9 @@
-{ config, lib, ... }:
+{ lib, ... }:
 
 {
   options = {
     lib = lib.mkOption {
-      default = {};
+      default = { };
 
       type = lib.types.attrsOf lib.types.attrs;
 

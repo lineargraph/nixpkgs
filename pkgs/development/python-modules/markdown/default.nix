@@ -1,28 +1,39 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, nose
-, pyyaml
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pyyaml,
+  setuptools,
+  unittestCheckHook,
 }:
 
 buildPythonPackage rec {
-  pname = "Markdown";
-  version = "2.6.10";
+  pname = "markdown";
+  version = "3.10.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    extension = "zip";
-    inherit pname version;
-    sha256 = "cfa536d1ee8984007fcecc5a38a493ff05c174cb74cb2341dafd175e6bc30851";
+  src = fetchFromGitHub {
+    owner = "Python-Markdown";
+    repo = "markdown";
+    tag = version;
+    hash = "sha256-iZ+52xXtpn59HIcG2LTHHV0AMAz5N72np6s8+EOy8MQ=";
   };
 
-  # error: invalid command 'test'
-#   doCheck = false;
+  build-system = [ setuptools ];
 
-  checkInputs = [ nose pyyaml ];
+  nativeCheckInputs = [
+    unittestCheckHook
+    pyyaml
+  ];
+
+  pythonImportsCheck = [ "markdown" ];
 
   meta = {
-    description = "A Python implementation of John Gruber’s Markdown with Extension support";
-    homepage = https://github.com/Python-Markdown/markdown;
+    changelog = "https://github.com/Python-Markdown/markdown/blob/${src.tag}/docs/changelog.md";
+    description = "Python implementation of John Gruber's Markdown";
+    mainProgram = "markdown_py";
+    homepage = "https://github.com/Python-Markdown/markdown";
     license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

@@ -1,27 +1,53 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, chardet
-, pyparsing
-, graphviz
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  replaceVars,
+  graphviz,
+  pytestCheckHook,
+  chardet,
+  parameterized,
+  pyparsing,
 }:
 
 buildPythonPackage rec {
   pname = "pydot";
-  version = "1.2.4";
-  name = "${pname}-${version}";
+  version = "4.0.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "92d2e2d15531d00710f2d6fb5540d2acabc5399d464f2f20d5d21073af241eb6";
+    hash = "sha256-whSPaBxKM+CL8OJqnl+OQJmoLg4qBoCY8yzoZXc2StU=";
   };
-  checkInputs = [ chardet ];
-  # No tests in archive
-  doCheck = false;
-  propagatedBuildInputs = [pyparsing graphviz];
+
+  build-system = [
+    setuptools
+  ];
+
+  dependencies = [ pyparsing ];
+
+  nativeCheckInputs = [
+    chardet
+    parameterized
+    pytestCheckHook
+  ];
+
+  patches = [
+    (replaceVars ./hardcode-graphviz-path.patch {
+      inherit graphviz;
+    })
+  ];
+
+  enabledTestPaths = [ "test/test_pydot.py" ];
+
+  pythonImportsCheck = [ "pydot" ];
+
   meta = {
-    homepage = https://github.com/erocarrera/pydot;
-    description = "Allows to easily create both directed and non directed graphs from Python";
+    description = "Allows to create both directed and non directed graphs from Python";
+    homepage = "https://github.com/erocarrera/pydot";
+    changelog = "https://github.com/pydot/pydot/blob/v${version}/ChangeLog";
     license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

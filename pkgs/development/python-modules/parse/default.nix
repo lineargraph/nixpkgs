@@ -1,24 +1,34 @@
-{ stdenv, fetchPypi, fetchpatch
-, buildPythonPackage, python
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  setuptools,
+  pytestCheckHook,
 }:
 buildPythonPackage rec {
   pname = "parse";
-  version = "1.8.4";
-  name = "${pname}-${version}";
+  version = "1.20.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "c3cdf6206f22aeebfa00e5b954fcfea13d1b2dc271c75806b6025b94fb490939";
+  src = fetchFromGitHub {
+    owner = "r1chardj0n3s";
+    repo = "parse";
+    tag = version;
+    hash = "sha256-i/H3E/Z8vqt2jLS8BaVHJuD2Fbi7TP7EeOjXAJ16bWg=";
   };
 
-  checkPhase = ''
-    ${python.interpreter} test_parse.py
+  postPatch = ''
+    rm .pytest.ini
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/r1chardj0n3s/parse;
+  nativeBuildInputs = [ setuptools ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = {
+    homepage = "https://github.com/r1chardj0n3s/parse";
     description = "parse() is the opposite of format()";
-    license = licenses.bsdOriginal;
-    maintainers = with maintainers; [ alunduil ];
+    license = lib.licenses.bsdOriginal;
+    maintainers = with lib.maintainers; [ alunduil ];
   };
 }

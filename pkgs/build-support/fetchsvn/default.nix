@@ -1,44 +1,95 @@
-{stdenvNoCC, subversion, glibcLocales, sshSupport ? false, openssh ? null}:
-{url, rev ? "HEAD", md5 ? "", sha256 ? "",
- ignoreExternals ? false, ignoreKeywords ? false, name ? null}:
+{
+  lib,
+  stdenvNoCC,
+  buildPackages,
+  cacert,
+  subversion,
+  glibcLocales,
+  sshSupport ? true,
+  openssh ? null,
+}:
 
 let
-  repoName = with stdenvNoCC.lib;
+  repoToName =
+    url: rev:
     let
-      fst = head;
-      snd = l: head (tail l);
-      trd = l: head (tail (tail l));
-      path_ =
-        (p: if head p == "" then tail p else p) # ~ drop final slash if any
-        (reverseList (splitString "/" url));
-      path = [ (removeSuffix "/" (head path_)) ] ++ (tail path_);
+      inherit (lib)
+        removeSuffix
+        splitString
+        reverseList
+        head
+        last
+        elemAt
+        ;
+      base = removeSuffix "/" (last (splitString ":" url));
+      path = reverseList (splitString "/" base);
+      repoName =
+        # ../repo/trunk -> repo
+        if head path == "trunk" then
+          elemAt path 1
+        # ../repo/branches/branch -> repo-branch
+        else if elemAt path 1 == "branches" then
+          "${elemAt path 2}-${head path}"
+        # ../repo/tags/tag -> repo-tag
+        else if elemAt path 1 == "tags" then
+          "${elemAt path 2}-${head path}"
+        # ../repo (no trunk) -> repo
+        else
+          head path;
     in
-      # ../repo/trunk -> repo
-      if fst path == "trunk" then snd path
-      # ../repo/branches/branch -> repo-branch
-      else if snd path == "branches" then "${trd path}-${fst path}"
-      # ../repo/tags/tag -> repo-tag
-      else if snd path == "tags" then     "${trd path}-${fst path}"
-      # ../repo (no trunk) -> repo
-      else fst path;
-
-  name_ = if name == null then "${repoName}-r${toString rev}" else name;
+    "${repoName}-r${toString rev}";
 in
 
-if md5 != "" then
-  throw "fetchsvn does not support md5 anymore, please use sha256"
+{
+  url,
+  rev ? "HEAD",
+  name ? repoToName url rev,
+  sha256 ? "",
+  hash ? "",
+  ignoreExternals ? false,
+  ignoreKeywords ? false,
+  preferLocalBuild ? true,
+}:
+
+assert sshSupport -> openssh != null;
+
+if hash != "" && sha256 != "" then
+  throw "Only one of sha256 or hash can be set"
 else
-stdenvNoCC.mkDerivation {
-  name = name_;
-  builder = ./builder.sh;
-  nativeBuildInputs = [ subversion glibcLocales ];
+  stdenvNoCC.mkDerivation {
+    inherit name;
+    builder = ./builder.sh;
+    nativeBuildInputs = [
+      cacert
+      subversion
+      glibcLocales
+    ]
+    ++ lib.optional sshSupport openssh;
 
-  outputHashAlgo = "sha256";
-  outputHashMode = "recursive";
-  outputHash = sha256;
+    strictDeps = true;
+    __structuredAttrs = true;
 
-  inherit url rev sshSupport openssh ignoreExternals ignoreKeywords;
+    env = lib.optionalAttrs sshSupport {
+      SVN_SSH = lib.getExe buildPackages.openssh;
+    };
 
-  impureEnvVars = stdenvNoCC.lib.fetchers.proxyImpureEnvVars;
-  preferLocalBuild = true;
-}
+    outputHashAlgo = if hash != "" then null else "sha256";
+    outputHashMode = "recursive";
+    outputHash =
+      if hash != "" then
+        hash
+      else if sha256 != "" then
+        sha256
+      else
+        lib.fakeSha256;
+
+    inherit
+      url
+      rev
+      ignoreExternals
+      ignoreKeywords
+      ;
+
+    impureEnvVars = lib.fetchers.proxyImpureEnvVars;
+    inherit preferLocalBuild;
+  }

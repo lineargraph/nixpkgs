@@ -1,22 +1,32 @@
-{ stdenv, lib, fetchFromGitHub, cmake, pkgconfig
-, qtbase, qttools, packagekit }:
+{
+  stdenv,
+  fetchFromGitHub,
+  cmake,
+  pkg-config,
+  qttools,
+  packagekit,
+}:
 
 stdenv.mkDerivation rec {
-  name = "packagekit-qt-${version}";
-  version = "1.0.1";
+  pname = "packagekit-qt";
+  version = "1.1.4";
 
   src = fetchFromGitHub {
-    owner  = "hughsie";
-    repo   = "PackageKit-Qt";
-    rev    = "v${version}";
-    sha256 = "1ls6mn9abpwzw5wjgmslc5h9happj3516y1q67imppczk8g9h2yk";
+    owner = "hughsie";
+    repo = "PackageKit-Qt";
+    tag = "v${version}";
+    hash = "sha256-D1LsEaxc6lA0ULmYQ9n2KEs6NpoHeTgOJsKzdEnImUM=";
   };
 
   buildInputs = [ packagekit ];
 
-  nativeBuildInputs = [ cmake pkgconfig qttools ];
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    qttools
+  ];
 
-  enableParallelBuilding = true;
+  dontWrapQtApps = true;
 
   meta = packagekit.meta // {
     description = "System to facilitate installing and updating packages - Qt";

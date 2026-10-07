@@ -1,46 +1,57 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, html5lib
-, wcwidth
-, nose
-, python
-, isPy3k
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  hatchling,
+
+  # dependencies
+  wcwidth,
+
+  # tests
+  pytestCheckHook,
+  versionCheckHook,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "ftfy";
+  version = "6.3.1";
+  pyproject = true;
 
-  version = "4.4.3";
-  # ftfy v5 only supports python3. Since at the moment the only
-  # packages that use ftfy are spacy and textacy which both support
-  # python 2 and 3, they have pinned ftfy to the v4 branch.
-  # I propose to stick to v4 until another package requires v5.
-  # At that point we can make a ftfy_v4 package.
-
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "152xdb56rhs1q4r0ck1n557sbphw7zq18r75a7kkd159ckdnc01w";
+  src = fetchFromGitHub {
+    owner = "rspeer";
+    repo = "python-ftfy";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-TmwDJeUDcF+uOB2X5tMmnf9liCI9rP6dYJVmJoaqszo=";
   };
 
-  propagatedBuildInputs = [ html5lib wcwidth ];
+  build-system = [ hatchling ];
 
-  checkInputs = [
-    nose
+  dependencies = [ wcwidth ];
+
+  pythonImportsCheck = [ "ftfy" ];
+
+  nativeCheckInputs = [
+    versionCheckHook
+    pytestCheckHook
   ];
 
-  checkPhase = ''
-    nosetests -v tests
+  preCheck = ''
+    export PATH=$out/bin:$PATH
   '';
 
-  # Several tests fail with
-  # FileNotFoundError: [Errno 2] No such file or directory: 'ftfy'
-  doCheck = false;
+  disabledTests = [
+    # https://github.com/rspeer/python-ftfy/issues/226
+    "ftfy.formatting.monospaced_width"
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Given Unicode text, make its representation consistent and possibly less broken.";
-    homepage = https://github.com/LuminosoInsight/python-ftfy/tree/master/tests;
-    license = licenses.mit;
-    maintainers = with maintainers; [ sdll aborsu ];
+  meta = {
+    changelog = "https://github.com/rspeer/python-ftfy/blob/${finalAttrs.src.rev}/CHANGELOG.md";
+    description = "Given Unicode text, make its representation consistent and possibly less broken";
+    mainProgram = "ftfy";
+    homepage = "https://github.com/LuminosoInsight/python-ftfy";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
   };
-}
+})

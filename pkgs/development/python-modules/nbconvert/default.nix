@@ -1,51 +1,96 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
-, nose
-, glibcLocales
-, entrypoints
-, bleach
-, mistune
-, jinja2
-, pygments
-, traitlets
-, testpath
-, jupyter_core
-, nbformat
-, nbconvert
-, ipykernel
-, pandocfilters
-, tornado
-, jupyter_client
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  hatchling,
+  beautifulsoup4,
+  bleach,
+  defusedxml,
+  jinja2,
+  jupyter-core,
+  jupyterlab-pygments,
+  markupsafe,
+  mistune,
+  nbclient,
+  packaging,
+  pandocfilters,
+  pygments,
+  traitlets,
+  flaky,
+  ipykernel,
+  ipywidgets,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "nbconvert";
-  version = "5.3.1";
-  name = "${pname}-${version}";
+  version = "7.17.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1f9dkvpx186xjm4xab0qbph588mncp4vqk3fmxrsnqs43mks9c8j";
+    hash = "sha256-NNDQp+c848urbFquj09Gh5coCwH9i9LKdG2oVp7d19I=";
   };
 
-  checkInputs = [ nose pytest glibcLocales ];
+  # Add $out/share/jupyter to the list of paths that are used to search for
+  # various exporter templates
+  patches = [ ./templates.patch ];
 
-  propagatedBuildInputs = [
-    entrypoints bleach mistune jinja2 pygments traitlets testpath
-    jupyter_core nbformat ipykernel pandocfilters tornado jupyter_client
+  postPatch = ''
+    substituteAllInPlace ./nbconvert/exporters/templateexporter.py
+  '';
+
+  build-system = [ hatchling ];
+
+  dependencies = [
+    beautifulsoup4
+    bleach
+    defusedxml
+    jinja2
+    jupyter-core
+    jupyterlab-pygments
+    markupsafe
+    mistune
+    nbclient
+    packaging
+    pandocfilters
+    pygments
+    traitlets
+  ]
+  ++ bleach.optional-dependencies.css;
+
+  preCheck = ''
+    export HOME=$(mktemp -d)
+  '';
+
+  nativeCheckInputs = [
+    flaky
+    ipykernel
+    ipywidgets
+    pytestCheckHook
   ];
 
-  checkPhase = ''
-    mkdir tmp
-    LC_ALL=en_US.UTF-8 HOME=`realpath tmp` py.test -v
-  '';
+  pytestFlags = [
+    "-Wignore::DeprecationWarning"
+  ];
+
+  disabledTests = [
+    # Attempts network access (Failed to establish a new connection: [Errno -3] Temporary failure in name resolution)
+    "test_export"
+    "test_webpdf_with_chromium"
+    # ModuleNotFoundError: No module named 'nbconvert.tests'
+    "test_convert_full_qualified_name"
+    "test_post_processor"
+  ];
+
+  # Some of the tests use localhost networking.
+  __darwinAllowLocalNetworking = true;
 
   meta = {
     description = "Converting Jupyter Notebooks";
-    homepage = http://jupyter.org/;
+    homepage = "https://github.com/jupyter/nbconvert";
+    changelog = "https://github.com/jupyter/nbconvert/blob/v${version}/CHANGELOG.md";
     license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ fridh globin ];
+    teams = [ lib.teams.jupyter ];
   };
 }

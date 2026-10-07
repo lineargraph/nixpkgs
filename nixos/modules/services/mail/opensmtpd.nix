@@ -1,60 +1,65 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.opensmtpd;
   conf = pkgs.writeText "smtpd.conf" cfg.serverConfiguration;
-  args = concatStringsSep " " cfg.extraServerArgs;
+  args = lib.concatStringsSep " " cfg.extraServerArgs;
 
-  sendmail = pkgs.runCommand "opensmtpd-sendmail" {} ''
+  sendmail = pkgs.runCommand "opensmtpd-sendmail" { preferLocalBuild = true; } ''
     mkdir -p $out/bin
     ln -s ${cfg.package}/sbin/smtpctl $out/bin/sendmail
   '';
 
-in {
+in
+{
 
   ###### interface
+
+  imports = [
+    (lib.mkRenamedOptionModule
+      [ "services" "opensmtpd" "addSendmailToSystemPath" ]
+      [ "services" "opensmtpd" "setSendmail" ]
+    )
+  ];
 
   options = {
 
     services.opensmtpd = {
 
-      enable = mkOption {
-        type = types.bool;
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = "Whether to enable the OpenSMTPD server.";
       };
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.opensmtpd;
-        defaultText = "pkgs.opensmtpd";
-        description = "The OpenSMTPD package to use.";
-      };
+      package = lib.mkPackageOption pkgs "opensmtpd" { };
 
-      addSendmailToSystemPath = mkOption {
-        type = types.bool;
+      setSendmail = lib.mkOption {
+        type = lib.types.bool;
         default = true;
-        description = ''
-          Whether to add OpenSMTPD's sendmail binary to the
-          system path or not.
-        '';
+        description = "Whether to set the system sendmail to OpenSMTPD's.";
       };
 
-      extraServerArgs = mkOption {
-        type = types.listOf types.str;
-        default = [];
-        example = [ "-v" "-P mta" ];
+      extraServerArgs = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [
+          "-v"
+          "-P mta"
+        ];
         description = ''
           Extra command line arguments provided when the smtpd process
           is started.
         '';
       };
 
-      serverConfiguration = mkOption {
-        type = types.lines;
+      serverConfiguration = lib.mkOption {
+        type = lib.types.lines;
         example = ''
           listen on lo
           accept for any deliver to lmtp localhost:24
@@ -65,30 +70,29 @@ in {
         '';
       };
 
-      procPackages = mkOption {
-        type = types.listOf types.package;
-        default = [];
+      procPackages = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
+        default = [ ];
         description = ''
           Packages to search for filters, tables, queues, and schedulers.
 
-          Add OpenSMTPD-extras here if you want to use the filters, etc. from
-          that package.
+          Add packages here if you want to use them as as such, for example
+          from the opensmtpd-table-* packages.
         '';
       };
     };
 
   };
 
-
   ###### implementation
 
-  config = mkIf cfg.enable {
-    users.extraGroups = {
+  config = lib.mkIf cfg.enable rec {
+    users.groups = {
       smtpd.gid = config.ids.gids.smtpd;
       smtpq.gid = config.ids.gids.smtpq;
     };
 
-    users.extraUsers = {
+    users.users = {
       smtpd = {
         description = "OpenSMTPD process user";
         uid = config.ids.uids.smtpd;
@@ -101,31 +105,66 @@ in {
       };
     };
 
-    systemd.services.opensmtpd = let
-      procEnv = pkgs.buildEnv {
-        name = "opensmtpd-procs";
-        paths = [ cfg.package ] ++ cfg.procPackages;
-        pathsToLink = [ "/libexec/opensmtpd" ];
+    security.wrappers = {
+      makemap = {
+        owner = "root";
+        group = "smtpq";
+        setuid = false;
+        setgid = true;
+        source = "${cfg.package}/bin/smtpctl";
       };
-    in {
-      wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
-      preStart = ''
-        mkdir -p /var/spool/smtpd
-        chmod 711 /var/spool/smtpd
-
-        mkdir -p /var/spool/smtpd/offline
-        chown root.smtpq /var/spool/smtpd/offline
-        chmod 770 /var/spool/smtpd/offline
-
-        mkdir -p /var/spool/smtpd/purge
-        chown smtpq.root /var/spool/smtpd/purge
-        chmod 700 /var/spool/smtpd/purge
-      '';
-      serviceConfig.ExecStart = "${cfg.package}/sbin/smtpd -d -f ${conf} ${args}";
-      environment.OPENSMTPD_PROC_PATH = "${procEnv}/libexec/opensmtpd";
+      smtpctl = {
+        owner = "root";
+        group = "smtpq";
+        setuid = false;
+        setgid = true;
+        source = "${cfg.package}/bin/smtpctl";
+      };
     };
 
-    environment.systemPackages = mkIf cfg.addSendmailToSystemPath [ sendmail ];
+    services.mail.sendmailSetuidWrapper = lib.mkIf cfg.setSendmail (
+      security.wrappers.smtpctl
+      // {
+        source = "${sendmail}/bin/sendmail";
+        program = "sendmail";
+      }
+    );
+
+    systemd.tmpfiles.settings.opensmtpd = {
+      "/var/spool/smtpd".d = {
+        mode = "0711";
+        user = "root";
+      };
+      "/var/spool/smtpd/offline".d = {
+        mode = "0770";
+        user = "root";
+        group = "smtpq";
+      };
+      "/var/spool/smtpd/purge".d = {
+        mode = "0700";
+        user = "smtpq";
+        group = "root";
+      };
+      "/var/spool/smtpd/queue".d = {
+        mode = "0700";
+        user = "smtpq";
+        group = "root";
+      };
+    };
+
+    systemd.services.opensmtpd =
+      let
+        procEnv = pkgs.buildEnv {
+          name = "opensmtpd-procs";
+          paths = [ cfg.package ] ++ cfg.procPackages;
+          pathsToLink = [ "/libexec/smtpd" ];
+        };
+      in
+      {
+        wantedBy = [ "multi-user.target" ];
+        after = [ "network.target" ];
+        serviceConfig.ExecStart = "${cfg.package}/sbin/smtpd -d -f ${conf} ${args}";
+        environment.OPENSMTPD_PROC_PATH = "${procEnv}/libexec/smtpd";
+      };
   };
 }

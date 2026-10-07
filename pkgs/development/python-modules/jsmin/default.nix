@@ -1,18 +1,30 @@
-{ stdenv, lib, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "jsmin";
-  version = "2.2.2";
-  name = "${pname}-${version}";
+  version = "3.0.1";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0fsmqbjvpxvff0984x7c0y8xmf49ax9mncz48b9xjx8wrnr9kpxn";
+    sha256 = "c0959a121ef94542e807a674142606f7e90214a2b3d1eb17300244bbb5cc2bfc";
   };
 
-  meta = with lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  enabledTestPaths = [ "jsmin/test.py" ];
+
+  pythonImportsCheck = [ "jsmin" ];
+
+  meta = {
     description = "JavaScript minifier";
     homepage = "https://github.com/tikitu/jsmin/";
-    license = licenses.mit;
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

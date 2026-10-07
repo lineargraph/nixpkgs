@@ -1,18 +1,36 @@
-{ lib, buildPythonPackage, fetchurl }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
-  name = "sarge-${version}";
-  version = "0.1.4";
+  pname = "sarge";
+  version = "0.1.7.post1";
+  format = "setuptools";
 
-  src = fetchurl {
-    url = "mirror://pypi/s/sarge/${name}.tar.gz";
-    sha256 = "08s8896973bz1gg0pkr592w6g4p6v47bkfvws5i91p9xf8b35yar";
+  src = fetchFromGitHub {
+    owner = "vsajip";
+    repo = "sarge";
+    rev = version;
+    hash = "sha256-bT1DbcQi+SbeRBsL7ILuQbSnAj3BBB4+FNl+Zek5xU4=";
   };
 
-  meta = with lib; {
-    homepage = http://sarge.readthedocs.org/;
-    description = "A wrapper for subprocess which provides command pipeline functionality";
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ abbradar ];
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTests = [
+    # Aarch64-linux times out for these tests, so they need to be disabled.
+    "test_timeout"
+    "test_feeder"
+  ];
+
+  pythonImportsCheck = [ "sarge" ];
+
+  meta = {
+    description = "Python wrapper for subprocess which provides command pipeline functionality";
+    homepage = "https://sarge.readthedocs.org/";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

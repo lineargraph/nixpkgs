@@ -1,36 +1,112 @@
-{ stdenv, buildPythonPackage, fetchPypi, isPy3k
-, Mako, packaging, pysocks, pygments, ROPGadget
-, capstone, paramiko, pip, psutil
-, pyelftools, pyserial, dateutil
-, requests, tox, unicorn, intervaltree, fetchpatch }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  debugger,
+  fetchPypi,
+  capstone,
+  colored-traceback,
+  intervaltree,
+  mako,
+  packaging,
+  paramiko,
+  psutil,
+  pyelftools,
+  pygments,
+  pyserial,
+  pysocks,
+  python-dateutil,
+  requests,
+  ropgadget,
+  rpyc,
+  setuptools,
+  six,
+  sortedcontainers,
+  unicorn,
+  unix-ar,
+  zstandard,
+  installShellFiles,
+}:
 
+let
+  debuggerName = lib.strings.getName debugger;
+in
 buildPythonPackage rec {
-  version = "3.12.0";
   pname = "pwntools";
+  version = "4.15.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "09a7yhsyqxb4xf2r6mbn3p5zx1wp89lxq7lj34y4zbin6ns5929s";
+    hash = "sha256-2ZqRcpjBynJBtRu6mtIhLyr0Qe9mSIBZskJlCOmip3Y=";
   };
 
-  propagatedBuildInputs = [ Mako packaging pysocks pygments ROPGadget capstone paramiko pip psutil pyelftools pyserial dateutil requests tox unicorn intervaltree ];
+  postPatch = ''
+    # Upstream hardcoded the check for the command `gdb-multiarch`;
+    # Forcefully use the provided debugger as `gdb`.
+    sed -i 's/gdb-multiarch/${debuggerName}/' pwnlib/gdb.py
 
-  disabled = isPy3k;
-  doCheck = false; # no setuptools tests for the package
+    # Disable update checks
+    substituteInPlace pwnlib/update.py \
+      --replace-fail 'disabled        = False' 'disabled        = True'
+  '';
 
-  # Can be removed when 3.13.0 is released
-  patches = [
-    (fetchpatch {
-      url = "https://github.com/Gallopsled/pwntools/commit/9859f54a21404174dd17efee02f91521a2dd09c5.patch";
-      sha256 = "0p0h87npn1mwsd8ciab7lg74bk3ahlk5r0mjbvx4jhihl2gjc3z2";
-    })
+  nativeBuildInputs = [ installShellFiles ];
+
+  build-system = [ setuptools ];
+
+  pythonRemoveDeps = [
+    "pip"
+    "unicorn"
   ];
 
+  propagatedBuildInputs = [
+    capstone
+    colored-traceback
+    intervaltree
+    mako
+    packaging
+    paramiko
+    psutil
+    pyelftools
+    pygments
+    pyserial
+    pysocks
+    python-dateutil
+    requests
+    ropgadget
+    rpyc
+    six
+    sortedcontainers
+    unicorn
+    unix-ar
+    zstandard
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = "http://pwntools.com";
+  doCheck = false; # no setuptools tests for the package
+
+  postInstall = ''
+    installShellCompletion --cmd pwn \
+      --bash extra/bash_completion.d/pwn \
+      --zsh extra/zsh_completion/_pwn
+  '';
+
+  postFixup = lib.optionalString (!stdenv.hostPlatform.isDarwin) ''
+    mkdir -p "$out/bin"
+    makeWrapper "${debugger}/bin/${debuggerName}" "$out/bin/pwntools-gdb"
+  '';
+
+  pythonImportsCheck = [ "pwn" ];
+
+  meta = {
     description = "CTF framework and exploit development library";
-    license = licenses.mit;
-    maintainers = with maintainers; [ bennofs kristoff3r ];
+    homepage = "https://pwntools.com";
+    changelog = "https://github.com/Gallopsled/pwntools/releases/tag/${version}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [
+      bennofs
+      kristoff3r
+      pamplemousse
+    ];
   };
 }

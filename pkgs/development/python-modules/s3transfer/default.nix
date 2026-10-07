@@ -1,53 +1,58 @@
-{ stdenv
-, fetchPypi
-, pythonOlder
-, buildPythonPackage
-, docutils
-, mock
-, nose
-, coverage
-, wheel
-, unittest2
-, botocore
-, futures
+{
+  lib,
+  stdenv,
+  botocore,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "s3transfer";
-  version = "0.1.13";
+  version = "0.16.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "90dc18e028989c609146e241ea153250be451e05ecc0c2832565231dacdf59c1";
+  src = fetchFromGitHub {
+    owner = "boto";
+    repo = "s3transfer";
+    tag = version;
+    hash = "sha256-dpDlsZtLjd6r4kLkIDPG6ZPFFs6/4elYiHk2HDpa9+4=";
   };
 
-  foo = 1;
-
-  propagatedBuildInputs =
-    [ botocore
-    ] ++ stdenv.lib.optional (pythonOlder "3") futures;
-
-  buildInputs = [
-    docutils
-    mock
-    nose
-    coverage
-    wheel
-    unittest2
+  build-system = [
+    setuptools
   ];
 
-  checkPhase = ''
-    pushd s3transfer/tests
-    nosetests -v unit/ functional/
-    popd
-  '';
+  dependencies = [
+    botocore
+  ];
 
-  # version on pypi has no tests/ dir
-  doCheck = false;
+  nativeCheckInputs = [
+    pytestCheckHook
+  ];
+
+  disabledTestPaths = [
+    # Requires network access
+    "tests/integration"
+  ]
+  ++
+    # There was a change in python 3.8 that defaults multiprocessing to spawn instead of fork on macOS
+    # See https://bugs.python.org/issue33725 and https://github.com/python/cpython/pull/13603.
+    # I suspect the underlying issue here is that upstream tests aren't compatible with spawn multiprocessing, and pass on linux where the default is still fork
+    lib.optionals stdenv.hostPlatform.isDarwin [ "tests/unit/test_compat.py" ];
+
+  pythonImportsCheck = [ "s3transfer" ];
+
+  optional-dependencies = {
+    crt = botocore.optional-dependencies.crt;
+  };
 
   meta = {
-    homepage = https://github.com/boto/s3transfer;
-    license = stdenv.lib.licenses.asl20;
-    description = "A library for managing Amazon S3 transfers";
+    description = "Library for managing Amazon S3 transfers";
+    homepage = "https://github.com/boto/s3transfer";
+    changelog = "https://github.com/boto/s3transfer/blob/${src.tag}/CHANGELOG.rst";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ nickcao ];
   };
 }

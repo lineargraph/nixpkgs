@@ -1,31 +1,59 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, xorg
-, cffi
-, six
+{
+  lib,
+  buildPythonPackage,
+  cffi,
+  fetchPypi,
+  pytestCheckHook,
+  setuptools,
+  libxcb,
+  xeyes,
+  xvfb,
 }:
 
 buildPythonPackage rec {
-  version = "0.6.0";
   pname = "xcffib";
+  version = "1.12.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "36142cb72535933e8e1ed39ff2c45559fa7038823bd6be6961ef8ee5bb0f6912";
+    hash = "sha256-Q0Ut5QnBJk1bzqS8Alyhv2gnLSQO8m0zQLRuEfY9PUo=";
   };
 
-  patchPhase = ''
+  postPatch = ''
     # Hardcode cairo library path
-    sed -e 's,ffi\.dlopen(,&"${xorg.libxcb.out}/lib/" + ,' -i xcffib/__init__.py
+    substituteInPlace xcffib/__init__.py \
+      --replace-fail "lib = ffi.dlopen(soname)" "lib = ffi.dlopen('${lib.getLib libxcb}/lib/' + soname)"
   '';
 
-  propagatedBuildInputs = [ cffi six ];
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "A drop in replacement for xpyb, an XCB python binding";
+  propagatedNativeBuildInputs = [ cffi ];
+
+  propagatedBuildInputs = [ cffi ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    xeyes
+    xvfb
+  ];
+
+  preCheck = ''
+    # import from $out
+    rm -r xcffib
+  '';
+
+  pythonImportsCheck = [ "xcffib" ];
+
+  # Tests use xvfb
+  __darwinAllowLocalNetworking = true;
+
+  meta = {
+    description = "Drop in replacement for xpyb, an XCB python binding";
     homepage = "https://github.com/tych0/xcffib";
-    license = licenses.asl20;
-    maintainers = with maintainers; [ kamilchm ];
+    changelog = "https://github.com/tych0/xcffib/releases/tag/v${version}";
+    license = lib.licenses.asl20;
+    platforms = lib.platforms.linux ++ lib.platforms.darwin ++ lib.platforms.windows;
+    maintainers = with lib.maintainers; [ kamilchm ];
   };
 }

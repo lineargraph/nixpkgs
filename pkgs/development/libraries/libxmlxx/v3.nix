@@ -1,28 +1,104 @@
-{ stdenv, fetchurl, pkgconfig, libxml2, glibmm, perl }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  pkg-config,
+  libxml2,
+  glibmm_2_4,
+  perl,
+  gnome,
+  meson,
+  ninja,
+  docbook5,
+  docbook-xsl-ns,
+  doxygen,
+  libxslt,
+  fop,
+  dblatex,
+  graphviz,
+
+  withDocumentation ? false,
+  withManual ? false, # Broken due to not being allowed to fetch file from web
+  withPDF ? false,
+  withExamples ? false,
+}:
 
 stdenv.mkDerivation rec {
-  name = "libxml++-${maj_ver}.${min_ver}";
-  maj_ver = "3.0";
-  min_ver = "1";
+  pname = "libxml++";
+  version = "3.2.5";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/libxml++/${maj_ver}/${name}.tar.xz";
-    sha256 = "19kik79fmg61nv0by0a5f9wchrcfjwzvih4v2waw01hqflhqvp0r";
+    url = "mirror://gnome/sources/libxml++/${lib.versions.majorMinor version}/libxml++-${version}.tar.xz";
+    hash = "sha256-DJs4G1qD1rOrSwuGXXJW2rJ9V1mBtjvi+Fnty5TaWcc=";
   };
 
-  outputs = [ "out" "devdoc" ];
+  outputs = [
+    "out"
+    "dev"
+  ]
+  ++ lib.lists.optionals withDocumentation [
+    "doc"
+    "devdoc"
+  ];
 
-  nativeBuildInputs = [ pkgconfig perl ];
+  nativeBuildInputs = [
+    ninja
+    meson
+    pkg-config
+  ]
+  ++ lib.lists.optionals withDocumentation [
+    perl
+    doxygen
+    libxslt
+    graphviz
+  ]
+  ++ lib.lists.optionals withManual [
+    docbook5
+    docbook-xsl-ns
+  ]
+  ++ lib.lists.optionals withPDF [
+    fop
+    dblatex
+  ];
 
-  buildInputs = [ glibmm ];
+  buildInputs = [ glibmm_2_4 ];
 
   propagatedBuildInputs = [ libxml2 ];
 
-  meta = with stdenv.lib; {
-    homepage = http://libxmlplusplus.sourceforge.net/;
+  mesonFlags = [
+    (lib.mesonBool "maintainer-mode" false)
+    (lib.mesonBool "build-documentation" withDocumentation)
+    (lib.mesonBool "build-manual" withManual)
+    (lib.mesonBool "build-pdf" withPDF)
+    (lib.mesonBool "build-examples" withExamples)
+    (lib.mesonBool "build-tests" doCheck)
+  ];
+
+  preBuild = lib.strings.optionalString withDocumentation ''
+    doxygen -u docs/reference/Doxyfile
+  '';
+
+  postFixup = ''
+    substituteInPlace $dev/lib/pkgconfig/libxml++-3.0.pc \
+      --replace-fail 'docdir=''${datarootdir}' "docdir=$doc/share"
+  '';
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      attrPath = "libxmlxx3";
+      packageName = "libxml++";
+      versionPolicy = "odd-unstable";
+      freeze = true;
+    };
+  };
+
+  doCheck = true;
+
+  meta = {
+    homepage = "https://libxmlplusplus.sourceforge.net/";
     description = "C++ wrapper for the libxml2 XML parser library, version 3";
-    license = licenses.lgpl2Plus;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ loskutov ];
+    license = lib.licenses.lgpl2Plus;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ willow ];
   };
 }

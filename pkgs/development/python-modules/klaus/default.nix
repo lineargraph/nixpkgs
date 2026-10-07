@@ -1,14 +1,30 @@
-{ lib, python, fetchFromGitHub }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  fetchpatch,
+  isPy3k,
+  flask,
+  pygments,
+  dulwich,
+  httpauth,
+  humanize,
+  pytest,
+  requests,
+  python-ctags3,
+  mock,
+}:
 
-python.pkgs.buildPythonPackage rec {
+buildPythonPackage rec {
   pname = "klaus";
-  version = "1.2.2";
+  version = "3.0.1";
+  format = "setuptools";
 
   src = fetchFromGitHub {
     owner = "jonashaag";
-    repo = pname;
+    repo = "klaus";
     rev = version;
-    sha256 = "0hkl1ycyd5ccijmknr3yfp3ga43y01m7390xnibqqgaisfvcm9wp";
+    hash = "sha256-GflSDhBmMsQ34o3ApraEJ6GmlXXP2kK6WW3lsfr6b7g=";
   };
 
   prePatch = ''
@@ -16,13 +32,29 @@ python.pkgs.buildPythonPackage rec {
       --replace "mkdir -p \$builddir" "mkdir -p \$builddir && pwd"
   '';
 
-  propagatedBuildInputs = with python.pkgs; [
-    six flask pygments dulwich httpauth humanize
+  # TODO: remove in next version
+  patches = [
+    (fetchpatch {
+      name = "distutils.patch";
+      url = "https://github.com/jonashaag/klaus/commit/d50d2aab97fd86c11f3b5a4c1ecbcf1e085f395f.patch";
+      hash = "sha256-gJ/ksm96VRNgqIBp+PX/ljzdfQJYbwTBmZaF2Ctu7Fc=";
+    })
   ];
 
-  checkInputs = with python.pkgs; [
-    pytest requests python-ctags3
-  ] ++ lib.optional (!isPy3k) mock;
+  propagatedBuildInputs = [
+    flask
+    pygments
+    dulwich
+    httpauth
+    humanize
+  ];
+
+  nativeCheckInputs = [
+    pytest
+    requests
+    python-ctags3
+  ]
+  ++ lib.optional (!isPy3k) mock;
 
   checkPhase = ''
     ./runtests.sh
@@ -31,10 +63,11 @@ python.pkgs.buildPythonPackage rec {
   # Needs to set up some git repos
   doCheck = false;
 
-  meta = with lib; {
-    description = "The first Git web viewer that Just Works";
-    homepage    = https://github.com/jonashaag/klaus;
-    license     = licenses.isc;
-    maintainers = with maintainers; [ ];
+  meta = {
+    description = "First Git web viewer that Just Works";
+    mainProgram = "klaus";
+    homepage = "https://github.com/jonashaag/klaus";
+    license = lib.licenses.isc;
+    maintainers = with lib.maintainers; [ pSub ];
   };
 }

@@ -1,45 +1,120 @@
-{ stdenv, lib, fetchFromGitHub, autoreconfHook, pkgconfig
-, libXext, libdrm, libXfixes, wayland, libffi, libX11
-, libGL, libGL_driver
-, minimal ? false, libva-minimal
+{
+  stdenv,
+  lib,
+  fetchFromGitHub,
+  meson,
+  pkg-config,
+  ninja,
+  wayland-scanner,
+  libdrm,
+  minimal ? false,
+  libx11,
+  libxcb,
+  libxext,
+  libxfixes,
+  wayland,
+  libffi,
+  libGL,
+  mesa,
+  # for passthru.tests
+  intel-compute-runtime,
+  intel-media-driver,
+  mpv,
+  intel-vaapi-driver,
+  vlc,
+  testers,
 }:
 
-stdenv.mkDerivation rec {
-  name = "libva-${lib.optionalString minimal "minimal-"}${version}";
-  version = "2.1.0";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libva" + lib.optionalString minimal "-minimal";
+  version = "2.24.1";
 
-  # update libva-utils and vaapiIntel as well
   src = fetchFromGitHub {
-    owner  = "01org";
-    repo   = "libva";
-    rev    = version;
-    sha256 = "1a60lrgr65hx9b2qp0gjky1298c4d4zp3ap6vnmmz850sxx5rm8w";
+    owner = "intel";
+    repo = "libva";
+    rev = finalAttrs.version;
+    sha256 = "sha256-kgFvqyUlBZApc8D2i3BX6bHkUVNon5bL4asZ9myhQEM=";
   };
 
-  outputs = [ "dev" "out" ];
-
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
-
-  buildInputs = [ libdrm ]
-    ++ lib.optionals (!minimal) [ libva-minimal libX11 libXext libXfixes wayland libffi libGL ];
-  # TODO: share libs between minimal and !minimal - perhaps just symlink them
-
-  enableParallelBuilding = true;
-
-  configureFlags = [
-    # Add FHS paths for non-NixOS applications.
-    "--with-drivers-path=${libGL_driver.driverLink}/lib/dri:/usr/lib/dri:/usr/lib32/dri"
-  ] ++ lib.optionals (!minimal) [ "--enable-glx" ];
-
-  installFlags = [
-    "dummy_drv_video_ladir=$(out)/lib/dri"
+  outputs = [
+    "dev"
+    "out"
   ];
 
-  meta = with stdenv.lib; {
-    description = "VAAPI library: Video Acceleration API";
-    homepage = http://www.freedesktop.org/wiki/Software/vaapi;
-    license = licenses.mit;
-    maintainers = with maintainers; [ garbas ];
-    platforms = platforms.unix;
+  depsBuildBuild = [ pkg-config ];
+
+  nativeBuildInputs = [
+    meson
+    pkg-config
+    ninja
+  ]
+  ++ lib.optional (!minimal) wayland-scanner;
+
+  buildInputs = [
+    libdrm
+  ]
+  ++ lib.optionals (!minimal) [
+    libx11
+    libxcb
+    libxext
+    libxfixes
+    wayland
+    libffi
+    libGL
+  ];
+
+  mesonFlags = lib.optionals stdenv.hostPlatform.isLinux [
+    # Add FHS and Debian paths for non-NixOS applications
+    "-Ddriverdir=${mesa.driverLink}/lib/dri:/usr/lib/dri:/usr/lib32/dri:/usr/lib/x86_64-linux-gnu/dri:/usr/lib/i386-linux-gnu/dri"
+  ];
+
+  env =
+    lib.optionalAttrs (stdenv.cc.bintools.isLLVM && lib.versionAtLeast stdenv.cc.bintools.version "17")
+      {
+        NIX_LDFLAGS = "--undefined-version";
+      }
+    // lib.optionalAttrs (stdenv.targetPlatform.useLLVM or false) {
+      NIX_CFLAGS_COMPILE = "-DHAVE_SECURE_GETENV";
+    };
+
+  passthru.tests = {
+    # other drivers depending on libva and selected application users.
+    # Please get a confirmation from the maintainer before adding more applications.
+    inherit
+      intel-compute-runtime
+      intel-media-driver
+      intel-vaapi-driver
+      mpv
+      vlc
+      ;
+    pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
   };
-}
+
+  meta = {
+    description = "Implementation for VA-API (Video Acceleration API)";
+    longDescription = ''
+      VA-API is an open-source library and API specification, which provides
+      access to graphics hardware acceleration capabilities for video
+      processing. It consists of a main library (this package) and
+      driver-specific acceleration backends for each supported hardware vendor.
+    '';
+    homepage = "https://01.org/linuxmedia/vaapi";
+    changelog = "https://raw.githubusercontent.com/intel/libva/${finalAttrs.version}/NEWS";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ SuperSandro2000 ];
+    pkgConfigModules = [
+      "libva"
+      "libva-drm"
+    ]
+    ++ lib.optionals (!minimal) [
+      "libva-glx"
+      "libva-wayland"
+      "libva-x11"
+    ];
+    platforms = lib.platforms.unix;
+    badPlatforms = [
+      # Mandatory libva shared library.
+      lib.systems.inspect.platformPatterns.isStatic
+    ];
+  };
+})

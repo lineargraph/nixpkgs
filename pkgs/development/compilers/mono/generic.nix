@@ -1,75 +1,87 @@
-{ stdenv, fetchurl, bison, pkgconfig, glib, gettext, perl, libgdiplus, libX11
-, callPackage, ncurses, zlib
-, cacert, Foundation, libobjc, python
-
-, version, sha256
-, withLLVM ? false
-, enableParallelBuilding ? true
-, meta ? {}
+{
+  lib,
+  stdenv,
+  bison,
+  pkg-config,
+  glib,
+  gettext,
+  perl,
+  libgdiplus,
+  libx11,
+  ncurses,
+  zlib,
+  bash,
+  cacert,
+  python3,
+  version,
+  src,
+  autoconf,
+  libtool,
+  automake,
+  cmake,
+  which,
+  gnumake42,
+  enableParallelBuilding ? true,
+  extraPatches ? [ ],
+  env ? { },
 }:
 
-let
-  llvm     = callPackage ./llvm.nix { };
-  name = "mono-${version}";
-in
-stdenv.mkDerivation {
-  inherit name;
+stdenv.mkDerivation (finalAttrs: {
+  pname = "mono";
+  inherit version src env;
 
-  src = fetchurl {
-    inherit sha256;
-    url = "http://download.mono-project.com/sources/mono/${name}.tar.bz2";
-  };
-
-  buildInputs =
-    [ bison pkgconfig glib gettext perl libgdiplus libX11 ncurses zlib python
-    ]
-    ++ (stdenv.lib.optionals stdenv.isDarwin [ Foundation libobjc ]);
-
-  propagatedBuildInputs = [glib];
-
-  NIX_LDFLAGS = if stdenv.isDarwin then "" else "-lgcc_s" ;
-
-  # To overcome the bug https://bugzilla.novell.com/show_bug.cgi?id=644723
-  dontDisableStatic = true;
-
-  # In fact I think this line does not help at all to what I
-  # wanted to achieve: have mono to find libgdiplus automatically
-  configureFlags = [
-    "--x-includes=${libX11.dev}/include"
-    "--x-libraries=${libX11.out}/lib"
-    "--with-libgdiplus=${libgdiplus}/lib/libgdiplus.so"
-  ]
-  ++ stdenv.lib.optionals withLLVM [
-    "--enable-llvm"
-    "--enable-llvmloaded"
-    "--with-llvm=${llvm}"
+  strictDeps = true;
+  nativeBuildInputs = [
+    autoconf
+    automake
+    bison
+    cmake
+    libtool
+    perl
+    pkg-config
+    python3
+    which
+    gnumake42
+    gettext
+  ];
+  buildInputs = [
+    glib
+    gettext
+    libgdiplus
+    libx11
+    ncurses
+    zlib
+    bash
   ];
 
-  # Attempt to fix this error when running "mcs --version":
-  # The file /nix/store/xxx-mono-2.4.2.1/lib/mscorlib.dll is an invalid CIL image
-  dontStrip = true;
+  configureFlags = [
+    "--x-includes=${libx11.dev}/include"
+    "--x-libraries=${libx11.out}/lib"
+    "--with-libgdiplus=${libgdiplus}/lib/libgdiplus.so"
+  ];
+
+  configurePhase = ''
+    patchShebangs autogen.sh mcs/build/start-compiler-server.sh
+    ./autogen.sh --prefix $out $configureFlags
+  '';
 
   # We want pkg-config to take priority over the dlls in the Mono framework and the GAC
   # because we control pkg-config
-  patches = [ ./pkgconfig-before-gac.patch ];
+  patches = [ ./pkgconfig-before-gac.patch ] ++ extraPatches;
 
-  # Patch all the necessary scripts. Also, if we're using LLVM, we fix the default
-  # LLVM path to point into the Mono LLVM build, since it's private anyway.
+  # Patch all the necessary scripts
   preBuild = ''
     makeFlagsArray=(INSTALL=`type -tp install`)
-    patchShebangs ./
-    substituteInPlace mcs/class/corlib/System/Environment.cs --replace /usr/share "$out/share"
-  '' + stdenv.lib.optionalString withLLVM ''
-    substituteInPlace mono/mini/aot-compiler.c --replace "llvm_path = g_strdup (\"\")" "llvm_path = g_strdup (\"${llvm}/bin/\")"
+    substituteInPlace mcs/class/corlib/System/Environment.cs --replace-fail /usr/share "$out/share"
   '';
 
-  # Fix mono DLLMap so it can find libX11 and gdiplus to run winforms apps
+  # Fix mono DLLMap so it can find libx11 to run winforms apps
+  # libgdiplus is correctly handled by the --with-libgdiplus configure flag
   # Other items in the DLLMap may need to be pointed to their store locations, I don't think this is exhaustive
-  # http://www.mono-project.com/Config_DllMap
+  # https://www.mono-project.com/Config_DllMap
   postBuild = ''
     find . -name 'config' -type f | xargs \
-    sed -i -e "s@libX11.so.6@${libX11.out}/lib/libX11.so.6@g" \
-           -e "s@/.*libgdiplus.so@${libgdiplus}/lib/libgdiplus.so@g" \
+    sed -i -e "s@libX11.so.6@${libx11.out}/lib/libX11.so.6@g"
   '';
 
   # Without this, any Mono application attempting to open an SSL connection will throw with
@@ -88,10 +100,49 @@ stdenv.mkDerivation {
   inherit enableParallelBuilding;
 
   meta = {
-    homepage = http://mono-project.com/;
+    # Per nixpkgs#151720 the build failures for aarch64-darwin are fixed since 6.12.0.129.
+    # Cross build is broken due to attempt to execute cert-sync built for the host.
+    broken =
+      (
+        stdenv.hostPlatform.isDarwin
+        && stdenv.hostPlatform.isAarch64
+        && lib.versionOlder finalAttrs.version "6.12.0.129"
+      )
+      || !stdenv.buildPlatform.canExecute stdenv.hostPlatform;
+    homepage =
+      if lib.versionOlder finalAttrs.version "6.14.0" then
+        "https://mono-project.com/"
+      else
+        "https://gitlab.winehq.org/mono/mono";
     description = "Cross platform, open source .NET development framework";
-    platforms = stdenv.lib.platforms.x86;
-    maintainers = with stdenv.lib.maintainers; [ viric thoughtpolice obadz vrthra ];
-    license = stdenv.lib.licenses.free; # Combination of LGPL/X11/GPL ?
-  } // meta;
-}
+    platforms = with lib.platforms; darwin ++ linux;
+    knownVulnerabilities = lib.optionals (lib.versionOlder finalAttrs.version "6.14.0") [
+      ''
+        mono was archived upstream, see https://www.mono-project.com/
+        While WineHQ has taken over development, consider using 6.14.0 or newer.
+      ''
+    ];
+    maintainers = with lib.maintainers; [
+      thoughtpolice
+      obadz
+    ];
+    license = with lib.licenses; [
+      # runtime, compilers, tools and most class libraries licensed
+      mit
+      # runtime includes some code licensed
+      bsd3
+      # mcs/class/I18N/mklist.sh marked GPLv2 and others just GPL
+      gpl2Only
+      # RabbitMQ.Client class libraries dual licensed
+      mpl20
+      asl20
+      # mcs/class/System.Core/System/TimeZoneInfo.Android.cs
+      asl20
+      # some documentation
+      mspl
+      # https://www.mono-project.com/docs/faq/licensing/
+      # https://github.com/mono/mono/blob/main/LICENSE
+    ];
+    mainProgram = "mono";
+  };
+})

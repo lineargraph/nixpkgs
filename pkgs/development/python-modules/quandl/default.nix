@@ -1,40 +1,35 @@
 {
-  lib, fetchFromGitHub, buildPythonPackage, isPy3k,
-  # runtime dependencies
-  pandas, numpy, requests, inflection, python-dateutil, six, more-itertools,
-  # test suite dependencies
-  nose, unittest2, flake8, httpretty, mock, factory_boy, jsondate,
-  # additional runtime dependencies are required on Python 2.x
-  pyOpenSSL ? null, ndg-httpsclient ? null, pyasn1 ? null
+  lib,
+  buildPythonPackage,
+  factory-boy,
+  faker,
+  fetchPypi,
+  httpretty,
+  inflection,
+  jsondate,
+  mock,
+  more-itertools,
+  numpy,
+  pandas,
+  parameterized,
+  pytestCheckHook,
+  python-dateutil,
+  requests,
+  six,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "quandl";
-  version = "3.2.1";
-  sha256 = "0vc0pzs2px9yaqkqcmd2m1b2bq1iils8fs0xbl0989hjq791a4jr";
+  version = "3.7.0";
+  format = "setuptools";
 
-  patches = [ ./allow-requests-v2.18.patch ];
-
-  # Tests do not work with fetchPypi
-  src = fetchFromGitHub {
-    owner = pname;
-    repo = "quandl-python";
-    rev = "refs/tags/v${version}";
-    inherit sha256;
-    fetchSubmodules = true; # Fetching by tag does not work otherwise
+  src = fetchPypi {
+    inherit (finalAttrs) version;
+    pname = "Quandl";
+    hash = "sha256-bguC+8eGFhCzV3xTlyd8QiDgZe7g/tTkbNa2AhZVtkw=";
   };
 
-  doCheck = true;
-
-  checkInputs = [
-    nose
-    unittest2
-    flake8
-    httpretty
-    mock
-    factory_boy
-    jsondate
-  ];
+  patches = [ ./pandas2-datetime-removal.patch ];
 
   propagatedBuildInputs = [
     pandas
@@ -44,16 +39,25 @@ buildPythonPackage rec {
     python-dateutil
     six
     more-itertools
-  ] ++ lib.optional (!isPy3k) [
-    pyOpenSSL
-    ndg-httpsclient
-    pyasn1
   ];
 
+  nativeCheckInputs = [
+    factory-boy
+    faker
+    httpretty
+    jsondate
+    mock
+    parameterized
+    pytestCheckHook
+  ];
+
+  pythonImportsCheck = [ "quandl" ];
+
   meta = {
-    homepage = "https://github.com/quandl/quandl-python";
     description = "Quandl Python client library";
-    maintainers = [ lib.maintainers.ilya-kolpakov ];
+    homepage = "https://github.com/quandl/quandl-python";
+    changelog = "https://github.com/quandl/quandl-python/blob/master/CHANGELOG.md";
     license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ ilya-kolpakov ];
   };
-}
+})

@@ -1,29 +1,34 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg }:
+{
+  lib,
+  ocaml,
+  fetchurl,
+  buildDunePackage,
+  eqaf,
+  alcotest,
+  crowbar,
+}:
 
-if !stdenv.lib.versionAtLeast ocaml.version "4.3"
-then throw "digestif is not available for OCaml ${ocaml.version}"
-else
-
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-digestif-${version}";
-  version = "0.5";
+buildDunePackage (finalAttrs: {
+  pname = "digestif";
+  version = "1.3.1";
 
   src = fetchurl {
-    url = "https://github.com/mirage/digestif/releases/download/v${version}/digestif-${version}.tbz";
-    sha256 = "0fsyfi5ps17j3wjav5176gf6z3a5xcw9aqhcr1gml9n9ayfbkhrd";
+    url = "https://github.com/mirage/digestif/releases/download/v${finalAttrs.version}/digestif-${finalAttrs.version}.tbz";
+    hash = "sha256-OSeUmlbUNawhBs24OUQAv/mJ1EVn66kDjkfbJmzIhGY=";
   };
 
-  unpackCmd = "tar -xjf $curSrc";
+  propagatedBuildInputs = [ eqaf ];
 
-  buildInputs = [ ocaml findlib ocamlbuild topkg ];
-
-  inherit (topkg) buildPhase installPhase;
+  checkInputs = [
+    alcotest
+    crowbar
+  ];
+  doCheck = true;
 
   meta = {
     description = "Simple hash algorithms in OCaml";
     homepage = "https://github.com/mirage/digestif";
-    license = stdenv.lib.licenses.mit;
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
-    inherit (ocaml.meta) platforms;
+    license = lib.licenses.mit;
+    maintainers = [ lib.maintainers.vbgl ];
   };
-}
+})

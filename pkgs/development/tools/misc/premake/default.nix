@@ -1,18 +1,20 @@
-{ stdenv, fetchurl, unzip }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  unzip,
+}:
 
-let baseName = "premake";
-  version  = "4.3";
-in
-
-stdenv.mkDerivation {
-  name = "${baseName}-${version}";
+stdenv.mkDerivation rec {
+  pname = "premake";
+  version = "4.3";
 
   src = fetchurl {
-    url = "mirror://sourceforge/${baseName}/${baseName}-${version}-src.zip";
+    url = "mirror://sourceforge/premake/premake-${version}-src.zip";
     sha256 = "1017rd0wsjfyq2jvpjjhpszaa7kmig6q1nimw76qx3cjz2868lrn";
   };
 
-  buildInputs = [ unzip ];
+  nativeBuildInputs = [ unzip ];
 
   buildPhase = ''
     make -C build/gmake.unix/
@@ -22,11 +24,15 @@ stdenv.mkDerivation {
     install -Dm755 bin/release/premake4 $out/bin/premake4
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://industriousone.com/premake;
-    description = "A simple build configuration and project generation tool using lua";
-    license = stdenv.lib.licenses.bsd3;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.bjornfor ];
+  premake_cmd = "premake4";
+  setupHook = ./setup-hook.sh;
+
+  meta = {
+    description = "Simple build configuration and project generation tool using lua";
+    homepage = "https://premake.github.io/";
+    license = lib.licenses.bsd3;
+    maintainers = [ lib.maintainers.bjornfor ];
+    mainProgram = "premake4";
+    platforms = lib.platforms.unix;
   };
 }

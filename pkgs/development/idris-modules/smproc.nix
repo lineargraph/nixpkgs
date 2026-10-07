@@ -1,16 +1,14 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, base
-, contrib
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  contrib,
+  lib,
 }:
-build-idris-package  {
-  name = "smproc";
+build-idris-package {
+  pname = "smproc";
   version = "2018-02-08";
 
-  idrisDeps = [ prelude base contrib ];
+  idrisDeps = [ contrib ];
 
   src = fetchFromGitHub {
     owner = "jameshaydon";
@@ -21,9 +19,8 @@ build-idris-package  {
 
   meta = {
     description = "Well-typed symmetric-monoidal category of concurrent processes";
-    homepage = https://github.com/jameshaydon/smproc;
+    homepage = "https://github.com/jameshaydon/smproc";
     license = lib.licenses.mit;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

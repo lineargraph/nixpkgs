@@ -1,6 +1,4 @@
-source $stdenv/setup
-
-(echo '#!/usr/bin/env sh'; \
+(echo "#!$SHELL"; \
  echo 'ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$@"') > ssh
 chmod +x ssh
 export CVS_RSH=$PWD/ssh
@@ -23,5 +21,3 @@ else
 fi
 (cd export && cvs -f -z0 -d "$cvsRoot" export $tag "$module")
 mv export/* $out
-
-stopNest

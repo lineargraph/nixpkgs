@@ -1,105 +1,123 @@
-{ stdenv, fetchurl, fetchpatch, zlib, openssl, perl, libedit, pkgconfig, pam, autoreconfHook
-, etcDir ? null
-, hpnSupport ? false
-, withKerberos ? true
-, withGssapiPatches ? false
-, kerberos
-, linkOpenssl? true
+{
+  callPackage,
+  lib,
+  fetchurl,
+  fetchpatch,
+  autoreconfHook,
 }:
-
 let
+  common = opts: callPackage (import ./common.nix opts) { };
 
-  # **please** update this patch when you update to a new openssh release.
-  gssapiPatch = fetchpatch {
-    name = "openssh-gssapi.patch";
-    url = "https://salsa.debian.org/ssh-team/openssh/raw/"
-      + "e395eed38096fcda74398424ea94de3ec44effd5"
-      + "/debian/patches/gssapi.patch";
-    sha256 = "0x7xysgdahb4jaq0f28g2d7yzp0d3mh59i4xnffszvjndhvbk27x";
+  # Gets the OpenSSH mirror URL.
+  urlFor = version: "mirror://openbsd/OpenSSH/portable/openssh-${version}.tar.gz";
+in
+{
+  openssh = common rec {
+    pname = "openssh";
+    version = "10.5p1";
+
+    src = fetchurl {
+      url = urlFor version;
+      hash = "sha256-1E0oqDnqna+WnMaRUP3lmRCys5Nh2tgaO9bL0ZIY2xE=";
+    };
+
+    extraPatches = [
+      # Use ssh-keysign from PATH
+      # ssh-keysign is used for host-based authentication, and is designed to be used
+      # as SUID-root program. OpenSSH defaults to referencing it from libexec, which
+      # cannot be made SUID in Nix.
+      ./ssh-keysign-8.5.patch
+    ];
+    extraMeta = {
+      maintainers = with lib.maintainers; [
+        das_j
+        helsinki-Jo
+        numinit
+        philiptaron
+      ];
+    };
   };
 
-in
-with stdenv.lib;
-stdenv.mkDerivation rec {
-  name = "openssh-${version}";
-  version = if hpnSupport then "7.7p1" else "7.7p1";
+  openssh_hpn = common rec {
+    pname = "openssh-with-hpn";
+    version = "10.5p1";
+    extraDesc = " with high performance networking patches";
 
-  src = if hpnSupport then
-      fetchurl {
-        url = "https://github.com/rapier1/openssh-portable/archive/hpn-KitchenSink-7_7_P1.tar.gz";
-        sha256 = "1l4k8mg3gnzxbz53cma8s6ak56waz03ijsr08p8vgpi0c2rc5ri5";
-      }
-    else
-      fetchurl {
-        url = "mirror://openbsd/OpenSSH/portable/${name}.tar.gz";
-        sha256 = "13vbbrvj3mmfhj83qyrg5c0ipr6bzw5s65dy4k8gr7p9hkkfffyp";
-      };
+    src = fetchurl {
+      url = urlFor version;
+      hash = "sha256-1E0oqDnqna+WnMaRUP3lmRCys5Nh2tgaO9bL0ZIY2xE=";
+    };
 
-  patches =
-    [
-      ./locale_archive.patch
-      ./fix-host-key-algorithms-plus.patch
+    extraPatches =
+      let
+        urlBase = "https://raw.githubusercontent.com/freebsd/freebsd-ports/b6e1767f0a502a384a7b9270a89123775a4bdc21/security/openssh-portable/files";
+        noBlocklistdHpnGluePatch = "${urlBase}/extra-patch-no-blocklistd-hpn-glue";
+        hpnPatch = "${urlBase}/extra-patch-hpn";
+      in
+      [
+        ./ssh-keysign-8.5.patch
 
-      # See discussion in https://github.com/NixOS/nixpkgs/pull/16966
-      ./dont_create_privsep_path.patch
-    ]
-    ++ optional withGssapiPatches (assert withKerberos; gssapiPatch);
+        # the blocklistd patch from FreeBSD ports is now required for HPN,
+        # unless we apply this HPN glue patch
+        (fetchpatch {
+          name = "ssh-no-blocklistd-hpn-glue.patch";
+          url = noBlocklistdHpnGluePatch;
+          extraPrefix = "";
+          hash = "sha256-+AeJ9fLmmT/P07JZvGaXpNft+2F9PoFsbzr+s9wfdro=";
+        })
 
-  postPatch =
-    # On Hydra this makes installation fail (sometimes?),
-    # and nix store doesn't allow such fancy permission bits anyway.
-    ''
-      substituteInPlace Makefile.in --replace '$(INSTALL) -m 4711' '$(INSTALL) -m 0711'
-    '';
+        # HPN Patch from FreeBSD ports
+        (fetchpatch {
+          name = "ssh-hpn-wo-channels.patch";
+          url = hpnPatch;
+          stripLen = 1;
+          excludes = [ "channels.c" ];
+          hash = "sha256-Hq30DZ5i32aHalliyjdELe91aMDTT7/vAANY8RVn6B4=";
+        })
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ zlib openssl libedit pam ]
-    ++ optional withKerberos kerberos
-    ++ optional hpnSupport autoreconfHook
-    ;
+        (fetchpatch {
+          name = "ssh-hpn-channels.patch";
+          url = hpnPatch;
+          extraPrefix = "";
+          includes = [ "channels.c" ];
+          hash = "sha256-pDLUbjv5XIyByEbiRAXC3WMUPKmn15af1stVmcvr7fE=";
+        })
+      ];
 
-  preConfigure = ''
-    # Setting LD causes `configure' and `make' to disagree about which linker
-    # to use: `configure' wants `gcc', but `make' wants `ld'.
-    unset LD
-  '';
+    extraNativeBuildInputs = [ autoreconfHook ];
 
-  # I set --disable-strip because later we strip anyway. And it fails to strip
-  # properly when cross building.
-  configureFlags = [
-    "--sbindir=\${out}/bin"
-    "--localstatedir=/var"
-    "--with-pid-dir=/run"
-    "--with-mantype=man"
-    "--with-libedit=yes"
-    "--disable-strip"
-    (if pam != null then "--with-pam" else "--without-pam")
-  ] ++ optional (etcDir != null) "--sysconfdir=${etcDir}"
-    ++ optional withKerberos (assert kerberos != null; "--with-kerberos5=${kerberos}")
-    ++ optional stdenv.isDarwin "--disable-libutil"
-    ++ optional (!linkOpenssl) "--without-openssl";
+    extraConfigureFlags = [ "--with-hpn" ];
+    extraMeta = {
+      maintainers = with lib.maintainers; [ abbe ];
+    };
+  };
 
-  enableParallelBuilding = true;
+  openssh_gssapi = common rec {
+    pname = "openssh-with-gssapi";
+    version = "10.4p1";
+    extraDesc = " with GSSAPI support";
 
-  hardeningEnable = [ "pie" ];
+    src = fetchurl {
+      url = urlFor version;
+      hash = "sha256-72Am3SrqjVYFljjV0yYpAsiSzrqfiDlYNeDQbT+2Mjg=";
+    };
 
-  postInstall = ''
-    # Install ssh-copy-id, it's very useful.
-    cp contrib/ssh-copy-id $out/bin/
-    chmod +x $out/bin/ssh-copy-id
-    cp contrib/ssh-copy-id.1 $out/share/man/man1/
-  '';
+    extraPatches = [
+      ./ssh-keysign-8.5.patch
 
-  installTargets = [ "install-nokeys" ];
-  installFlags = [
-    "sysconfdir=\${out}/etc/ssh"
-  ];
+      (fetchpatch {
+        name = "servconf-fix-gssapi.patch";
+        url = "https://salsa.debian.org/ssh-team/openssh/raw/debian/1%2510.4p1-1/debian/patches/servconf-fix-gssapi.patch";
+        hash = "sha256-ypyaoEhwxo7SYVpjMkCQnrcFgY2ouWJQlrbJy50Lidk=";
+      })
 
-  meta = {
-    homepage = http://www.openssh.com/;
-    description = "An implementation of the SSH protocol";
-    license = stdenv.lib.licenses.bsd2;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ eelco aneeshusa ];
+      (fetchpatch {
+        name = "gssapi.patch";
+        url = "https://salsa.debian.org/ssh-team/openssh/raw/debian/1%2510.4p1-1/debian/patches/gssapi.patch";
+        hash = "sha256-K12AE4C0zMdRdMsRMQCMRIFvN+NhNvCgyt0NDZp7n24=";
+      })
+    ];
+
+    extraNativeBuildInputs = [ autoreconfHook ];
   };
 }

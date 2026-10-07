@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, ... }:
 
 with lib;
 
@@ -28,14 +28,13 @@ in
       description = ''
         SCSI link power management policy. The kernel default is
         "max_performance".
-        </para><para>
+
         "med_power_with_dipm" is supported by kernel versions
         4.15 and newer.
       '';
     };
 
   };
-
 
   ###### implementation
 

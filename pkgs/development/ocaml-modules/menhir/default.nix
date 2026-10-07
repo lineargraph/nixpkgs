@@ -1,12 +1,31 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild
-, version ? if stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "4.02" then "20170712" else "20140422"
-}@args:
+{
+  buildDunePackage,
+  replaceVars,
+  ocaml,
+  menhirGLR,
+  menhirLib,
+  menhirSdk,
+}:
 
-let
-  sha256 =
-  if version == "20140422" then "1ki1f2id6a14h9xpv2k8yb6px7dyw8cvwh39csyzj4qpzx7wia0d"
-  else if version == "20170712" then "006hq3bwj81j67f2k9cgzj5wr4hai8j36925p5n3sd2j01ljsj6a"
-  else throw ("menhir: unknown version " ++ version);
-in
+buildDunePackage {
+  pname = "menhir";
 
-import ./generic.nix (args // { inherit version sha256; })
+  inherit (menhirLib) version src;
+
+  buildInputs = [
+    menhirGLR
+    menhirLib
+    menhirSdk
+  ];
+
+  patches = [
+    (replaceVars ./menhir-suggest-menhirLib.patch {
+      libdir = "${menhirLib}/lib/ocaml/${ocaml.version}/site-lib/menhirLib";
+    })
+  ];
+
+  meta = menhirSdk.meta // {
+    description = "LR(1) parser generator for OCaml";
+    mainProgram = "menhir";
+  };
+}

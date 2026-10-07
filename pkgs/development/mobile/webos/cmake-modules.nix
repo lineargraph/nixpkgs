@@ -1,7 +1,12 @@
-{ stdenv, fetchFromGitHub, cmake }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  cmake,
+}:
 
 stdenv.mkDerivation rec {
-  name = "cmake-modules-webos-${version}";
+  pname = "cmake-modules-webos";
   version = "19";
 
   src = fetchFromGitHub {
@@ -24,9 +29,17 @@ stdenv.mkDerivation rec {
 
   setupHook = ./cmake-setup-hook.sh;
 
-  meta = with stdenv.lib; {
+  postPatch = ''
+    substituteInPlace CMakeLists.txt \
+      --replace-fail "cmake_minimum_required(VERSION 2.8.7)" "cmake_minimum_required(VERSION 3.10)"
+    substituteInPlace webOS/webOS.cmake \
+      --replace-fail "cmake_minimum_required(VERSION 2.8.7)" "cmake_minimum_required(VERSION 3.10)"
+  '';
+
+  meta = {
     description = "CMake modules needed to build Open WebOS components";
-    license = licenses.asl20;
-    maintainers = with maintainers; [ dtzWill ];
+    homepage = "https://github.com/openwebos/cmake-modules-webos";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
   };
 }

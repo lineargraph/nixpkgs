@@ -1,38 +1,74 @@
-{ stdenv, buildPythonPackage, fetchPypi, pythonAtLeast,
-  ipaddress, websocket_client, urllib3, pyyaml, requests_oauthlib, python-dateutil, google_auth,
-  isort, pytest, coverage, mock, sphinx, autopep8, pep8, codecov, recommonmark, nose }:
+{
+  lib,
+  stdenv,
+  adal,
+  buildPythonPackage,
+  certifi,
+  durationpy,
+  fetchFromGitHub,
+  google-auth,
+  mock,
+  pytestCheckHook,
+  python-dateutil,
+  pyyaml,
+  requests,
+  requests-oauthlib,
+  setuptools,
+  six,
+  urllib3,
+  websocket-client,
+}:
 
 buildPythonPackage rec {
   pname = "kubernetes";
-  version = "5.0.0";
+  version = "35.0.0";
+  pyproject = true;
 
-  prePatch = ''
-    sed -e 's/sphinx>=1.2.1,!=1.3b1,<1.4 # BSD/sphinx/' -i test-requirements.txt
-
-    # This is used to randomize tests, which is not reproducible. Drop it.
-    sed -e '/randomize/d' -i test-requirements.txt
-  ''
-  # This is a python2 and python3.2 only requiremet since it is a backport of a python-3.3 api.
-  + (if (pythonAtLeast "3.3")  then ''
-    sed -e '/ipaddress/d' -i requirements.txt
-  '' else "");
-
-  checkPhase = ''
-    py.test
-  '';
-
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1z8rrlq73bzli9rg57kj8ivz09vhsydyjq1ksbcis6j7h9c187zq";
+  src = fetchFromGitHub {
+    owner = "kubernetes-client";
+    repo = "python";
+    tag = "v${version}";
+    hash = "sha256-q52LqOz8aQkzWPwEy1c2jUQJ3hQ2sDVrYGkOgOc7Mm0=";
   };
 
-  checkInputs = [ isort coverage pytest mock sphinx autopep8 pep8 codecov recommonmark nose ];
-  propagatedBuildInputs = [ ipaddress websocket_client urllib3 pyyaml requests_oauthlib python-dateutil google_auth ];
+  build-system = [
+    setuptools
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Kubernetes python client";
-    homepage = https://github.com/kubernetes-client/python;
-    license = licenses.asl20;
-    maintainers = with maintainers; [ lsix ];
+  dependencies = [
+    certifi
+    durationpy
+    google-auth
+    python-dateutil
+    pyyaml
+    requests
+    requests-oauthlib
+    six
+    urllib3
+    websocket-client
+  ];
+
+  optional-dependencies = {
+    adal = [ adal ];
+  };
+
+  pythonImportsCheck = [ "kubernetes" ];
+
+  nativeCheckInputs = [
+    mock
+    pytestCheckHook
+  ]
+  ++ lib.concatAttrValues optional-dependencies;
+
+  disabledTests = lib.optionals stdenv.hostPlatform.isDarwin [
+    # AssertionError: <class 'urllib3.poolmanager.ProxyManager'> != <class 'urllib3.poolmanager.Poolmanager'>
+    "test_rest_proxycare"
+  ];
+
+  meta = {
+    description = "Kubernetes Python client";
+    homepage = "https://github.com/kubernetes-client/python";
+    changelog = "https://github.com/kubernetes-client/python/releases/tag/${src.tag}";
+    license = lib.licenses.asl20;
   };
 }

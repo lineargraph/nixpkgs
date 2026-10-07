@@ -1,47 +1,105 @@
-{ pkgs, stdenv, fetchFromGitHub, erlang, rebar, makeWrapper,
-  coreutils, curl, bash, debugInfo ? false }:
-
-{ baseName ? "elixir"
-, version
-, minimumOTPVersion
-, sha256 ? null
-, rev ? "v${version}"
-, src ? fetchFromGitHub { inherit rev sha256; owner = "elixir-lang"; repo = "elixir"; }
+{
+  version,
+  hash,
+  minimumOTPVersion,
+  maximumOTPVersion ? null,
+}:
+{
+  bash,
+  config,
+  coreutils,
+  curl,
+  debugInfo ? false,
+  erlang,
+  fetchFromGitHub,
+  lib,
+  makeWrapper,
+  nix-update-script,
+  stdenv,
 }:
 
 let
-  inherit (stdenv.lib) getVersion versionAtLeast;
+  inherit (lib)
+    assertMsg
+    concatStringsSep
+    getVersion
+    optionals
+    optionalString
+    toInt
+    versions
+    versionAtLeast
+    versionOlder
+    ;
 
+  compatibilityMsg = ''
+    Unsupported elixir and erlang OTP combination.
+
+    elixir ${version}
+    erlang OTP ${getVersion erlang} is not >= ${minimumOTPVersion} ${
+      optionalString (maximumOTPVersion != null) "and <= ${maximumOTPVersion}"
+    }
+
+    See https://hexdocs.pm/elixir/${version}/compatibility-and-deprecations.html
+  '';
+
+  maxShiftMajor = toString ((toInt (versions.major maximumOTPVersion)) + 1);
+  maxAssert =
+    if (maximumOTPVersion == null) then
+      true
+    else
+      versionOlder (versions.major (getVersion erlang)) maxShiftMajor;
+  minAssert = versionAtLeast (getVersion erlang) minimumOTPVersion;
+  bothAssert = minAssert && maxAssert;
+
+  elixirShebang =
+    if stdenv.hostPlatform.isDarwin then
+      # Darwin disallows shebang scripts from using other scripts as their
+      # command. Use env as an intermediary instead of calling elixir directly
+      # (another shebang script).
+      # See https://github.com/NixOS/nixpkgs/pull/9671
+      "${coreutils}/bin/env $out/bin/elixir"
+    else
+      "$out/bin/elixir";
+
+  erlc_opts = [ "deterministic" ] ++ optionals debugInfo [ "debug_info" ];
 in
-  assert versionAtLeast (getVersion erlang) minimumOTPVersion;
+if !config.allowAliases && !bothAssert then
+  # Don't throw without aliases to not break CI.
+  null
+else
+  assert assertMsg bothAssert compatibilityMsg;
+  stdenv.mkDerivation {
+    pname = "elixir";
 
-  stdenv.mkDerivation ({
-    name = "${baseName}-${version}";
+    src = fetchFromGitHub {
+      owner = "elixir-lang";
+      repo = "elixir";
+      rev = "v${version}";
+      inherit hash;
+    };
 
-    inherit src version;
+    inherit version debugInfo;
 
-    buildInputs = [ erlang rebar makeWrapper ];
+    nativeBuildInputs = [ makeWrapper ];
+    buildInputs = [ erlang ];
 
-    LOCALE_ARCHIVE = stdenv.lib.optionalString stdenv.isLinux
-      "${pkgs.glibcLocales}/lib/locale/locale-archive";
-    LANG = "en_US.UTF-8";
-    LC_TYPE = "en_US.UTF-8";
-
-    setupHook = ./setup-hook.sh;
-
-    inherit debugInfo;
-
-    buildFlags = if debugInfo
-      then "ERL_COMPILER_OPTIONS=debug_info"
-      else "";
+    env = {
+      LANG = "C.UTF-8";
+      LC_TYPE = "C.UTF-8";
+      DESTDIR = placeholder "out";
+      PREFIX = "/";
+      ERL_COMPILER_OPTIONS = "[${concatStringsSep "," erlc_opts}]";
+    };
 
     preBuild = ''
-      # The build process uses ./rebar. Link it to the nixpkgs rebar
-      rm -v rebar
-      ln -s ${rebar}/bin/rebar rebar
+      patchShebangs lib/elixir/scripts/generate_app.escript || true
+    '';
 
-      substituteInPlace Makefile \
-        --replace "/usr/local" $out
+    # copy stdlib source files for LSP access
+    postInstall = ''
+      for d in lib/*; do
+        cp -R "$d/lib" "$out/lib/elixir/$d"
+      done
     '';
 
     postFixup = ''
@@ -49,20 +107,36 @@ in
       # to PATH so the scripts can run without problems.
 
       for f in $out/bin/*; do
-       b=$(basename $f)
+        b=$(basename $f)
         if [ "$b" = mix ]; then continue; fi
         wrapProgram $f \
-          --prefix PATH ":" "${stdenv.lib.makeBinPath [ erlang coreutils curl bash ]}" \
-          --set CURL_CA_BUNDLE /etc/ssl/certs/ca-certificates.crt
+          --prefix PATH ":" "${
+            lib.makeBinPath [
+              erlang
+              coreutils
+              curl
+              bash
+            ]
+          }"
       done
 
       substituteInPlace $out/bin/mix \
-            --replace "/usr/bin/env elixir" "${coreutils}/bin/env elixir"
+        --replace "/usr/bin/env elixir" "${elixirShebang}"
     '';
 
-    meta = with stdenv.lib; {
-      homepage = https://elixir-lang.org/;
-      description = "A functional, meta-programming aware language built on top of the Erlang VM";
+    passthru.updateScript = nix-update-script {
+      extraArgs = [
+        "--version-regex"
+        "v(${lib.versions.major version}\\.${lib.versions.minor version}\\.[0-9\\-rc.]+)"
+        "--override-filename"
+        "pkgs/development/interpreters/elixir/${lib.versions.major version}.${lib.versions.minor version}.nix"
+      ];
+    };
+
+    meta = {
+      homepage = "https://elixir-lang.org/";
+      description = "Functional, meta-programming aware language built on top of the Erlang VM";
+      changelog = "https://github.com/elixir-lang/elixir/releases/tag/v${version}";
 
       longDescription = ''
         Elixir is a functional, meta-programming aware language built on
@@ -72,8 +146,8 @@ in
         with hot code upgrades.
       '';
 
-      license = licenses.epl10;
-      platforms = platforms.unix;
-      maintainers = with maintainers; [ the-kenny havvy couchemar ankhers ];
+      license = lib.licenses.asl20;
+      platforms = lib.platforms.unix;
+      teams = [ lib.teams.beam ];
     };
-  })
+  }

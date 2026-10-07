@@ -1,25 +1,44 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  file,
+  setuptools,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "sqlmap";
-  version = "1.2.5";
-  name = "${pname}-${version}";
+  version = "1.10.9";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "93fe37e535f4aabd05a7456295f39c0af73cbcd0511750663fc7a718c5915919";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-YiColRzO57wX5CRkB/++LJSGiagxkvIZTDVInHolUHY=";
   };
+
+  postPatch = ''
+    substituteInPlace sqlmap/thirdparty/magic/magic.py --replace "ctypes.util.find_library('magic')" \
+      "'${file}/lib/libmagic${stdenv.hostPlatform.extensions.sharedLibrary}'"
+
+    # the check for the last update date does not work in Nix,
+    # since the timestamp of the all files in the nix store is reset to the unix epoch
+    echo 'LAST_UPDATE_NAGGING_DAYS = float("inf")' >> sqlmap/lib/core/settings.py
+  '';
+
+  build-system = [ setuptools ];
 
   # No tests in archive
   doCheck = false;
 
-  meta = with lib; {
-    homepage = "http://sqlmap.org";
-    license = licenses.gpl2;
+  pythonImportsCheck = [ "sqlmap" ];
+
+  meta = {
     description = "Automatic SQL injection and database takeover tool";
-    maintainers = with maintainers; [ bennofs ];
+    homepage = "https://sqlmap.org";
+    changelog = "https://github.com/sqlmapproject/sqlmap/releases/tag/${finalAttrs.version}";
+    license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ bennofs ];
+    mainProgram = "sqlmap";
   };
-}
+})

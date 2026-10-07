@@ -1,21 +1,56 @@
-{ stdenv, buildPythonPackage, fetchurl, pytest, isPy3k }:
+{
+  lib,
+  buildPythonPackage,
+  callPackage,
+  fetchFromGitHub,
+  pythonOlder,
+  pytest,
+  setuptools-scm,
+  typing-extensions,
+}:
+
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "pytest-asyncio";
-  version = "0.8.0";
+  version = "1.4.0"; # N.B.: when updating, tests bleak and aioesphomeapi tests
+  pyproject = true;
 
-  disabled = !isPy3k;
-
-  src = fetchurl {
-    url = "mirror://pypi/p/${pname}/${name}.tar.gz";
-    sha256 = "f32804bb58a66e13a3eda11f8942a71b1b6a30466b0d2ffe9214787aab0e172e";
+  src = fetchFromGitHub {
+    owner = "pytest-dev";
+    repo = "pytest-asyncio";
+    tag = "v${version}";
+    hash = "sha256-MuTLCRHCuD9TwJkMiFIC5Xv5Xz6NL8j4JZpW8BA45SI=";
   };
+
+  outputs = [
+    "out"
+    "testout"
+  ];
+
+  build-system = [ setuptools-scm ];
+
+  pythonRelaxDeps = [ "pytest" ];
 
   buildInputs = [ pytest ];
 
-  meta = with stdenv.lib; {
-    description = "library for testing asyncio code with pytest";
-    license = licenses.asl20;
-    homepage = https://github.com/pytest-dev/pytest-asyncio;
+  dependencies = lib.optionals (pythonOlder "3.13") [
+    typing-extensions
+  ];
+
+  postInstall = ''
+    mkdir $testout
+    cp -R tests $testout/tests
+  '';
+
+  doCheck = false;
+  passthru.tests.pytest = callPackage ./tests.nix { };
+
+  pythonImportsCheck = [ "pytest_asyncio" ];
+
+  meta = {
+    description = "Library for testing asyncio code with pytest";
+    homepage = "https://github.com/pytest-dev/pytest-asyncio";
+    changelog = "https://github.com/pytest-dev/pytest-asyncio/blob/${src.tag}/docs/reference/changelog.rst";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

@@ -1,28 +1,34 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, stdenv
-, libcxx
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  stdenv,
+  cppy,
+  setuptools-scm,
 }:
 
 buildPythonPackage rec {
   pname = "kiwisolver";
-  version = "1.0.1";
+  version = "1.5.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "ce3be5d520b4d2c3e5eeb4cd2ef62b9b9ab8ac6b6fedbaa0e39cdb6f50644278";
+    hash = "sha256-1Bk/PZ3D9veartDlY39F2YhQ6/AffKIOaUV/PolGtmo=";
   };
-  
-  NIX_CFLAGS_COMPILE = stdenv.lib.optionalString stdenv.isDarwin "-I${libcxx}/include/c++/v1";
-  
-  # Does not include tests
-  doCheck = false;
+
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.hostPlatform.isDarwin "-I${lib.getInclude stdenv.cc.libcxx}/include/c++/v1";
+
+  nativeBuildInputs = [ setuptools-scm ];
+
+  buildInputs = [ cppy ];
+
+  pythonImportsCheck = [ "kiwisolver" ];
 
   meta = {
-    description = "A fast implementation of the Cassowary constraint solver";
-    homepage = https://github.com/nucleic/kiwi;
+    description = "Implementation of the Cassowary constraint solver";
+    homepage = "https://github.com/nucleic/kiwi";
     license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
-
 }

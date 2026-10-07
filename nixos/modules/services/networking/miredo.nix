@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -20,16 +25,9 @@ in
 
     services.miredo = {
 
-      enable = mkEnableOption "the Miredo IPv6 tunneling service.";
+      enable = mkEnableOption "the Miredo IPv6 tunneling service";
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.miredo;
-        defaultText = "pkgs.miredo";
-        description = ''
-          The package to use for the miredo daemon's binary.
-        '';
-      };
+      package = mkPackageOption pkgs "miredo" { };
 
       serverAddress = mkOption {
         default = "teredo.remlab.net";
@@ -69,7 +67,6 @@ in
       };
     };
   };
-
 
   ###### implementation
 

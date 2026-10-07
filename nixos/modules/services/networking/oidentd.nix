@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -20,7 +25,6 @@ with lib;
 
   };
 
-
   ###### implementation
 
   config = mkIf config.services.oidentd.enable {
@@ -28,17 +32,16 @@ with lib;
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
       serviceConfig.Type = "forking";
-      script = "${pkgs.oidentd}/sbin/oidentd -u oidentd -g nogroup" +
-          optionalString config.networking.enableIPv6 " -a ::";
+      script = "${pkgs.oidentd}/sbin/oidentd -u oidentd -g nogroup";
     };
 
-    users.extraUsers.oidentd = {
+    users.users.oidentd = {
       description = "Ident Protocol daemon user";
       group = "oidentd";
       uid = config.ids.uids.oidentd;
     };
 
-    users.extraGroups.oidentd.gid = config.ids.gids.oidentd;
+    users.groups.oidentd.gid = config.ids.gids.oidentd;
 
   };
 

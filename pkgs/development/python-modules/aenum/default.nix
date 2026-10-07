@@ -1,31 +1,51 @@
-{ stdenv, fetchPypi, buildPythonPackage, python, isPy3k, glibcLocales }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pyparsing,
+  pytestCheckHook,
+  pythonAtLeast,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "aenum";
-  version = "2.1.2";
-  name = "${pname}-${version}";
+  version = "3.1.16";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "a3208e4b28db3a7b232ff69b934aef2ea1bf27286d9978e1e597d46f490e4687";
+    hash = "sha256-v6+Vib20GO46mG2FdQxzGNnSg5wbGh1v6PxT7CAc8UA=";
   };
 
-  # For Python 3, locale has to be set to en_US.UTF-8 for
-  # tests to pass
-  checkInputs = if isPy3k then [ glibcLocales ] else [];
+  nativeBuildInputs = [ setuptools ];
 
-  checkPhase = ''
-  runHook preCheck
-  ${if isPy3k then "export LC_ALL=en_US.UTF-8" else ""}
-  PYTHONPATH=`pwd` ${python.interpreter} aenum/test.py
-  runHook postCheck
-  '';
+  nativeCheckInputs = [
+    pyparsing
+    pytestCheckHook
+  ];
 
+  pythonImportsCheck = [ "aenum" ];
+
+  disabledTests = [
+    # https://github.com/ethanfurman/aenum/issues/27
+    "test_class_nested_enum_and_pickle_protocol_four"
+    "test_pickle_enum_function_with_qualname"
+    "test_stdlib_inheritence"
+    "test_subclasses_with_getnewargs_ex"
+    "test_arduino_headers"
+    "test_c_header_scanner"
+    "test_extend_flag_backwards_stdlib"
+  ]
+  ++ lib.optionals (pythonAtLeast "3.12") [
+    # AttributeError: <enum 'Color'> has no attribute 'value'. Did you mean: 'blue'?
+    "test_extend_enum_shadow_property_stdlib"
+  ];
 
   meta = {
     description = "Advanced Enumerations (compatible with Python's stdlib Enum), NamedTuples, and NamedConstants";
-    maintainers = with stdenv.lib.maintainers; [ vrthra ];
-    license = with stdenv.lib.licenses; [ bsd3 ];
-    homepage = https://bitbucket.org/stoneleaf/aenum;
+    homepage = "https://github.com/ethanfurman/aenum";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

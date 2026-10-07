@@ -1,24 +1,34 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  pytestCheckHook,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "colorlog";
-  version = "3.1.4";
+  version = "6.12.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "418db638c9577f37f0fae4914074f395847a728158a011be2a193ac491b9779d";
+  src = fetchFromGitHub {
+    owner = "borntyping";
+    repo = "python-colorlog";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-K7gxWg1OMSwcslrBvEyRIoGKSDOrlfiLmhxl8PbL/9g=";
   };
 
-  checkInputs = [ pytest ];
+  build-system = [ setuptools ];
 
-  checkPhase = ''
-    py.test -p no:logging
-  '';
+  pythonImportsCheck = [ "colorlog" ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = {
+    changelog = "https://github.com/borntyping/python-colorlog/releases/tag/${finalAttrs.src.tag}";
     description = "Log formatting with colors";
-    homepage = https://github.com/borntyping/python-colorlog;
-    license = licenses.mit;
-    maintainers = with maintainers; [ dotlambda ];
+    homepage = "https://github.com/borntyping/python-colorlog";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
-}
+})

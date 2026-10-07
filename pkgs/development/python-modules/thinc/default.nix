@@ -1,91 +1,109 @@
-{ stdenv
-, lib
-, pkgs
-, buildPythonPackage
-, fetchPypi
-, pythonOlder
-, pytest
-, cython
-, cymem
-, msgpack-numpy
-, msgpack-python
-, preshed
-, numpy
-, python
-, murmurhash
-, pathlib
-, hypothesis
-, tqdm
-, cytoolz
-, plac
-, six
-, mock
-, termcolor
-, wrapt
-, dill
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  blis,
+  cymem,
+  cython,
+  murmurhash,
+  numpy,
+  preshed,
+  setuptools,
+
+  # buildInputs
+  blas,
+
+  # dependencies
+  catalogue,
+  confection,
+  pydantic,
+  srsly,
+  wasabi,
+
+  # tests
+  hypothesis,
+  pytestCheckHook,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "thinc";
-  version = "6.10.2";
+  version = "8.3.12";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0xia81wvfrhyriywab184s49g8rpl42vcf5fy3x6xxw50a2yn7cs";
+  src = fetchFromGitHub {
+    owner = "explosion";
+    repo = "thinc";
+    tag = "release-v${finalAttrs.version}";
+    hash = "sha256-8nf+AWAD7Fy50XRJDINmyk42F7KMDhGgATwqbln3r04=";
   };
 
   postPatch = ''
-    substituteInPlace setup.py \
-      --replace "msgpack-python==" "msgpack-python>=" \
-      --replace "msgpack-numpy==" "msgpack-numpy>="
+    substituteInPlace pyproject.toml \
+      --replace-fail coverage.exceptions.CoverageWarning ""
   '';
 
-  propagatedBuildInputs = [
-   cython
-   cymem
-   msgpack-numpy
-   msgpack-python
-   preshed
-   numpy
-   murmurhash
-   pytest
-   hypothesis
-   tqdm
-   cytoolz
-   plac
-   six
-   mock
-   termcolor
-   wrapt
-   dill
-  ] ++ lib.optional (pythonOlder "3.4") pathlib;
-
-
-  checkInputs = [
-    pytest
+  build-system = [
+    blis
+    cymem
+    cython
+    murmurhash
+    numpy
+    preshed
+    setuptools
   ];
 
-  prePatch = ''
-    substituteInPlace setup.py --replace \
-      "'pathlib>=1.0.0,<2.0.0'," \
-      "\"pathlib>=1.0.0,<2.0.0; python_version<'3.4'\","
+  buildInputs = [
+    blas
+  ];
 
-    substituteInPlace setup.py --replace \
-      "'cytoolz>=0.8,<0.9'," \
-      "'cytoolz>=0.8',"
+  dependencies = [
+    blis
+    catalogue
+    confection
+    cymem
+    murmurhash
+    numpy
+    preshed
+    pydantic
+    srsly
+    wasabi
+  ];
+
+  pythonImportsCheck = [ "thinc" ];
+
+  nativeCheckInputs = [
+    hypothesis
+    pytestCheckHook
+  ];
+
+  # avoid local paths, relative imports wont resolve correctly
+  preCheck = ''
+    mv thinc/tests tests
+    rm -r thinc
   '';
 
-  # Cannot find cython modules.
-  doCheck = false;
+  pytestFlags = [
+    # UserWarning: Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.
+    "-Wignore::UserWarning"
+  ];
 
-  checkPhase = ''
-    pytest thinc/tests
-  '';
+  disabledTestPaths = [
+    # pydantic.v1.error_wrappers.ValidationError: 1 validation error for DefaultsSchema
+    "tests/test_config.py"
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Practical Machine Learning for NLP in Python";
-    homepage = https://github.com/explosion/thinc;
-    license = licenses.mit;
-    maintainers = with maintainers; [ aborsu sdll ];
-    };
-}
+  disabledTests = [
+    # RecursionError: Stack overflow (used 8148 kB)
+    "test_pickle_with_flatten"
+  ];
+
+  meta = {
+    description = "Library for NLP machine learning";
+    homepage = "https://github.com/explosion/thinc";
+    changelog = "https://github.com/explosion/thinc/releases/tag/${finalAttrs.src.tag}";
+    license = lib.licenses.mit;
+    maintainers = [ ];
+  };
+})

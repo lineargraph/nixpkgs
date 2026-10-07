@@ -1,18 +1,34 @@
-{ fetchurl, stdenv, lib
-, buildPlatform, hostPlatform
-, enableStatic ? stdenv.hostPlatform.useAndroidPrebuilt
+{
+  fetchurl,
+  stdenv,
+  lib,
+  updateAutotoolsGnuConfigScriptsHook,
+  enableStatic ? stdenv.hostPlatform.isStatic,
+  enableShared ? !stdenv.hostPlatform.isStatic,
+  enableDarwinABICompat ? false,
 }:
 
-# assert !stdenv.isLinux || hostPlatform != buildPlatform; # TODO: improve on cross
+# assert !stdenv.hostPlatform.isLinux || stdenv.hostPlatform != stdenv.buildPlatform; # TODO: improve on cross
 
-stdenv.mkDerivation rec {
-  name = "libiconv-${version}";
-  version = "1.15";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libiconv";
+  version = "1.19";
 
   src = fetchurl {
-    url = "mirror://gnu/libiconv/${name}.tar.gz";
-    sha256 = "0y1ij745r4p48mxq84rax40p10ln7fc7m243p8k8sia519i3dxfc";
+    url = "mirror://gnu/libiconv/libiconv-${finalAttrs.version}.tar.gz";
+    hash = "sha256-iN2WqMBGTsoUT8eRrmDNMc2O54Mh5nOX4l/AlcShmqY=";
   };
+
+  enableParallelBuilding = true;
+
+  # necessary to build on FreeBSD native pending inclusion of
+  # https://git.savannah.gnu.org/cgit/config.git/commit/?id=e4786449e1c26716e3f9ea182caf472e4dbc96e0
+  nativeBuildInputs = [ updateAutotoolsGnuConfigScriptsHook ];
+
+  strictDeps = true;
+
+  # https://github.com/NixOS/nixpkgs/pull/192630#discussion_r978985593
+  hardeningDisable = lib.optional (stdenv.hostPlatform.libc == "bionic") "fortify";
 
   setupHooks = [
     ../../../build-support/setup-hooks/role.bash
@@ -20,16 +36,60 @@ stdenv.mkDerivation rec {
   ];
 
   postPatch =
-    lib.optionalString ((hostPlatform != buildPlatform && hostPlatform.libc == "msvcrt") || stdenv.cc.nativeLibc)
+    lib.optionalString
+      (
+        (stdenv.hostPlatform != stdenv.buildPlatform && stdenv.hostPlatform.isMinGW) || stdenv.cc.nativeLibc
+      )
       ''
         sed '/^_GL_WARN_ON_USE (gets/d' -i srclib/stdio.in.h
-      '';
+      ''
+    + lib.optionalString (!enableShared) ''
+      sed -i -e '/preload/d' Makefile.in
+    ''
+    # The system libiconv is based on libiconv 1.11 with some ABI differences. The following changes
+    # build a compatible libiconv on Darwin, allowing it to be sustituted in place of the system one
+    # using `install_name_tool`. This removes the need to for a separate, Darwin-specific libiconv
+    # derivation and allows Darwin to benefit from upstream updates and fixes.
+    + lib.optionalString enableDarwinABICompat ''
+      for iconv_h_in in iconv.h.in iconv.h.build.in; do
+        substituteInPlace "include/$iconv_h_in" \
+          --replace-fail "#define iconv libiconv" "" \
+          --replace-fail "#define iconv_close libiconv_close" "" \
+          --replace-fail "#define iconv_open libiconv_open" "" \
+          --replace-fail "#define iconv_open_into libiconv_open_into" "" \
+          --replace-fail "#define iconvctl libiconvctl" "" \
+          --replace-fail "#define iconvlist libiconvlist" ""
+      done
+    '';
 
-  configureFlags = lib.optional stdenv.isFreeBSD "--with-pic"
-    ++ lib.optional enableStatic "--enable-static";
+  # This is hacky, but `libiconv.dylib` needs to reexport `libcharset.dylib` to match the behavior
+  # of the system libiconv on Darwin. Trying to do this by modifying the `Makefile` results in an
+  # error linking `iconv` because `libcharset.dylib` is not at its final path yet. Avoid the error
+  # by building without the reexport then clean and rebuild `libiconv.dylib` with the reexport.
+  #
+  # For an explanation why `libcharset.dylib` is reexported, see:
+  # https://github.com/apple-oss-distributions/libiconv/blob/a167071feb7a83a01b27ec8d238590c14eb6faff/xcodeconfig/libiconv.xcconfig
+  postBuild = lib.optionalString enableDarwinABICompat ''
+    make clean -C lib
+    NIX_CFLAGS_COMPILE+=" -Wl,-reexport-lcharset -L. " make -C lib -j$NIX_BUILD_CORES SHELL=$SHELL
+  '';
+
+  configureFlags = [
+    (lib.enableFeature enableStatic "static")
+    (lib.enableFeature enableShared "shared")
+  ]
+  ++ lib.optional stdenv.hostPlatform.isFreeBSD "--with-pic"
+  # Work around build failure caused by the gnulib workaround for
+  # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=114870.
+  # remove after gnulib is updated
+  ++ lib.optional stdenv.hostPlatform.isCygwin "gl_cv_clean_version_stddef=yes";
+
+  passthru = { inherit (finalAttrs) setupHooks; };
+
+  __structuredAttrs = true;
 
   meta = {
-    description = "An iconv(3) implementation";
+    description = "Iconv(3) implementation";
 
     longDescription = ''
       Some programs, like mailers and web browsers, must be able to convert
@@ -41,12 +101,13 @@ stdenv.mkDerivation rec {
       applications.
     '';
 
-    homepage = http://www.gnu.org/software/libiconv/;
+    homepage = "https://www.gnu.org/software/libiconv/";
     license = lib.licenses.lgpl2Plus;
 
     maintainers = [ ];
+    mainProgram = "iconv";
 
     # This library is not needed on GNU platforms.
     hydraPlatforms = with lib.platforms; cygwin ++ darwin ++ freebsd;
   };
-}
+})

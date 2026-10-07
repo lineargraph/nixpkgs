@@ -1,22 +1,47 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  flit-core,
+  unittestCheckHook,
+
+  # for passthru.tests
+  awsebcli,
+  black,
+  hatchling,
+  yamllint,
 }:
 
 buildPythonPackage rec {
-  pname   = "pathspec";
-  version = "0.5.6";
-  name    = "${pname}-${version}";
+  pname = "pathspec";
+  version = "1.1.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "be664567cf96a718a68b33329862d1e6f6803ef9c48a6e2636265806cfceb29d";
+    hash = "sha256-F9tezVJBBKEg4XOBTJA2epapjQfEWy4QwvORn/+Rv1o=";
+  };
+
+  nativeBuildInputs = [ flit-core ];
+
+  pythonImportsCheck = [ "pathspec" ];
+
+  checkInputs = [ unittestCheckHook ];
+
+  passthru.tests = {
+    inherit
+      awsebcli
+      black
+      hatchling
+      yamllint
+      ;
   };
 
   meta = {
     description = "Utility library for gitignore-style pattern matching of file paths";
     homepage = "https://github.com/cpburnz/python-path-specification";
+    changelog = "https://github.com/cpburnz/python-pathspec/blob/v${version}/CHANGES.rst";
     license = lib.licenses.mpl20;
-    maintainers = with lib.maintainers; [ copumpkin ];
+    maintainers = [ ];
   };
 }

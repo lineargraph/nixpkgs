@@ -1,9 +1,19 @@
-{ stdenv, fetchurl, qtdeclarative , qttools, qtbase, qmake }:
+{
+  stdenv,
+  fetchurl,
+  qtdeclarative,
+  qttools,
+  qtbase,
+  qmake,
+}:
 
 stdenv.mkDerivation rec {
-  name = "qtinstaller-${version}";
+  pname = "qtinstaller";
 
-  propagatedBuildInputs = [ qtdeclarative qttools ];
+  propagatedBuildInputs = [
+    qtdeclarative
+    qttools
+  ];
   nativeBuildInputs = [ qmake ];
 
   version = "2.0.3";
@@ -13,11 +23,15 @@ stdenv.mkDerivation rec {
     name = "qt-installer-framework-opensource-src-${version}.tar.gz";
   };
 
-  outputs = [ "out" "dev" "doc" ];
+  outputs = [
+    "out"
+    "dev"
+    "doc"
+  ];
 
   setOutputFlags = false;
-  enableParallelBuilding = true;
-  NIX_QT_SUBMODULE = true;
+  env.NIX_QT_SUBMODULE = true;
+  dontWrapQtApps = true;
 
   installPhase = ''
     mkdir -p $out/{bin,lib,share/qt-installer-framework}
@@ -40,7 +54,7 @@ stdenv.mkDerivation rec {
   '';
 
   meta = {
-    description = ''Qt installer framework'';
+    description = "Qt installer framework";
     inherit (qtbase.meta) platforms license homepage;
   };
 }

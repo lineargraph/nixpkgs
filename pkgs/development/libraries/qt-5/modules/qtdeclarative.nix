@@ -1,16 +1,26 @@
-{ qtModule, lib, python2, qtbase, qtsvg, qtxmlpatterns }:
-
-with lib;
+{
+  qtModule,
+  python3,
+  qtbase,
+  qtsvg,
+}:
 
 qtModule {
-  name = "qtdeclarative";
-  qtInputs = [ qtbase qtsvg qtxmlpatterns ];
-  nativeBuildInputs = [ python2 ];
-  outputs = [ "out" "dev" "bin" ];
+  pname = "qtdeclarative";
+  propagatedBuildInputs = [
+    qtbase
+    qtsvg
+  ];
+  nativeBuildInputs = [ python3 ];
+  outputs = [
+    "out"
+    "dev"
+    "bin"
+  ];
   preConfigure = ''
     NIX_CFLAGS_COMPILE+=" -DNIXPKGS_QML2_IMPORT_PREFIX=\"$qtQmlPrefix\""
   '';
-  configureFlags = lib.optionals (lib.versionAtLeast qtbase.version "5.11.0") [ "-qml-debug" ];
+  configureFlags = [ "-qml-debug" ];
   devTools = [
     "bin/qml"
     "bin/qmlcachegen"

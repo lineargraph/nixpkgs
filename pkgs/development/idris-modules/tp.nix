@@ -1,15 +1,11 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, base
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  lib,
 }:
-build-idris-package  {
-  name = "tp";
+build-idris-package {
+  pname = "tp";
   version = "2017-08-15";
-
-  idrisDeps = [ prelude base ];
 
   src = fetchFromGitHub {
     owner = "superfunc";
@@ -23,9 +19,8 @@ build-idris-package  {
 
   meta = {
     description = "Strongly Typed Paths for Idris";
-    homepage = https://github.com/superfunc/tp;
+    homepage = "https://github.com/superfunc/tp";
     license = lib.licenses.mit;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

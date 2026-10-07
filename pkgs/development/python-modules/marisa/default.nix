@@ -1,25 +1,49 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, marisa, swig }:
+{
+  lib,
+  buildPythonPackage,
+  marisa,
+  setuptools,
+  swig,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage {
   pname = "marisa";
-  version = "1.3.40";
+  inherit (marisa) src version;
+  pyproject = true;
 
-  src = fetchFromGitHub {
-    owner = "s-yata";
-    repo  = "marisa-trie";
-    rev   = "59e410597981475bae94d9d9eb252c1d9790dc2f";
-    sha256 = "0z4bf55np08q3cbi6gvj3cpw3zp8kf2d0jq6k74pjk066m7rapbb";
-  };
+  patches = marisa.patches or [ ];
 
-  nativeBuildInputs = [ swig marisa ];
-  buildinputs = [ marisa ];
+  # fix The 'marisa' derivation has version '0.3.1' but .dist-info/METADATA specifies version '0.0.0'.
+  postPatch = ''
+    substituteInPlace bindings/python/setup.py --replace-fail \
+      'setup(name = "marisa",' \
+      'setup(name = "marisa", version = "${marisa.version}"',
+  '';
 
-  sourceRoot = "${src.name}/bindings/python";
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "Python binding for marisa package (do not confuse with marisa-trie python bindings)";
-    homepage    = https://github.com/s-yata/marisa-trie;
-    license     = with licenses; [ bsd2 lgpl2 ];
-    maintainers = with maintainers; [ vanzef ];
+  nativeBuildInputs = [ swig ];
+
+  buildInputs = [ marisa ];
+
+  preBuild = ''
+    make -C bindings swig-python
+
+    cd bindings/python
+  '';
+
+  # upstream has no tests
+  doCheck = false;
+
+  pythonImportsCheck = [ "marisa" ];
+
+  meta = {
+    description = "Python bindings for marisa";
+    homepage = "https://github.com/s-yata/marisa-trie";
+    license = with lib.licenses; [
+      bsd2
+      lgpl21Plus
+    ];
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

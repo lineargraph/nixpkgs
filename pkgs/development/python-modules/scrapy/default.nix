@@ -1,40 +1,196 @@
-{ stdenv, buildPythonPackage, fetchurl, glibcLocales, mock, pytest, botocore,
-  testfixtures, pillow, six, twisted, w3lib, lxml, queuelib, pyopenssl,
-  service-identity, parsel, pydispatcher, cssselect, lib }:
+{
+  lib,
+  stdenv,
+  botocore,
+  buildPythonPackage,
+  cryptography,
+  cssselect,
+  defusedxml,
+  fetchFromGitHub,
+  glibcLocales,
+  hatchling,
+  httpx,
+  installShellFiles,
+  itemadapter,
+  itemloaders,
+  jmespath,
+  lxml,
+  packaging,
+  parsel,
+  pexpect,
+  protego,
+  pydispatcher,
+  pyftpdlib,
+  pyopenssl,
+  pytest-asyncio,
+  pytest-twisted,
+  pytest-xdist,
+  pytestCheckHook,
+  pythonAtLeast,
+  queuelib,
+  service-identity,
+  setuptools,
+  sybil,
+  testfixtures,
+  tldextract,
+  twisted,
+  uvloop,
+  w3lib,
+  zope-interface,
+}:
+
 buildPythonPackage rec {
-    version = "1.5.0";
-    pname = "Scrapy";
-    name = "${pname}-${version}";
+  pname = "scrapy";
+  version = "2.17.0";
+  pyproject = true;
 
-    buildInputs = [ glibcLocales mock pytest botocore testfixtures pillow ];
-    propagatedBuildInputs = [
-      six twisted w3lib lxml cssselect queuelib pyopenssl service-identity parsel pydispatcher
-    ];
+  src = fetchFromGitHub {
+    owner = "scrapy";
+    repo = "scrapy";
+    tag = version;
+    hash = "sha256-4FAZJZc8qsMn93XPNYnnbqecA29DWwh5VNNlCsnib7A=";
+  };
 
-    # Scrapy is usually installed via pip where copying all
-    # permissions makes sense. In Nix the files copied are owned by
-    # root and readonly. As a consequence scrapy can't edit the
-    # project templates.
-    patches = [ ./permissions-fix.patch ];
+  pythonRelaxDeps = [
+    "defusedxml"
+  ];
 
-    LC_ALL="en_US.UTF-8";
+  build-system = [
+    hatchling
+  ];
 
-    checkPhase = ''
-      py.test --ignore=tests/test_linkextractors_deprecated.py --ignore=tests/test_proxy_connect.py ${lib.optionalString stdenv.isDarwin "--ignore=tests/test_utils_iterators.py"}
-      # The ignored tests require mitmproxy, which depends on protobuf, but it's disabled on Python3
-      # Ignore iteration test, because lxml can't find encodings on darwin https://bugs.launchpad.net/lxml/+bug/707396
+  nativeBuildInputs = [
+    installShellFiles
+    setuptools
+  ];
+
+  dependencies = [
+    cryptography
+    cssselect
+    defusedxml
+    itemadapter
+    itemloaders
+    lxml
+    packaging
+    parsel
+    protego
+    pydispatcher
+    pyopenssl
+    queuelib
+    service-identity
+    tldextract
+    twisted
+    w3lib
+    zope-interface
+  ];
+
+  nativeCheckInputs = [
+    botocore
+    glibcLocales
+    httpx
+    jmespath
+    pexpect
+    pytest-asyncio
+    pytest-twisted
+    pytest-xdist
+    pyftpdlib
+    pytestCheckHook
+    sybil
+    testfixtures
+    uvloop
+  ];
+
+  env.LC_ALL = "en_US.UTF-8";
+
+  pytestFlags = [
+    # DeprecationWarning: There is no current event loop
+    "-Wignore::DeprecationWarning"
+  ];
+
+  disabledTestPaths = [
+    "tests/test_utils_display.py"
+    "tests/test_command_check.py"
+
+    # ConnectionRefusedError: [Errno 111] Connection refused
+    "tests/test_feedexport.py::TestFTPFeedStorage::test_append"
+    "tests/test_feedexport.py::TestFTPFeedStorage::test_append_active_mode"
+    "tests/test_feedexport.py::TestFTPFeedStorage::test_overwrite"
+    "tests/test_feedexport.py::TestFTPFeedStorage::test_overwrite_active_mode"
+
+    # this test is testing that the *first* deprecation warning is a specific one
+    # but for some reason we get other deprecation warnings appearing first
+    # but this isn't a material issue and the deprecation warning is still raised
+    "tests/test_spider_start.py::MainTestCase::test_start_deprecated_super"
+
+    # Don't test the documentation
+    "docs"
+  ]
+  ++ lib.optionals (pythonAtLeast "3.14") [
+    "tests/test_feedexport.py"
+  ];
+
+  disabledTests = [
+    # Requires network access
+    "AnonymousFTPTestCase"
+    "FTPFeedStorageTest"
+    "FeedExportTest"
+    "TestRealWebsite"
+    "test_custom_asyncio_loop_enabled_true"
+    "test_custom_loop_asyncio"
+    "test_custom_loop_asyncio_deferred_signal"
+    "test_pos_string"
+    "test_key_resp_or_url"
+    # "FileFeedStoragePreFeedOptionsTest" # https://github.com/scrapy/scrapy/issues/5157
+    "test_persist"
+    "test_timeout_download_from_spider_nodata_rcvd"
+    "test_timeout_download_from_spider_server_hangs"
+    "test_unbounded_response"
+    "CookiesMiddlewareTest"
+    "test_asyncio_enabled_reactor_same_loop"
+    "test_response_ip_address"
+    # Test fails on Hydra
+    "test_start_requests_laziness"
+
+    # Fails due to different path structure on NixOS
+    "test_start_deprecated_super"
+    "test_file_path"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    "test_xmliter_encoding"
+    "test_download"
+    "test_reactor_default_twisted_reactor_select"
+    "URIParamsSettingTest"
+    "URIParamsFeedOptionTest"
+    # flaky on darwin-aarch64
+    "test_fixed_delay"
+    "test_start_requests_laziness"
+  ]
+  ++ lib.optionals (pythonAtLeast "3.14") [
+    "test_non_pickable_object"
+  ];
+
+  postInstall = ''
+    installManPage extras/scrapy.1
+    installShellCompletion --cmd scrapy \
+      --zsh extras/scrapy_zsh_completion \
+      --bash extras/scrapy_bash_completion
+  '';
+
+  pythonImportsCheck = [ "scrapy" ];
+
+  __darwinAllowLocalNetworking = true;
+
+  meta = {
+    description = "High-level web crawling and web scraping framework";
+    mainProgram = "scrapy";
+    longDescription = ''
+      Scrapy is a fast high-level web crawling and web scraping framework, used to crawl
+      websites and extract structured data from their pages. It can be used for a wide
+      range of purposes, from data mining to monitoring and automated testing.
     '';
-
-    src = fetchurl {
-      url = "mirror://pypi/S/Scrapy/${name}.tar.gz";
-      sha256 = "31a0bf05d43198afaf3acfb9b4fb0c09c1d7d7ff641e58c66e36117f26c4b755";
-    };
-
-    meta = with lib; {
-      description = "A fast high-level web crawling and web scraping framework, used to crawl websites and extract structured data from their pages";
-      homepage = http://scrapy.org/;
-      license = licenses.bsd3;
-      maintainers = with maintainers; [ drewkett ];
-      platforms = platforms.unix;
-    };
+    homepage = "https://scrapy.org/";
+    changelog = "https://github.com/scrapy/scrapy/raw/${src.tag}/docs/news.rst";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ vinnymeller ];
+  };
 }

@@ -1,27 +1,44 @@
-{ stdenv, lib, buildPythonPackage, fetchPypi, isPy3k, dnspython, idna, ipaddress }:
+{
+  lib,
+  buildPythonPackage,
+  dnspython,
+  fetchPypi,
+  idna,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
-  pname = "email_validator";
-  version = "1.0.2";
-  name = "${pname}-${version}";
+  pname = "email-validator";
+  version = "2.3.0";
+  format = "setuptools";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "1ja9149l9ck5n45a72h3is7v476hjny5ybxbcamx1nw6iplsm7k6";
+    pname = "email_validator";
+    inherit version;
+    hash = "sha256-n8BcN/L2z0Of9BT4/EbZF5KZdKgiRMIOsQIxumDFRCY=";
   };
 
-  doCheck = false;
-
-  propagatedBuildInputs = [
+  dependencies = [
     dnspython
     idna
-  ] ++ (if isPy3k then [ ] else [ ipaddress ]);
+  ];
 
-  meta = with lib; {
-    description = "A robust email syntax and deliverability validation library for Python 2.x/3.x.";
-    homepage    = https://github.com/JoshData/python-email-validator;
-    license     = licenses.cc0;
-    maintainers = with maintainers; [ siddharthist ];
-    platforms   = platforms.unix;
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTestPaths = [
+    # dns.resolver.NoResolverConfiguration: cannot open /etc/resolv.conf
+    "tests/test_deliverability.py"
+    "tests/test_main.py"
+  ];
+
+  pythonImportsCheck = [ "email_validator" ];
+
+  meta = {
+    description = "Email syntax and deliverability validation library";
+    mainProgram = "email_validator";
+    homepage = "https://github.com/JoshData/python-email-validator";
+    changelog = "https://github.com/JoshData/python-email-validator/releases/tag/v${version}";
+    license = lib.licenses.cc0;
+    maintainers = with lib.maintainers; [ siddharthist ];
   };
 }

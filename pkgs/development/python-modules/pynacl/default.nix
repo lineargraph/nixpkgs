@@ -1,32 +1,61 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, pytest, coverage, libsodium, cffi, six, hypothesis}:
+{
+  lib,
+  buildPythonPackage,
+  cffi,
+  fetchFromGitHub,
+  hypothesis,
+  libsodium,
+  pytestCheckHook,
+  pytest-xdist,
+  setuptools,
+  sphinxHook,
+}:
 
 buildPythonPackage rec {
   pname = "pynacl";
-  version = "1.2.1";
+  version = "1.6.2";
+  outputs = [
+    "out"
+    "doc"
+  ];
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "pyca";
-    repo = pname;
-    rev = version;
-    sha256 = "0z9i1z4hjzmp23igyhvg131gikbrr947506lwfb3fayf0agwfv8f";
+    repo = "pynacl";
+    tag = version;
+    hash = "sha256-EzzJVRDgYQO6T8YIQjad/Eb9O+BXT4IpOpa48fpBPnc=";
   };
 
-  # set timeout to unlimited, remove deadline from tests, see https://github.com/pyca/pynacl/issues/370
-  patches = [ ./pynacl-no-timeout-and-deadline.patch ];
+  build-system = [
+    cffi
+    setuptools
+  ];
 
-  checkInputs = [ pytest hypothesis ];
-  propagatedBuildInputs = [ libsodium cffi six ];
+  # cffi is listed in both build-system.requires and project.dependencies,
+  # and is indeed needed in both when cross-compiling
+  dependencies = [ cffi ];
 
-  SODIUM_INSTALL = "system";
+  nativeBuildInputs = [ sphinxHook ];
 
-  checkPhase = ''
-    py.test
-  '';
-  
-  meta = with stdenv.lib; {
-    maintainers = with maintainers; [ va1entin ];
+  buildInputs = [ libsodium ];
+
+  propagatedNativeBuildInputs = [ cffi ];
+
+  nativeCheckInputs = [
+    hypothesis
+    pytestCheckHook
+    pytest-xdist
+  ];
+
+  env.SODIUM_INSTALL = "system";
+
+  pythonImportsCheck = [ "nacl" ];
+
+  meta = {
     description = "Python binding to the Networking and Cryptography (NaCl) library";
-    homepage = https://github.com/pyca/pynacl/;
-    license = licenses.asl20;
+    homepage = "https://github.com/pyca/pynacl/";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ mdaniels5757 ];
   };
 }

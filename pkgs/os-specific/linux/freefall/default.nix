@@ -1,9 +1,13 @@
-{ stdenv, kernel }:
+{
+  lib,
+  stdenv,
+  kernel,
+}:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation {
   inherit (kernel) version src;
 
-  name = "freefall-${version}";
+  pname = "freefall";
 
   postPatch = ''
     cd tools/laptop/freefall
@@ -15,10 +19,11 @@ stdenv.mkDerivation rec {
 
   makeFlags = [ "PREFIX=$(out)" ];
 
-  meta = with stdenv.lib; {
+  meta = {
     inherit (kernel.meta) homepage license;
 
     description = "Free-fall protection for spinning HP/Dell laptop hard drives";
+    mainProgram = "freefall";
     longDescription = ''
       Provides a shock protection facility in modern laptops with spinning hard
       drives, by stopping all input/output operations on the internal hard drive
@@ -28,6 +33,6 @@ stdenv.mkDerivation rec {
       disk heads, and an accelerometer device. It has no effect on SSD devices!
     '';
 
-    platforms = platforms.linux;
+    platforms = lib.platforms.linux;
   };
 }

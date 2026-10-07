@@ -1,33 +1,58 @@
-{lib, buildPythonPackage, fetchPypi, isPy3k, incremental, ipaddress, twisted
-, automat, zope_interface, idna, pyopenssl, service-identity, pytest, mock, lsof
-, GeoIP}:
+{
+  lib,
+  stdenv,
+  automat,
+  buildPythonPackage,
+  cryptography,
+  fetchPypi,
+  geoip,
+  lsof,
+  mock,
+  pytestCheckHook,
+  setuptools,
+  twisted,
+  zope-interface,
+}:
 
 buildPythonPackage rec {
   pname = "txtorcon";
-  version = "0.20.0";
-
-  checkInputs = [ pytest mock lsof GeoIP ];
-  propagatedBuildInputs = [
-    incremental twisted automat zope_interface
-    # extra dependencies required by twisted[tls]
-    idna pyopenssl service-identity
-  ] ++ lib.optionals (!isPy3k) [ ipaddress ];
+  version = "26.6.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "dc80cb76b3ddacef6d671c0a088cb1a45274c0858554c32ce55d0f41421c740e";
+    hash = "sha256-BAjwY6n8uN9Snayle7c3PqD1tOuv/NUQN1S3xWF3P2g=";
   };
 
-  # Skip a failing test until fixed upstream:
-  # https://github.com/meejah/txtorcon/issues/250
-  checkPhase = ''
-    pytest --ignore=test/test_util.py .
-  '';
+  build-system = [ setuptools ];
+
+  dependencies = [
+    cryptography
+    twisted
+    automat
+    zope-interface
+  ]
+  ++ twisted.optional-dependencies.tls;
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    mock
+    lsof
+    geoip
+  ];
+
+  doCheck = !(stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isAarch64);
+
+  pythonImportsCheck = [ "txtorcon" ];
 
   meta = {
     description = "Twisted-based Tor controller client, with state-tracking and configuration abstractions";
-    homepage = https://github.com/meejah/txtorcon;
-    maintainers = with lib.maintainers; [ jluttine ];
+    homepage = "https://github.com/meejah/txtorcon";
+    changelog = "https://github.com/meejah/txtorcon/releases/tag/v${version}";
+    maintainers = with lib.maintainers; [
+      jluttine
+      exarkun
+    ];
     license = lib.licenses.mit;
   };
 }

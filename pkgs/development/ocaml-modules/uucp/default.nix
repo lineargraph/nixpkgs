@@ -1,37 +1,65 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg, uchar, uutf, uunf }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  ocaml,
+  findlib,
+  ocamlbuild,
+  topkg,
+  uchar,
+  uutf,
+  uunf,
+  uucd,
+}:
 
-let
+stdenv.mkDerivation (finalAttrs: {
+  name = "ocaml${ocaml.version}-${finalAttrs.pname}-${finalAttrs.version}";
   pname = "uucp";
-  version = "10.0.1";
-  webpage = "http://erratique.ch/software/${pname}";
-in
-
-assert stdenv.lib.versionAtLeast ocaml.version "4.01";
-
-stdenv.mkDerivation {
-
-  name = "ocaml${ocaml.version}-${pname}-${version}";
+  version = "18.0.0";
 
   src = fetchurl {
-    url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "0qgbrx3lnrzii8a9f0hv4kp73y57q6fr79hskxxxs70q68j2xpfm";
+    url = "https://erratique.ch/software/uucp/releases/uucp-${finalAttrs.version}.tbz";
+    hash = "sha256-ut7cfFg6entCN2O625f5/UuWmQa5NFyFQifDje1jI/w=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild topkg uutf uunf ];
+  nativeBuildInputs = [
+    ocaml
+    findlib
+    ocamlbuild
+    topkg
+  ];
+  buildInputs = [
+    topkg
+    uutf
+    uunf
+    uucd
+  ];
 
   propagatedBuildInputs = [ uchar ];
 
-  unpackCmd = "tar xjf $src";
+  strictDeps = true;
 
-  buildPhase = "${topkg.buildPhase} --with-cmdliner false";
+  buildPhase = ''
+    runHook preBuild
+    ${topkg.buildPhase} --with-cmdliner false --tests ${lib.boolToString finalAttrs.finalPackage.doCheck}
+    runHook postBuild
+  '';
 
   inherit (topkg) installPhase;
 
-  meta = with stdenv.lib; {
-    description = "An OCaml library providing efficient access to a selection of character properties of the Unicode character database";
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
-    license = licenses.bsd3;
-    maintainers = [ maintainers.vbgl ];
+  doCheck = true;
+  checkPhase = ''
+    runHook preCheck
+    ${topkg.run} test
+    runHook postCheck
+  '';
+  checkInputs = [ uucd ];
+
+  meta = {
+    description = "OCaml library providing efficient access to a selection of character properties of the Unicode character database";
+    homepage = "https://erratique.ch/software/uucp";
+    inherit (ocaml.meta) platforms;
+    license = lib.licenses.bsd3;
+    maintainers = [ lib.maintainers.vbgl ];
   };
-}
+})

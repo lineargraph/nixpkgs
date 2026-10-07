@@ -1,16 +1,24 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
-let cfg = config.services.networking.websockify; in {
+let
+  cfg = config.services.networking.websockify;
+in
+{
   options = {
     services.networking.websockify = {
-      enable = mkOption {  
+      enable = mkOption {
         description = "Whether to enable websockify to forward websocket connections to TCP connections.";
 
-        default = false;   
+        default = false;
 
-        type = types.bool; 
+        type = types.bool;
       };
 
       sslCert = mkOption {
@@ -21,14 +29,14 @@ let cfg = config.services.networking.websockify; in {
       sslKey = mkOption {
         description = "Path to the SSL key.";
         default = cfg.sslCert;
-        defaultText = "config.services.networking.websockify.sslCert";
+        defaultText = literalExpression "config.services.networking.websockify.sslCert";
         type = types.path;
       };
 
       portMap = mkOption {
         description = "Ports to map by default.";
-        default = {};
-        type = types.attrsOf types.int;
+        default = { };
+        type = types.attrsOf types.port;
       };
     };
   };
@@ -38,15 +46,15 @@ let cfg = config.services.networking.websockify; in {
       description = "Service to forward websocket connections to TCP connections (from port:to port %I)";
       script = ''
         IFS=':' read -a array <<< "$1"
-        ${pkgs.pythonPackages.websockify}/bin/websockify --ssl-only \
+        ${pkgs.python3Packages.websockify}/bin/websockify --ssl-only \
           --cert=${cfg.sslCert} --key=${cfg.sslKey} 0.0.0.0:''${array[0]} 0.0.0.0:''${array[1]}
       '';
       scriptArgs = "%i";
     };
 
-    systemd.targets."default-websockify" = {
+    systemd.targets.default-websockify = {
       description = "Target to start all default websockify@ services";
-      unitConfig."X-StopOnReconfiguration" = true;
+      unitConfig.X-StopOnReconfiguration = true;
       wants = mapAttrsToList (name: value: "websockify@${name}:${toString value}.service") cfg.portMap;
       wantedBy = [ "multi-user.target" ];
     };

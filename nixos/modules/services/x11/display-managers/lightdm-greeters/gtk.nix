@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -6,49 +11,27 @@ let
 
   dmcfg = config.services.xserver.displayManager;
   ldmcfg = dmcfg.lightdm;
+  xcfg = config.services.xserver;
   cfg = ldmcfg.greeters.gtk;
 
-  inherit (pkgs) stdenv lightdm writeScript writeText;
+  inherit (pkgs) writeText;
 
   theme = cfg.theme.package;
   icons = cfg.iconTheme.package;
+  cursors = cfg.cursorTheme.package;
 
-  # The default greeter provided with this expression is the GTK greeter.
-  # Again, we need a few things in the environment for the greeter to run with
-  # fonts/icons.
-  wrappedGtkGreeter = pkgs.runCommand "lightdm-gtk-greeter"
-    { buildInputs = [ pkgs.makeWrapper ]; }
-    ''
-      # This wrapper ensures that we actually get themes
-      makeWrapper ${pkgs.lightdm_gtk_greeter}/sbin/lightdm-gtk-greeter \
-        $out/greeter \
-        --prefix PATH : "${pkgs.glibc.bin}/bin" \
-        --set GDK_PIXBUF_MODULE_FILE "${pkgs.gdk_pixbuf.out}/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache" \
-        --set GTK_PATH "${theme}:${pkgs.gtk3.out}" \
-        --set GTK_EXE_PREFIX "${theme}" \
-        --set GTK_DATA_PREFIX "${theme}" \
-        --set XDG_DATA_DIRS "${theme}/share:${icons}/share" \
-        --set XDG_CONFIG_HOME "${theme}/share"
-
-      cat - > $out/lightdm-gtk-greeter.desktop << EOF
-      [Desktop Entry]
-      Name=LightDM Greeter
-      Comment=This runs the LightDM Greeter
-      Exec=$out/greeter
-      Type=Application
-      EOF
-    '';
-
-  gtkGreeterConf = writeText "lightdm-gtk-greeter.conf"
-    ''
+  gtkGreeterConf = writeText "lightdm-gtk-greeter.conf" ''
     [greeter]
     theme-name = ${cfg.theme.name}
     icon-theme-name = ${cfg.iconTheme.name}
+    cursor-theme-name = ${cfg.cursorTheme.name}
+    cursor-theme-size = ${toString cfg.cursorTheme.size}
     background = ${ldmcfg.background}
     ${optionalString (cfg.clock-format != null) "clock-format = ${cfg.clock-format}"}
     ${optionalString (cfg.indicators != null) "indicators = ${concatStringsSep ";" cfg.indicators}"}
+    ${optionalString (xcfg.dpi != null) "xft-dpi=${toString xcfg.dpi}"}
     ${cfg.extraConfig}
-    '';
+  '';
 
 in
 {
@@ -66,14 +49,7 @@ in
 
       theme = {
 
-        package = mkOption {
-          type = types.package;
-          default = pkgs.gnome3.gnome-themes-standard;
-          defaultText = "pkgs.gnome3.gnome-themes-standard";
-          description = ''
-            The package path that contains the theme given in the name option.
-          '';
-        };
+        package = mkPackageOption pkgs "gnome-themes-extra" { };
 
         name = mkOption {
           type = types.str;
@@ -87,14 +63,7 @@ in
 
       iconTheme = {
 
-        package = mkOption {
-          type = types.package;
-          default = pkgs.gnome3.defaultIconTheme;
-          defaultText = "pkgs.gnome3.defaultIconTheme";
-          description = ''
-            The package path that contains the icon theme given in the name option.
-          '';
-        };
+        package = mkPackageOption pkgs "adwaita-icon-theme" { };
 
         name = mkOption {
           type = types.str;
@@ -104,6 +73,27 @@ in
           '';
         };
 
+      };
+
+      cursorTheme = {
+
+        package = mkPackageOption pkgs "adwaita-icon-theme" { };
+
+        name = mkOption {
+          type = types.str;
+          default = "Adwaita";
+          description = ''
+            Name of the cursor theme to use for the lightdm-gtk-greeter.
+          '';
+        };
+
+        size = mkOption {
+          type = types.int;
+          default = 16;
+          description = ''
+            Size of the cursor theme to use for the lightdm-gtk-greeter.
+          '';
+        };
       };
 
       clock-format = mkOption {
@@ -121,7 +111,16 @@ in
       indicators = mkOption {
         type = types.nullOr (types.listOf types.str);
         default = null;
-        example = [ "~host" "~spacer" "~clock" "~spacer" "~session" "~language" "~a11y" "~power" ];
+        example = [
+          "~host"
+          "~spacer"
+          "~clock"
+          "~spacer"
+          "~session"
+          "~language"
+          "~a11y"
+          "~power"
+        ];
         description = ''
           List of allowed indicator modules to use for the lightdm gtk
           greeter panel.
@@ -151,9 +150,15 @@ in
   config = mkIf (ldmcfg.enable && cfg.enable) {
 
     services.xserver.displayManager.lightdm.greeter = mkDefault {
-      package = wrappedGtkGreeter;
+      package = pkgs.lightdm-gtk-greeter.xgreeters;
       name = "lightdm-gtk-greeter";
     };
+
+    environment.systemPackages = [
+      cursors
+      icons
+      theme
+    ];
 
     environment.etc."lightdm/lightdm-gtk-greeter.conf".source = gtkGreeterConf;
 

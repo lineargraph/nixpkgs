@@ -1,21 +1,28 @@
-import ./make-test.nix ({ pkgs, ...} : {
+{ pkgs, ... }:
+{
   name = "transmission";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ coconnor ];
+  meta = {
+    maintainers = [ ];
   };
 
-  machine = { config, pkgs, ... }: {
-    imports = [ ../modules/profiles/minimal.nix ];
+  nodes.machine =
+    { ... }:
+    {
+      imports = [ ../modules/profiles/minimal.nix ];
 
-    networking.firewall.allowedTCPPorts = [ 9091 ];
+      networking.firewall.allowedTCPPorts = [ 9091 ];
 
-    services.transmission.enable = true;
-  };
+      security.apparmor.enable = true;
+
+      services.transmission.enable = true;
+    };
 
   testScript =
+    { nodes, ... }:
+    #python
     ''
-      startAll;
-      $machine->waitForUnit("transmission");
-      $machine->shutdown;
+      start_all()
+      machine.wait_for_unit("transmission")
+      machine.shutdown()
     '';
-})
+}

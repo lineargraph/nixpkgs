@@ -1,31 +1,45 @@
-{ stdenv, buildPythonPackage, fetchPypi, pythonOlder, six
-, pytest, pytest-flake8, backports_unittest-mock, keyring, setuptools_scm
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  jaraco-classes,
+  jaraco-context,
+  keyring,
+  pytestCheckHook,
+  setuptools-scm,
 }:
 
 buildPythonPackage rec {
-  pname = "keyrings.alt";
-  version = "3.1";
+  pname = "keyrings-alt";
+  version = "5.0.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0nnva8g03dv6gdhjk1ihn2qw7g15232fyj8shipah9whgfv8d75m";
+  src = fetchFromGitHub {
+    owner = "jaraco";
+    repo = "keyrings.alt";
+    tag = "v${version}";
+    hash = "sha256-m/hIXjri3FZ3rPIymiIBy8cKNOwJoj14WjsOyDtcWmU=";
   };
 
-  nativeBuildInputs = [ setuptools_scm ];
-  propagatedBuildInputs = [ six ];
+  build-system = [ setuptools-scm ];
 
-  # Fails with "ImportError: cannot import name mock"
-  #doCheck = false;
-  checkInputs = [ pytest pytest-flake8 keyring ] ++ stdenv.lib.optional (pythonOlder "3.3") backports_unittest-mock;
+  dependencies = [
+    jaraco-classes
+    jaraco-context
+  ];
 
-  checkPhase = ''
-    py.test
-  '';
+  nativeCheckInputs = [
+    pytestCheckHook
+    keyring
+  ];
 
-  meta = with stdenv.lib; {
-    license = licenses.mit;
+  pythonImportsCheck = [ "keyrings.alt" ];
+
+  meta = {
     description = "Alternate keyring implementations";
-    homepage = https://github.com/jaraco/keyrings.alt;
-    maintainers = with maintainers; [ nyarly ];
+    homepage = "https://github.com/jaraco/keyrings.alt";
+    changelog = "https://github.com/jaraco/keyrings.alt/blob/v${version}/NEWS.rst";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ nyarly ];
   };
 }

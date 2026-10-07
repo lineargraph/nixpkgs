@@ -1,96 +1,166 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
+
   cfg = config.programs.zsh.ohMyZsh;
+
+  mkLinkFarmEntry =
+    name: dir:
+    let
+      env = pkgs.buildEnv {
+        name = "zsh-${name}-env";
+        paths = cfg.customPkgs;
+        pathsToLink = [ "/share/zsh/${dir}" ];
+      };
+    in
+    {
+      inherit name;
+      path = "${env}/share/zsh/${dir}";
+    };
+
+  mkLinkFarmEntry' = name: mkLinkFarmEntry name name;
+
+  custom =
+    if cfg.custom != null then
+      cfg.custom
+    else if builtins.length cfg.customPkgs == 0 then
+      null
+    else
+      pkgs.linkFarm "oh-my-zsh-custom" [
+        (mkLinkFarmEntry' "themes")
+        (mkLinkFarmEntry "completions" "site-functions")
+        (mkLinkFarmEntry' "plugins")
+      ];
+
 in
-  {
-    options = {
-      programs.zsh.ohMyZsh = {
-        enable = mkOption {
-          default = false;
-          description = ''
-            Enable oh-my-zsh.
-          '';
-        };
+{
+  imports = [
+    (lib.mkRenamedOptionModule
+      [ "programs" "zsh" "oh-my-zsh" "enable" ]
+      [ "programs" "zsh" "ohMyZsh" "enable" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "programs" "zsh" "oh-my-zsh" "theme" ]
+      [ "programs" "zsh" "ohMyZsh" "theme" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "programs" "zsh" "oh-my-zsh" "custom" ]
+      [ "programs" "zsh" "ohMyZsh" "custom" ]
+    )
+    (lib.mkRenamedOptionModule
+      [ "programs" "zsh" "oh-my-zsh" "plugins" ]
+      [ "programs" "zsh" "ohMyZsh" "plugins" ]
+    )
+  ];
 
-        package = mkOption {
-          default = pkgs.oh-my-zsh;
-          defaultText = "pkgs.oh-my-zsh";
-          description = ''
-            Package to install for `oh-my-zsh` usage.
-          '';
+  options = {
+    programs.zsh.ohMyZsh = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Enable oh-my-zsh.
+        '';
+      };
 
-          type = types.package;
-        };
+      package = lib.mkPackageOption pkgs "oh-my-zsh" { };
 
-        plugins = mkOption {
-          default = [];
-          type = types.listOf(types.str);
-          description = ''
-            List of oh-my-zsh plugins
-          '';
-        };
+      plugins = lib.mkOption {
+        default = [ ];
+        type = lib.types.listOf (lib.types.str);
+        description = ''
+          List of oh-my-zsh plugins
+        '';
+      };
 
-        custom = mkOption {
-          default = "";
-          type = types.str;
-          description = ''
-            Path to a custom oh-my-zsh package to override config of oh-my-zsh.
-          '';
-        };
+      custom = lib.mkOption {
+        default = null;
+        type = with lib.types; nullOr str;
+        description = ''
+          Path to a custom oh-my-zsh package to override config of oh-my-zsh.
+          (Can't be used along with `customPkgs`).
+        '';
+      };
 
-        theme = mkOption {
-          default = "";
-          type = types.str;
-          description = ''
-            Name of the theme to be used by oh-my-zsh.
-          '';
-        };
+      customPkgs = lib.mkOption {
+        default = [ ];
+        type = lib.types.listOf lib.types.package;
+        description = ''
+          List of custom packages that should be loaded into `oh-my-zsh`.
+        '';
+      };
 
-        cacheDir = mkOption {
-          default = "$HOME/.cache/oh-my-zsh";
-          type = types.str;
-          description = ''
-            Cache directory to be used by `oh-my-zsh`.
-            Without this option it would default to the read-only nix store.
-          '';
-        };
+      theme = lib.mkOption {
+        default = "";
+        type = lib.types.str;
+        description = ''
+          Name of the theme to be used by oh-my-zsh.
+        '';
+      };
+
+      cacheDir = lib.mkOption {
+        default = "$HOME/.cache/oh-my-zsh";
+        type = lib.types.str;
+        description = ''
+          Cache directory to be used by `oh-my-zsh`.
+          Without this option it would default to the read-only nix store.
+        '';
+      };
+
+      preLoaded = lib.mkOption {
+        type = lib.types.lines;
+        default = "";
+        description = ''
+          Shell commands executed before the `oh-my-zsh` is loaded.
+          For example, to disable async git prompt write `zstyle ':omz:alpha:lib:git' async-prompt no` (more information <https://github.com/ohmyzsh/ohmyzsh?tab=readme-ov-file#async-git-prompt>)
+        '';
       };
     };
+  };
 
-    config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
 
-      # Prevent zsh from overwriting oh-my-zsh's prompt
-      programs.zsh.promptInit = mkDefault "";
+    # Prevent zsh from overwriting oh-my-zsh's prompt
+    programs.zsh.promptInit = lib.mkDefault "";
 
-      environment.systemPackages = [ cfg.package ];
+    environment.systemPackages = [ cfg.package ];
 
-      programs.zsh.interactiveShellInit = with builtins; ''
-        # oh-my-zsh configuration generated by NixOS
-        export ZSH=${cfg.package}/share/oh-my-zsh
+    programs.zsh.interactiveShellInit = ''
+      # oh-my-zsh configuration generated by NixOS
+      export ZSH=${cfg.package}/share/oh-my-zsh
 
-        ${optionalString (length(cfg.plugins) > 0)
-          "plugins=(${concatStringsSep " " cfg.plugins})"
-        }
+      ${lib.optionalString (
+        builtins.length (cfg.plugins) > 0
+      ) "plugins=(${builtins.concatStringsSep " " cfg.plugins})"}
 
-        ${optionalString (stringLength(cfg.custom) > 0)
-          "ZSH_CUSTOM=\"${cfg.custom}\""
-        }
+      ${lib.optionalString (custom != null) "ZSH_CUSTOM=\"${custom}\""}
 
-        ${optionalString (stringLength(cfg.theme) > 0)
-          "ZSH_THEME=\"${cfg.theme}\""
-        }
+      ${lib.optionalString (builtins.stringLength (cfg.theme) > 0) "ZSH_THEME=\"${cfg.theme}\""}
 
-        ${optionalString (cfg.cacheDir != null) ''
-          if [[ ! -d "${cfg.cacheDir}" ]]; then
-            mkdir -p "${cfg.cacheDir}"
-          fi
-          ZSH_CACHE_DIR=${cfg.cacheDir}
-        ''}
+      ${lib.optionalString (cfg.cacheDir != null) ''
+        if [[ ! -d "${cfg.cacheDir}" ]]; then
+          mkdir -p "${cfg.cacheDir}"
+        fi
+        ZSH_CACHE_DIR=${cfg.cacheDir}
+      ''}
 
-        source $ZSH/oh-my-zsh.sh
-      '';
-    };
-  }
+      ${cfg.preLoaded}
+      source $ZSH/oh-my-zsh.sh
+    '';
+
+    assertions = [
+      {
+        assertion = cfg.custom != null -> cfg.customPkgs == [ ];
+        message = "If `cfg.custom` is set for `ZSH_CUSTOM`, `customPkgs` can't be used!";
+      }
+    ];
+
+  };
+
+  meta.doc = ./oh-my-zsh.md;
+}

@@ -1,30 +1,75 @@
-{ lib
-, buildPythonPackage
-, cython
-, numpy
-, nose
-, scipy
-, scikitlearn
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  cython,
+  numpy,
+  scipy,
+  scikit-learn,
+  joblib,
+  six,
+
+  # test
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "hdbscan";
-  version = "0.8.13";
+  version = "0.8.41";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "31874db29375816688b5541287a051c9bd768f2499ccf1f6a4d88d266530e2a6";
+  src = fetchFromGitHub {
+    owner = "scikit-learn-contrib";
+    repo = "hdbscan";
+    tag = "release-${version}";
+    hash = "sha256-4uwWoNkrdLB2KzDAksPupdgkIFBgTahzravOtu1WYws=";
   };
 
-  checkInputs = [ nose ];
+  pythonRemoveDeps = [ "cython" ];
 
-  propagatedBuildInputs = [ cython numpy scipy scikitlearn ];
+  nativeBuildInputs = [
+    cython
+    joblib
+    numpy
+    scikit-learn
+    scipy
+    six
+  ];
 
-  meta = with lib; {
+  preCheck = ''
+    cd hdbscan/tests
+    rm __init__.py
+  '';
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTests = [
+    # known flaky tests: https://github.com/scikit-learn-contrib/hdbscan/issues/420
+    "test_mem_vec_diff_clusters"
+    "test_all_points_mem_vec_diff_clusters"
+    "test_approx_predict_diff_clusters"
+    # another flaky test https://github.com/scikit-learn-contrib/hdbscan/issues/421
+    "test_hdbscan_boruvka_balltree_matches"
+    # more flaky tests https://github.com/scikit-learn-contrib/hdbscan/issues/570
+    "test_hdbscan_boruvka_balltree"
+    "test_hdbscan_best_balltree_metric"
+    # "got an unexpected keyword argument"
+    "test_hdbscan_badargs"
+  ];
+
+  disabledTestPaths = [
+    # joblib.externals.loky.process_executor.BrokenProcessPool:
+    "test_branches.py"
+  ];
+
+  pythonImportsCheck = [ "hdbscan" ];
+
+  meta = {
     description = "Hierarchical Density-Based Spatial Clustering of Applications with Noise, a clustering algorithm with a scikit-learn compatible API";
-    homepage =  http://github.com/scikit-learn-contrib/hdbscan;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ ixxie ];
+    homepage = "https://github.com/scikit-learn-contrib/hdbscan";
+    changelog = "https://github.com/scikit-learn-contrib/hdbscan/releases/tag/release-${version}";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

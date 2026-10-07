@@ -1,19 +1,43 @@
-{lib, fetchPypi, buildPythonPackage, numpy, pyparsing}:
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  setuptools,
+  numpy,
+  pyparsing,
+  pytest-cov-stub,
+  pytestCheckHook,
+}:
 
-buildPythonPackage rec{
+buildPythonPackage rec {
   pname = "periodictable";
-  version = "1.5.0";
+  version = "2.0.2";
+  pyproject = true;
 
-  propagatedBuildInputs = [numpy pyparsing];
-
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1cjk6aqcz41nxm4fpriz01vqdafd6g57cjk0wh1iklk5cx6c085h";
+  src = fetchFromGitHub {
+    owner = "python-periodictable";
+    repo = "periodictable";
+    tag = "v${version}";
+    hash = "sha256-nI6hiLnqmVXT06pPkHCBEMTxZhfnZJqSImW3V9mJ4+8=";
   };
 
+  build-system = [ setuptools ];
+
+  dependencies = [
+    numpy
+    pyparsing
+  ];
+
+  nativeCheckInputs = [
+    pytest-cov-stub
+    pytestCheckHook
+  ];
+
+  pythonImportsCheck = [ "periodictable" ];
+
   meta = {
-    homepage = http://www.reflectometry.org/danse/software.html;
-    description = "an extensible periodic table of the elements prepopulated with data important to neutron and x-ray scattering experiments";
+    description = "Extensible periodic table of the elements";
+    homepage = "https://github.com/pkienzle/periodictable";
     license = lib.licenses.publicDomain;
     maintainers = with lib.maintainers; [ rprospero ];
   };

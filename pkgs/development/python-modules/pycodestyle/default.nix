@@ -1,19 +1,47 @@
-{ lib, buildPythonPackage, fetchPypi }:
+{
+  buildPythonPackage,
+  fetchFromGitHub,
+  lib,
+  python,
+  pytestCheckHook,
+  setuptools,
+  isPyPy,
+}:
 
 buildPythonPackage rec {
   pname = "pycodestyle";
-  version = "2.3.1";
-  name = "${pname}-${version}";
+  version = "2.14.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0rk78b66p57ala26mdldl9lafr48blv5s659sah9q50qnfjmc8k8";
+  src = fetchFromGitHub {
+    owner = "PyCQA";
+    repo = "pycodestyle";
+    tag = version;
+    hash = "sha256-1EEQp/QEulrdU9tTe28NerQ33IWlAiSlicpmNYciW88=";
   };
 
-  meta = with lib; {
-    description = "Python style guide checker (formerly called pep8)";
-    homepage = https://pycodestyle.readthedocs.io;
-    license = licenses.mit;
-    maintainers = with maintainers; [ garbas ];
+  build-system = [ setuptools ];
+
+  pythonImportsCheck = [ "pycodestyle" ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  # https://github.com/PyCQA/pycodestyle/blob/2.14.0/tox.ini#L16
+  postCheck = ''
+    ${python.interpreter} -m pycodestyle --statistics pycodestyle.py
+  '';
+
+  disabledTests = lib.optionals isPyPy [
+    # PyPy reports a SyntaxError instead of ValueError
+    "test_check_nullbytes"
+  ];
+
+  meta = {
+    changelog = "https://github.com/PyCQA/pycodestyle/blob/${src.tag}/CHANGES.txt";
+    description = "Python style guide checker";
+    mainProgram = "pycodestyle";
+    homepage = "https://pycodestyle.pycqa.org/";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ kamadorueda ];
   };
 }

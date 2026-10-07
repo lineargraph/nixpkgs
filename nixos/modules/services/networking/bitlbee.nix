@@ -1,25 +1,27 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.bitlbee;
   bitlbeeUid = config.ids.uids.bitlbee;
 
-  bitlbeePkg = if cfg.libpurple_plugins == []
-  then pkgs.bitlbee
-  else pkgs.bitlbee.override { enableLibPurple = true; };
+  bitlbeePkg = pkgs.bitlbee.override {
+    enableLibPurple = cfg.libpurple_plugins != [ ];
+    enablePam = cfg.authBackend == "pam";
+  };
 
-  bitlbeeConfig = pkgs.writeText "bitlbee.conf"
-    ''
+  bitlbeeConfig = pkgs.writeText "bitlbee.conf" ''
     [settings]
     RunMode = Daemon
-    User = bitlbee
     ConfigDir = ${cfg.configDir}
     DaemonInterface = ${cfg.interface}
     DaemonPort = ${toString cfg.portNumber}
     AuthMode = ${cfg.authMode}
+    AuthBackend = ${cfg.authBackend}
     Plugindir = ${pkgs.bitlbee-plugins cfg.plugins}/lib/bitlbee
     ${lib.optionalString (cfg.hostName != "") "HostName = ${cfg.hostName}"}
     ${lib.optionalString (cfg.protocols != "") "Protocols = ${cfg.protocols}"}
@@ -27,13 +29,11 @@ let
 
     [defaults]
     ${cfg.extraDefaults}
-    '';
+  '';
 
-  purple_plugin_path =
-    lib.concatMapStringsSep ":"
-      (plugin: "${plugin}/lib/pidgin/")
-      cfg.libpurple_plugins
-    ;
+  purple_plugin_path = lib.concatMapStringsSep ":" (
+    plugin: "${plugin}/lib/pidgin/:${plugin}/lib/purple-2/"
+  ) cfg.libpurple_plugins;
 
 in
 
@@ -45,7 +45,8 @@ in
 
     services.bitlbee = {
 
-      enable = mkOption {
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = ''
           Whether to run the BitlBee IRC to other chat network gateway.
@@ -54,25 +55,44 @@ in
         '';
       };
 
-      interface = mkOption {
+      interface = lib.mkOption {
+        type = lib.types.str;
         default = "127.0.0.1";
         description = ''
-          The interface the BitlBee deamon will be listening to.  If `127.0.0.1',
-          only clients on the local host can connect to it; if `0.0.0.0', clients
+          The interface the BitlBee daemon will be listening to.  If `127.0.0.1`,
+          only clients on the local host can connect to it; if `0.0.0.0`, clients
           can access it from any network interface.
         '';
       };
 
-      portNumber = mkOption {
+      portNumber = lib.mkOption {
         default = 6667;
+        type = lib.types.port;
         description = ''
           Number of the port BitlBee will be listening to.
         '';
       };
 
-      authMode = mkOption {
+      authBackend = lib.mkOption {
+        default = "storage";
+        type = lib.types.enum [
+          "storage"
+          "pam"
+        ];
+        description = ''
+          How users are authenticated
+            storage -- save passwords internally
+            pam -- Linux PAM authentication
+        '';
+      };
+
+      authMode = lib.mkOption {
         default = "Open";
-        type = types.enum [ "Open" "Closed" "Registered" ];
+        type = lib.types.enum [
+          "Open"
+          "Closed"
+          "Registered"
+        ];
         description = ''
           The following authentication modes are available:
             Open -- Accept connections from anyone, use NickServ for user authentication.
@@ -81,9 +101,9 @@ in
         '';
       };
 
-      hostName = mkOption {
+      hostName = lib.mkOption {
         default = "";
-        type = types.str;
+        type = lib.types.str;
         description = ''
           Normally, BitlBee gets a hostname using getsockname(). If you have a nicer
           alias for your BitlBee daemon, you can set it here and BitlBee will identify
@@ -91,51 +111,53 @@ in
         '';
       };
 
-      plugins = mkOption {
-        type = types.listOf types.package;
-        default = [];
-        example = literalExample "[ pkgs.bitlbee-facebook ]";
+      plugins = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
+        default = [ ];
+        example = lib.literalExpression "[ pkgs.bitlbee-facebook ]";
         description = ''
           The list of bitlbee plugins to install.
         '';
       };
 
-      libpurple_plugins = mkOption {
-        type = types.listOf types.package;
-        default = [];
-        example = literalExample "[ pkgs.purple-matrix ]";
+      libpurple_plugins = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
+        default = [ ];
+        example = lib.literalExpression "[ pkgs.purple-discord ]";
         description = ''
           The list of libpurple plugins to install.
         '';
       };
 
-      configDir = mkOption {
+      configDir = lib.mkOption {
         default = "/var/lib/bitlbee";
-        type = types.path;
+        type = lib.types.path;
         description = ''
           Specify an alternative directory to store all the per-user configuration
           files.
         '';
       };
 
-      protocols = mkOption {
+      protocols = lib.mkOption {
         default = "";
-        type = types.str;
+        type = lib.types.str;
         description = ''
           This option allows to remove the support of protocol, even if compiled
           in. If nothing is given, there are no restrictions.
         '';
       };
 
-      extraSettings = mkOption {
+      extraSettings = lib.mkOption {
         default = "";
+        type = lib.types.lines;
         description = ''
           Will be inserted in the Settings section of the config file.
         '';
       };
 
-      extraDefaults = mkOption {
+      extraDefaults = lib.mkOption {
         default = "";
+        type = lib.types.lines;
         description = ''
           Will be inserted in the Default section of the config file.
         '';
@@ -147,33 +169,28 @@ in
 
   ###### implementation
 
-  config = mkIf config.services.bitlbee.enable {
-
-    users.extraUsers = singleton
-      { name = "bitlbee";
-        uid = bitlbeeUid;
-        description = "BitlBee user";
-        home = "/var/lib/bitlbee";
-        createHome = true;
-      };
-
-    users.extraGroups = singleton
-      { name = "bitlbee";
-        gid = config.ids.gids.bitlbee;
-      };
-
-    systemd.services.bitlbee =
-      {
+  config = lib.mkMerge [
+    (lib.mkIf config.services.bitlbee.enable {
+      systemd.services.bitlbee = {
         environment.PURPLE_PLUGIN_PATH = purple_plugin_path;
         description = "BitlBee IRC to other chat networks gateway";
         after = [ "network.target" ];
         wantedBy = [ "multi-user.target" ];
-        serviceConfig.User = "bitlbee";
-        serviceConfig.ExecStart = "${bitlbeePkg}/sbin/bitlbee -F -n -c ${bitlbeeConfig}";
+
+        serviceConfig = {
+          DynamicUser = true;
+          StateDirectory = "bitlbee";
+          ReadWritePaths = [ cfg.configDir ];
+          ExecStart = "${bitlbeePkg}/sbin/bitlbee -F -n -c ${bitlbeeConfig}";
+        };
       };
 
-    environment.systemPackages = [ bitlbeePkg ];
+      environment.systemPackages = [ bitlbeePkg ];
 
-  };
+    })
+    (lib.mkIf (config.services.bitlbee.authBackend == "pam") {
+      security.pam.services.bitlbee = { };
+    })
+  ];
 
 }

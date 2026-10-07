@@ -1,14 +1,21 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
-let cfg = config.services.subsonic; in {
+{
+  config,
+  lib,
+  options,
+  pkgs,
+  ...
+}:
+let
+  cfg = config.services.subsonic;
+  opt = options.services.subsonic;
+in
+{
   options = {
     services.subsonic = {
-      enable = mkEnableOption "Subsonic daemon";
+      enable = lib.mkEnableOption "Subsonic daemon";
 
-      home = mkOption {
-        type = types.path;
+      home = lib.mkOption {
+        type = lib.types.path;
         default = "/var/lib/subsonic";
         description = ''
           The directory where Subsonic will create files.
@@ -16,8 +23,8 @@ let cfg = config.services.subsonic; in {
         '';
       };
 
-      listenAddress = mkOption {
-        type = types.string;
+      listenAddress = lib.mkOption {
+        type = lib.types.str;
         default = "0.0.0.0";
         description = ''
           The host name or IP address on which to bind Subsonic.
@@ -27,8 +34,8 @@ let cfg = config.services.subsonic; in {
         '';
       };
 
-      port = mkOption {
-        type = types.int;
+      port = lib.mkOption {
+        type = lib.types.port;
         default = 4040;
         description = ''
           The port on which Subsonic will listen for
@@ -36,8 +43,8 @@ let cfg = config.services.subsonic; in {
         '';
       };
 
-      httpsPort = mkOption {
-        type = types.int;
+      httpsPort = lib.mkOption {
+        type = lib.types.port;
         default = 0;
         description = ''
           The port on which Subsonic will listen for
@@ -45,8 +52,8 @@ let cfg = config.services.subsonic; in {
         '';
       };
 
-      contextPath = mkOption {
-        type = types.path;
+      contextPath = lib.mkOption {
+        type = lib.types.path;
         default = "/";
         description = ''
           The context path, i.e., the last part of the Subsonic
@@ -54,8 +61,8 @@ let cfg = config.services.subsonic; in {
         '';
       };
 
-      maxMemory = mkOption {
-        type = types.int;
+      maxMemory = lib.mkOption {
+        type = lib.types.int;
         default = 100;
         description = ''
           The memory limit (max Java heap size) in megabytes.
@@ -63,8 +70,8 @@ let cfg = config.services.subsonic; in {
         '';
       };
 
-      defaultMusicFolder = mkOption {
-        type = types.path;
+      defaultMusicFolder = lib.mkOption {
+        type = lib.types.path;
         default = "/var/music";
         description = ''
           Configure Subsonic to use this folder for music.  This option
@@ -72,8 +79,8 @@ let cfg = config.services.subsonic; in {
         '';
       };
 
-      defaultPodcastFolder = mkOption {
-        type = types.path;
+      defaultPodcastFolder = lib.mkOption {
+        type = lib.types.path;
         default = "/var/music/Podcast";
         description = ''
           Configure Subsonic to use this folder for Podcasts.  This option
@@ -81,8 +88,8 @@ let cfg = config.services.subsonic; in {
         '';
       };
 
-      defaultPlaylistFolder = mkOption {
-        type = types.path;
+      defaultPlaylistFolder = lib.mkOption {
+        type = lib.types.path;
         default = "/var/playlists";
         description = ''
           Configure Subsonic to use this folder for playlists.  This option
@@ -90,25 +97,26 @@ let cfg = config.services.subsonic; in {
         '';
       };
 
-      transcoders = mkOption {
-        type = types.listOf types.path;
+      transcoders = lib.mkOption {
+        type = lib.types.listOf lib.types.path;
         default = [ "${pkgs.ffmpeg.bin}/bin/ffmpeg" ];
+        defaultText = lib.literalExpression ''[ "''${pkgs.ffmpeg.bin}/bin/ffmpeg" ]'';
         description = ''
           List of paths to transcoder executables that should be accessible
           from Subsonic. Symlinks will be created to each executable inside
-          ${cfg.home}/transcoders.
+          ''${config.${opt.home}}/transcoders.
         '';
       };
     };
   };
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     systemd.services.subsonic = {
       description = "Personal media streamer";
-      after = [ "local-fs.target" "network.target" ];
+      after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
       script = ''
-        ${pkgs.jre}/bin/java -Xmx${toString cfg.maxMemory}m \
+        ${pkgs.jre8}/bin/java -Xmx${toString cfg.maxMemory}m \
           -Dsubsonic.home=${cfg.home} \
           -Dsubsonic.host=${cfg.listenAddress} \
           -Dsubsonic.port=${toString cfg.port} \
@@ -130,7 +138,7 @@ let cfg = config.services.subsonic; in {
                 ! [ -e "${cfg.home}" ] &&
                 [ -d "$oldHome" ] &&
                 [ $(${pkgs.coreutils}/bin/stat -c %u "$oldHome") -eq \
-                    ${toString config.users.extraUsers.subsonic.uid} ]; then
+                    ${toString config.users.users.subsonic.uid} ]; then
             logger Moving "$oldHome" to "${cfg.home}"
             ${pkgs.coreutils}/bin/mv -T "$oldHome" "${cfg.home}"
         fi
@@ -152,7 +160,7 @@ let cfg = config.services.subsonic; in {
       };
     };
 
-    users.extraUsers.subsonic = {
+    users.users.subsonic = {
       description = "Subsonic daemon user";
       home = cfg.home;
       createHome = true;
@@ -160,6 +168,6 @@ let cfg = config.services.subsonic; in {
       uid = config.ids.uids.subsonic;
     };
 
-    users.extraGroups.subsonic.gid = config.ids.gids.subsonic;
+    users.groups.subsonic.gid = config.ids.gids.subsonic;
   };
 }

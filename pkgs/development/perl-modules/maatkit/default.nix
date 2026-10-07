@@ -1,16 +1,22 @@
-{buildPerlPackage, stdenv, fetchurl, DBDmysql}:
+{
+  buildPerlPackage,
+  lib,
+  fetchurl,
+  DBDmysql,
+}:
 
-buildPerlPackage rec {
-  name = "maatkit-7540";
+buildPerlPackage {
+  pname = "maatkit";
+  version = "7540";
 
   src = fetchurl {
-    url = "https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/maatkit/${name}.tar.gz";
+    url = "https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/maatkit/maatkit-7540.tar.gz";
     sha256 = "1a7rxrddkrsfxb2wj01ha91ld0vapfkqcy8j9p08l76zz2l8p2v1";
   };
 
   outputs = [ "out" ];
 
-  buildInputs = [ DBDmysql ] ;
+  buildInputs = [ DBDmysql ];
 
   preConfigure = ''
     find . | while read fn; do
@@ -24,7 +30,7 @@ buildPerlPackage rec {
             fi
         fi
     done
-  '' ;
+  '';
 
   meta = {
     description = "Database toolkit";
@@ -36,7 +42,7 @@ buildPerlPackage rec {
       In addition to MySQL, there is support for PostgreSQL, Memcached, and a
       growing variety of other databases and technologies.
     '';
-    license = stdenv.lib.licenses.gpl2Plus;
-    homepage = http://www.maatkit.org/;
+    license = lib.licenses.gpl2Plus;
+    homepage = "https://code.google.com/archive/p/maatkit/";
   };
 }

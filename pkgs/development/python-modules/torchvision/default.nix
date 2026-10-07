@@ -1,31 +1,103 @@
-{ buildPythonPackage
-, fetchPypi
-, six
-, numpy
-, pillow
-, pytorch
-, lib
+{
+  lib,
+  torch,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # nativeBuildInputs
+  libpng,
+  ninja,
+  which,
+
+  # buildInputs
+  libjpeg_turbo,
+
+  # dependencies
+  numpy,
+  pillow,
+  scipy,
+
+  # tests
+  pytest,
+  writableTmpDirAsHomeHook,
 }:
 
-buildPythonPackage rec {
-  version = "0.2.1";
-  pname   = "torchvision";
-  name    = "${pname}-${version}";
+let
+  inherit (torch) cudaCapabilities cudaPackages cudaSupport;
 
-  format = "wheel";
+in
+buildPythonPackage.override { inherit (torch) stdenv; } (finalAttrs: {
+  pname = "torchvision";
+  version = "0.28.0";
+  pyproject = true;
+  __structuredAttrs = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    format = "wheel";
-    sha256 = "18gvdabkmzfjg47ns0lw38mf85ry28nq1mas5rzlwvb4l5zmw2ms";
+  src = fetchFromGitHub {
+    owner = "pytorch";
+    repo = "vision";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-rku0QAW7RTkCjD4RorY7DeYfr6PDvqdm+6Yw9wBjGHU=";
   };
 
-  propagatedBuildInputs = [ six numpy pillow pytorch ];
+  nativeBuildInputs = [
+    libpng
+    ninja
+    which
+  ]
+  ++ lib.optionals cudaSupport [ cudaPackages.cuda_nvcc ];
+
+  buildInputs = [
+    libjpeg_turbo
+    libpng
+    torch.cxxdev
+  ]
+  ++ lib.optionals cudaSupport (
+    with cudaPackages;
+    [
+      cuda_cudart # cuda_runtime.h
+      libcublas # cublas_v2.h
+      libcusolver # cusolverDn.h
+      libcusparse # cusparse.h
+    ]
+  );
+
+  dependencies = [
+    numpy
+    pillow
+    torch
+    scipy
+  ];
+
+  env = {
+    TORCHVISION_INCLUDE = "${libjpeg_turbo.dev}/include/";
+    TORCHVISION_LIBRARY = "${libjpeg_turbo}/lib/";
+  }
+  // lib.optionalAttrs cudaSupport {
+    TORCH_CUDA_ARCH_LIST = "${lib.concatStringsSep ";" cudaCapabilities}";
+    FORCE_CUDA = 1;
+  };
+
+  # tests download big datasets, models, require internet connection, etc.
+  doCheck = false;
+
+  pythonImportsCheck = [ "torchvision" ];
+
+  nativeCheckInputs = [
+    pytest
+    writableTmpDirAsHomeHook
+  ];
+
+  checkPhase = ''
+    py.test test --ignore=test/test_datasets_download.py
+  '';
 
   meta = {
     description = "PyTorch vision library";
-    homepage    = http://pytorch.org/;
-    license     = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ ericsagnes ];
+    homepage = "https://pytorch.org/vision";
+    downloadPage = "https://github.com/pytorch/vision";
+    changelog = "https://github.com/pytorch/vision/releases/tag/${finalAttrs.src.tag}";
+    license = lib.licenses.bsd3;
+    platforms = with lib.platforms; linux ++ lib.optionals (!cudaSupport) darwin;
+    maintainers = with lib.maintainers; [ GaetanLepage ];
   };
-}
+})

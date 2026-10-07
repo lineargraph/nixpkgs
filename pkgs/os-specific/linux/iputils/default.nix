@@ -1,55 +1,104 @@
-{ stdenv, fetchurl
-, libsysfs, gnutls, openssl
-, libcap, opensp, docbook_sgml_dtd_31
-, libidn, nettle
-, SGMLSpm, libgcrypt }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  meson,
+  ninja,
+  pkg-config,
+  gettext,
+  libxslt,
+  docbook_xsl_ns,
+  libcap,
+  libidn2,
+  iproute2,
+  apparmorRulesFromClosure,
+  nix-update-script,
+}:
 
-let
-  time = "20161105";
-in
-stdenv.mkDerivation rec {
-  name = "iputils-${time}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "iputils";
+  version = "20250605";
 
-  src = fetchurl {
-    url = "https://github.com/iputils/iputils/archive/s${time}.tar.gz";
-    sha256 = "12mdmh4qbf5610csaw3rkzhpzf6djndi4jsl4gyr8wni0cphj4zq";
+  src = fetchFromGitHub {
+    owner = "iputils";
+    repo = "iputils";
+    tag = finalAttrs.version;
+    hash = "sha256-AJgNPIE90kALu4ihANELr9Dh28LhJ4camLksOIRV8Xo=";
   };
 
-  prePatch = ''
-    sed -e s/sgmlspl/sgmlspl.pl/ \
-        -e s/nsgmls/onsgmls/ \
-      -i doc/Makefile
+  outputs = [
+    "out"
+    "man"
+    "apparmor"
+  ];
+
+  # We don't have the required permissions inside the build sandbox:
+  # /build/source/build/ping/ping: socket: Operation not permitted
+  doCheck = false;
+
+  mesonFlags = [
+    "-DNO_SETCAP_OR_SUID=true"
+    "-Dsystemdunitdir=etc/systemd/system"
+    "-DINSTALL_SYSTEMD_UNITS=true"
+    "-DSKIP_TESTS=${lib.boolToString (!finalAttrs.finalPackage.doCheck)}"
+  ]
+  # Disable idn usage w/musl (https://github.com/iputils/iputils/pull/111):
+  ++ lib.optional stdenv.hostPlatform.isMusl "-DUSE_IDN=false";
+
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gettext
+    libxslt.bin
+    docbook_xsl_ns
+  ];
+  buildInputs = [ libcap ] ++ lib.optional (!stdenv.hostPlatform.isMusl) libidn2;
+  nativeCheckInputs = [ iproute2 ];
+
+  postInstall = ''
+    mkdir $apparmor
+    cat >$apparmor/bin.ping <<EOF
+    include <tunables/global>
+    $out/bin/ping {
+      include <abstractions/base>
+      include <abstractions/consoles>
+      include <abstractions/nameservice>
+      include "${
+        apparmorRulesFromClosure { name = "ping"; } (
+          [ libcap ] ++ lib.optional (!stdenv.hostPlatform.isMusl) libidn2
+        )
+      }"
+      include if exists <local/bin.ping>
+      capability net_raw,
+      network inet raw,
+      network inet6 raw,
+      mr $out/bin/ping,
+      r $out/share/locale/**,
+      r @{PROC}/@{pid}/environ,
+    }
+    EOF
   '';
 
-  # Disable idn usage w/musl: https://github.com/iputils/iputils/pull/111
-  makeFlags = [ "USE_GNUTLS=no" ] ++ stdenv.lib.optional stdenv.hostPlatform.isMusl "USE_IDN=no";
+  passthru.updateScript = nix-update-script { };
 
-  depsBuildBuild = [ opensp SGMLSpm docbook_sgml_dtd_31 ];
-  buildInputs = [
-    libsysfs openssl libcap libgcrypt nettle
-  ] ++ stdenv.lib.optional (!stdenv.hostPlatform.isMusl) libidn;
+  meta = {
+    homepage = "https://github.com/iputils/iputils";
+    changelog = "https://github.com/iputils/iputils/releases/tag/${finalAttrs.version}";
+    description = "Set of small useful utilities for Linux networking";
+    longDescription = ''
+      A set of small useful utilities for Linux networking including:
 
-  # ninfod probably could build on cross, but the Makefile doesn't pass --host etc to the sub configure...
-  buildFlags = "man all" + stdenv.lib.optionalString (!stdenv.isCross) " ninfod";
-
-  installPhase =
-    ''
-      mkdir -p $out/bin
-      cp -p ping tracepath clockdiff arping rdisc rarpd $out/bin/
-      if [ -x ninfod/ninfod ]; then
-        cp -p ninfod/ninfod $out/bin
-      fi
-
-      mkdir -p $out/share/man/man8
-      cp -p \
-        doc/clockdiff.8 doc/arping.8 doc/ping.8 doc/rdisc.8 doc/rarpd.8 doc/tracepath.8 doc/ninfod.8 \
-        $out/share/man/man8
+      - arping: send ARP REQUEST to a neighbour host
+      - clockdiff: measure clock difference between hosts
+      - ping: send ICMP ECHO_REQUEST to network hosts
+      - tracepath: traces path to a network host discovering MTU along this path
     '';
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/iputils/iputils;
-    description = "A set of small useful utilities for Linux networking";
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ lheckemann ];
+    license = with lib.licenses; [
+      gpl2Plus
+      bsd3
+    ];
+    platforms = lib.platforms.linux;
+    maintainers = with lib.maintainers; [ mdaniels5757 ];
   };
-}
+})

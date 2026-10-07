@@ -1,35 +1,60 @@
-{ stdenv, fetchurl, which, bison, flex, libmaa, zlib, libtool }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  which,
+  bison,
+  flex,
+  libmaa,
+  zlib,
+  libtool,
+  nixosTests,
+}:
 
 stdenv.mkDerivation rec {
-  name = "dictd-${version}";
-  version = "1.12.1";
+  pname = "dictd";
+  version = "1.13.3";
 
   src = fetchurl {
     url = "mirror://sourceforge/dict/dictd-${version}.tar.gz";
-    sha256 = "0min6v60b6z5mrymyjfwzx8nv6rdm8pd8phlwl6v2jl5vkngcdx2";
+    hash = "sha256-GSEp37OPpyP0ipWGx5xRmPxJBP7BdXF2kXMU3Qc/EXE=";
   };
 
-  buildInputs = [ libmaa zlib ];
-
-  nativeBuildInputs = [ bison flex libtool which ];
-
-  # Makefile(.in) contains "clientparse.c clientparse.h: clientparse.y" which
-  # causes bison to run twice, and break the build when this happens in
-  # parallel.  Test with "make -j clientparse.c clientparse.h".  The error
-  # message may be "mv: cannot move 'y.tab.c' to 'clientparse.c'".
-  enableParallelBuilding = false;
-
-  patchPhase = "patch -p0 < ${./buildfix.diff}";
-  configureFlags = [
-    "--enable-dictorg"
-    "--datadir=/run/current-systems/sw/share/dictd"
+  patches = [
+    ./buildfix.diff
   ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    libmaa
+    zlib
+  ];
+
+  nativeBuildInputs = [
+    bison
+    flex
+    libtool
+    which
+  ];
+
+  # In earlier versions, parallel building was not supported but it's OK with 1.13
+  enableParallelBuilding = true;
+
+  configureFlags = [
+    "--datadir=/run/current-system/sw/share/dictd"
+    "--sysconfdir=/etc"
+  ];
+
+  postInstall = ''
+    install -Dm444 -t $out/share/doc/${pname} NEWS README
+  '';
+
+  passthru.tests.nixos = nixosTests.dictd;
+
+  meta = {
     description = "Dict protocol server and client";
-    homepage    = http://www.dict.org;
-    license     = licenses.gpl2;
-    maintainers = with maintainers; [ ];
-    platforms   = platforms.linux;
+    homepage = "http://www.dict.org";
+    license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ sikmir ];
+    platforms = lib.platforms.unix;
   };
 }

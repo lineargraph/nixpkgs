@@ -1,9 +1,13 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  options,
+  pkgs,
+  ...
+}:
 let
   cfg = config.services.peerflix;
+  opt = options.services.peerflix;
 
   configFile = pkgs.writeText "peerflix-config.json" ''
     {
@@ -12,33 +16,39 @@ let
     }
   '';
 
-in {
+in
+{
 
   ###### interface
 
   options.services.peerflix = {
-    enable = mkOption {
+    enable = lib.mkOption {
       description = "Whether to enable peerflix service.";
       default = false;
-      type = types.bool;
+      type = lib.types.bool;
     };
 
-    stateDir = mkOption {
+    stateDir = lib.mkOption {
       description = "Peerflix state directory.";
       default = "/var/lib/peerflix";
-      type = types.path;
+      type = lib.types.path;
     };
 
-    downloadDir = mkOption {
+    downloadDir = lib.mkOption {
       description = "Peerflix temporary download directory.";
       default = "${cfg.stateDir}/torrents";
-      type = types.path;
+      defaultText = lib.literalExpression ''"''${config.${opt.stateDir}}/torrents"'';
+      type = lib.types.path;
     };
   };
 
   ###### implementation
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
+    systemd.tmpfiles.rules = [
+      "d '${cfg.stateDir}' - peerflix - - -"
+    ];
+
     systemd.services.peerflix = {
       description = "Peerflix Daemon";
       wantedBy = [ "multi-user.target" ];
@@ -47,17 +57,19 @@ in {
 
       preStart = ''
         mkdir -p "${cfg.stateDir}"/{torrents,.config/peerflix-server}
-        if [ "$(id -u)" = 0 ]; then chown -R peerflix "${cfg.stateDir}"; fi
         ln -fs "${configFile}" "${cfg.stateDir}/.config/peerflix-server/config.json"
       '';
 
       serviceConfig = {
-        ExecStart = "${pkgs.nodePackages.peerflix-server}/bin/peerflix-server";
-        PermissionsStartOnly = true;
+        ExecStart = "${pkgs.peerflix-server}/bin/peerflix-server";
         User = "peerflix";
       };
     };
 
-    users.extraUsers.peerflix.uid = config.ids.uids.peerflix;
+    users.users.peerflix = {
+      isSystemUser = true;
+      group = "peerflix";
+    };
+    users.groups.peerflix = { };
   };
 }

@@ -1,26 +1,58 @@
-{ stdenv, libdiscid, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  stdenv,
+  libdiscid,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  sphinxHook,
+  sphinx-autodoc-typehints,
+  sphinx-rtd-theme,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "discid";
-  version = "1.1.1";
-  name = "${pname}-${version}";
+  version = "1.4.2";
+  pyproject = true;
+
+  outputs = [
+    "out"
+    "doc"
+  ];
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "78a3bf6c8377fdbe3d85e914a209ff97aa43e35605779639847b510ced31f7b9";
+    sha256 = "sha256-DLtLlpScaMvGPJ/EWF75t+wrnTniO84LTbXWHG97geY=";
   };
 
+  build-system = [
+    setuptools
+  ];
+
   patchPhase =
-    let extension = stdenv.hostPlatform.extensions.sharedLibrary; in
+    let
+      extension = stdenv.hostPlatform.extensions.sharedLibrary;
+    in
     ''
       substituteInPlace discid/libdiscid.py \
         --replace "_open_library(_LIB_NAME)" \
                   "_open_library('${libdiscid}/lib/libdiscid${extension}')"
     '';
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [
+    sphinxHook
+    sphinx-autodoc-typehints
+    sphinx-rtd-theme
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ];
+
+  meta = {
     description = "Python binding of libdiscid";
-    homepage    = "https://python-discid.readthedocs.org/";
-    license     = licenses.lgpl3Plus;
+    homepage = "https://python-discid.readthedocs.org/";
+    license = lib.licenses.lgpl3Plus;
   };
 }

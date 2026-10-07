@@ -1,30 +1,75 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, jsonpickle
-, wrapt
-, requests
-, future
+{
+  lib,
+  aiohttp,
+  botocore,
+  bottle,
+  buildPythonPackage,
+  django,
+  fetchFromGitHub,
+  httpx,
+  jsonpickle,
+  pymysql,
+  pytest-asyncio_0,
+  pynamodb,
+  pytestCheckHook,
+  requests,
+  setuptools,
+  sqlalchemy,
+  webtest,
+  wrapt,
 }:
 
 buildPythonPackage rec {
   pname = "aws-xray-sdk";
-  version = "0.97";
+  version = "2.15.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "43eca57bb48b718ea58968608cfd22f4b9c62c2d904bb08aa2f8afe56eeb9de4";
+  src = fetchFromGitHub {
+    owner = "aws";
+    repo = "aws-xray-sdk-python";
+    tag = version;
+    hash = "sha256-Zu2+awB6Ynxp6hkY1bB1f6u+KpDvCcoGxDWanSH+yBY=";
   };
 
+  nativeBuildInputs = [ setuptools ];
+
   propagatedBuildInputs = [
-    jsonpickle wrapt requests future
+    botocore
+    jsonpickle
+    requests
+    wrapt
   ];
+
+  nativeCheckInputs = [
+    aiohttp
+    bottle
+    django
+    httpx
+    pymysql
+    pynamodb
+    pytest-asyncio_0
+    pytestCheckHook
+    sqlalchemy
+    webtest
+  ];
+
+  disabledTestPaths = [
+    # This reduces the amount of dependencies
+    "tests/ext/"
+    # We don't care about benchmarks
+    "tests/test_local_sampling_benchmark.py"
+    "tests/test_patcher.py"
+    # async def functions are not natively supported.
+    "tests/test_async_recorder.py"
+  ];
+
+  pythonImportsCheck = [ "aws_xray_sdk" ];
 
   meta = {
     description = "AWS X-Ray SDK for the Python programming language";
+    homepage = "https://github.com/aws/aws-xray-sdk-python";
+    changelog = "https://github.com/aws/aws-xray-sdk-python/blob/${src.tag}/CHANGELOG.rst";
     license = lib.licenses.asl20;
-    homepage = https://github.com/aws/aws-xray-sdk-python;
+    maintainers = [ ];
   };
-
-  doCheck = false;
 }

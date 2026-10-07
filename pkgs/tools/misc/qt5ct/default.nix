@@ -1,35 +1,48 @@
-{ stdenv, fetchurl, qtbase, qtsvg, qttools, qmake }:
+{
+  mkDerivation,
+  lib,
+  fetchurl,
+  qtbase,
+  qtsvg,
+  qttools,
+  qmake,
+}:
 
-let inherit (stdenv.lib) getDev; in
+let
+  inherit (lib) getDev;
+in
 
-stdenv.mkDerivation rec {
-  name = "qt5ct-${version}";
-  version = "0.35";
+mkDerivation rec {
+  pname = "qt5ct";
+  version = "1.9";
 
   src = fetchurl {
-    url = "mirror://sourceforge/qt5ct/${name}.tar.bz2";
-    sha256 = "0xzgd12cvm4vyzl8qax6izdmaf46bf18h055z6k178s8pybm1sqw";
+    url = "mirror://sourceforge/qt5ct/qt5ct-${version}.tar.bz2";
+    sha256 = "sha256-3BDmk51CO5JZgc5n/rsaAVtvYcAiqcx+bIte/qRYi/8=";
   };
 
-  nativeBuildInputs = [ qmake qttools ];
+  nativeBuildInputs = [
+    qmake
+    qttools
+  ];
 
-  buildInputs = [ qtbase ];
+  buildInputs = [
+    qtbase
+    qtsvg
+  ];
 
   qmakeFlags = [
     "LRELEASE_EXECUTABLE=${getDev qttools}/bin/lrelease"
+    "PLUGINDIR=${placeholder "out"}/${qtbase.qtPluginPrefix}"
+    "LIBDIR=${placeholder "out"}/lib"
   ];
 
-  preConfigure = ''
-    qmakeFlags+=" PLUGINDIR=$out/$qtPluginPrefix"
-  '';
-
-  enableParallelBuilding = true;
-
-  meta = with stdenv.lib; {
+  meta = {
     description = "Qt5 Configuration Tool";
-    homepage = https://www.opendesktop.org/content/show.php?content=168066;
-    platforms = platforms.linux;
-    license = licenses.bsd2;
-    maintainers = with maintainers; [ ralith ];
+    homepage = "https://sourceforge.net/projects/qt5ct/";
+    platforms = lib.platforms.linux;
+    license = lib.licenses.bsd2;
+    maintainers = [ ];
+    mainProgram = "qt5ct";
   };
 }

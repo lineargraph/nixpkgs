@@ -2,49 +2,141 @@
 #   1. jenkins service starts on master node
 #   2. jenkins user can be extended on both master and slave
 #   3. jenkins service not started on slave node
+#   4. declarative jobs can be added and removed
 
-import ./make-test.nix ({ pkgs, ...} : {
+{ config, lib, ... }:
+{
   name = "jenkins";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ bjornfor coconnor domenkozar eelco chaoflow ];
+  meta = with lib.maintainers; {
+    maintainers = [
+      bjornfor
+    ];
   };
 
   nodes = {
 
     master =
-      { config, pkgs, ... }:
-      { services.jenkins.enable = true;
+      { ... }:
+      {
+        services.jenkins = {
+          enable = true;
+          jobBuilder = {
+            enable = true;
+            nixJobs = [
+              {
+                job = {
+                  name = "job-1";
+                  builders = [
+                    {
+                      shell = ''
+                        echo "Running job-1"
+                      '';
+                    }
+                  ];
+                };
+              }
+
+              {
+                job = {
+                  name = "folder-1";
+                  project-type = "folder";
+                };
+              }
+
+              {
+                job = {
+                  name = "folder-1/job-2";
+                  builders = [
+                    {
+                      shell = ''
+                        echo "Running job-2"
+                      '';
+                    }
+                  ];
+                };
+              }
+            ];
+          };
+        };
+
+        specialisation.noJenkinsJobs.configuration = {
+          services.jenkins.jobBuilder.nixJobs = lib.mkForce [ ];
+        };
 
         # should have no effect
         services.jenkinsSlave.enable = true;
 
-        users.extraUsers.jenkins.extraGroups = [ "users" ];
+        users.users.jenkins.extraGroups = [ "users" ];
 
         systemd.services.jenkins.serviceConfig.TimeoutStartSec = "6min";
+
+        # Increase disk space to prevent this issue:
+        #
+        # WARNING h.n.DiskSpaceMonitorDescriptor#markNodeOfflineOrOnline: Making Built-In Node offline temporarily due to the lack of disk space
+        virtualisation.diskSize = 2 * 1024;
       };
 
     slave =
-      { config, pkgs, ... }:
-      { services.jenkinsSlave.enable = true;
+      { ... }:
+      {
+        services.jenkinsSlave.enable = true;
 
-        users.extraUsers.jenkins.extraGroups = [ "users" ];
+        users.users.jenkins.extraGroups = [ "users" ];
       };
 
   };
 
-  testScript = ''
-    startAll;
+  testScript =
+    { nodes, ... }:
+    let
+      pkgs = config.node.pkgs;
+      configWithoutJobs = "${nodes.master.system.build.toplevel}/specialisation/noJenkinsJobs";
+      jenkinsPort = nodes.master.services.jenkins.port;
+      jenkinsUrl = "http://localhost:${toString jenkinsPort}";
+      jenkinsHome = nodes.master.services.jenkins.home;
+    in
+    ''
+      start_all()
 
-    $master->waitForUnit("jenkins");
+      master.wait_for_unit("default.target")
 
-    $master->mustSucceed("curl http://localhost:8080 | grep 'Authentication required'");
+      assert "Authentication required" in master.succeed("curl http://localhost:8080")
 
-    print $master->execute("sudo -u jenkins groups");
-    $master->mustSucceed("sudo -u jenkins groups | grep jenkins | grep users");
+      for host in master, slave:
+          groups = host.succeed("sudo -u jenkins groups")
+          assert "jenkins" in groups
+          assert "users" in groups
 
-    print $slave->execute("sudo -u jenkins groups");
-    $slave->mustSucceed("sudo -u jenkins groups | grep jenkins | grep users");
+      slave.fail("systemctl is-enabled jenkins.service")
 
-    $slave->mustFail("systemctl is-enabled jenkins.service");
-  '';
-})
+      slave.succeed("java -fullversion")
+
+      with subtest("jobs are declarative"):
+          # Check that jobs are created on disk.
+          master.wait_until_succeeds("test -f ${jenkinsHome}/jobs/job-1/config.xml")
+          master.wait_until_succeeds("test -f ${jenkinsHome}/jobs/folder-1/config.xml")
+          master.wait_until_succeeds("test -f ${jenkinsHome}/jobs/folder-1/jobs/job-2/config.xml")
+
+          # Verify that jenkins also sees the jobs.
+          out = master.succeed("${pkgs.jenkins}/bin/jenkins-cli -http -s ${jenkinsUrl} -auth admin:$(cat ${jenkinsHome}/secrets/initialAdminPassword) list-jobs")
+          jobs = [x.strip() for x in out.splitlines()]
+          # Seeing jobs inside folders requires the Folders plugin
+          # (https://plugins.jenkins.io/cloudbees-folder/), which we don't have
+          # in this vanilla jenkins install, so limit ourself to non-folder jobs.
+          assert jobs == ['job-1'], f"jobs != ['job-1']: {jobs}"
+
+          master.succeed(
+              "${configWithoutJobs}/bin/switch-to-configuration test >&2"
+          )
+
+          # Check that jobs are removed from disk.
+          master.wait_until_fails("test -f ${jenkinsHome}/jobs/job-1/config.xml")
+          master.wait_until_fails("test -f ${jenkinsHome}/jobs/folder-1/config.xml")
+          master.wait_until_fails("test -f ${jenkinsHome}/jobs/folder-1/jobs/job-2/config.xml")
+
+          # Verify that jenkins also sees the jobs as removed.
+          out = master.succeed("${pkgs.jenkins}/bin/jenkins-cli -http -s ${jenkinsUrl} -auth admin:$(cat ${jenkinsHome}/secrets/initialAdminPassword) list-jobs")
+          jobs = [x.strip() for x in out.splitlines()]
+          assert jobs == [], f"jobs != []: {jobs}"
+    '';
+}

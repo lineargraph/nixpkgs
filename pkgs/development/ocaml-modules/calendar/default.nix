@@ -1,23 +1,28 @@
-{stdenv, fetchurl, ocaml, findlib}:
+{
+  lib,
+  buildDunePackage,
+  fetchFromGitHub,
+  re,
+}:
 
-stdenv.mkDerivation {
-  name = "ocaml-calendar-2.5";
-  src = fetchurl {
-    url = https://forge.ocamlcore.org/frs/download.php/915/calendar-2.5.tar.bz2;
-    sha256 = "04pvhwb664g3s644c7v7419a3kvf5s3pynkhmk5j59dvlfm1yf0f";
-    };
+buildDunePackage (finalAttrs: {
+  pname = "calendar";
+  version = "3.0.0";
+  minimalOCamlVersion = "4.03";
 
-  buildInputs = [ocaml findlib];
-
-  createFindlibDestdir = true;
-
-  meta =  {
-    homepage = https://forge.ocamlcore.org/projects/calendar/;
-    description = "An Objective Caml library managing dates and times";
-    license = "LGPL";
-    platforms = ocaml.meta.platforms or [];
-    maintainers = [
-      stdenv.lib.maintainers.gal_bolle
-    ];
+  src = fetchFromGitHub {
+    owner = "ocaml-community";
+    repo = "calendar";
+    rev = "v${finalAttrs.version}";
+    sha256 = "sha256-+VQzi6pEMqzV1ZR84Yjdu4jsJEWtx+7bd6PQGX7TiEs=";
   };
-}
+
+  propagatedBuildInputs = [ re ];
+
+  meta = {
+    inherit (finalAttrs.src.meta) homepage;
+    description = "Library for handling dates and times";
+    license = lib.licenses.lgpl21Plus;
+    maintainers = [ lib.maintainers.gal_bolle ];
+  };
+})

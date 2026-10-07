@@ -1,20 +1,34 @@
-{ stdenv, fetchPypi, buildPythonPackage }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+}:
 
-buildPythonPackage rec {
-  name = "${pname}-${version}";
+buildPythonPackage (finalAttrs: {
   pname = "easydict";
-  version = "1.7";
+  version = "1.13";
+  pyproject = true;
+
+  __structuredAttrs = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "1xpnwjdw4x5kficjgcajqcal6bxcb0ax8l6hdkww9fp6lrh28x8v";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-sRNd7bxByAEOK8H3fsl0TH+qQrzhoch0FnkUSdbId4A=";
   };
 
-  docheck = false; # No tests in archive
+  build-system = [
+    setuptools
+  ];
+
+  doCheck = false; # No tests in archive
+
+  pythonImportsCheck = [ "easydict" ];
 
   meta = {
-    homepage = https://github.com/makinacorpus/easydict;
-    license = with stdenv.lib; licenses.lgpl3;
     description = "Access dict values as attributes (works recursively)";
+    homepage = "https://github.com/makinacorpus/easydict";
+    changelog = "https://github.com/makinacorpus/easydict/releases/tag/${finalAttrs.version}";
+    license = lib.licenses.lgpl3;
   };
-}
+})

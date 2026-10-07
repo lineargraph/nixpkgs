@@ -1,42 +1,57 @@
-{ stdenv, lib, python, kernel, makeWrapper, writeText }:
+{
+  stdenv,
+  lib,
+  python3,
+  kernel,
+  makeWrapper,
+  writeText,
+  gawk,
+  iproute2,
+}:
 
 let
-  daemons = stdenv.mkDerivation rec {
-    name = "hyperv-daemons-bin-${version}";
+  libexec = "libexec/hypervkvpd";
+
+  fcopy_name =
+    if lib.versionOlder kernel.version "6.10" then
+      "fcopy"
+    else
+      # The fcopy program is explicitly left out in the Makefile on aarch64
+      (if stdenv.hostPlatform.isAarch64 then null else "fcopy_uio");
+
+  daemons = stdenv.mkDerivation {
+    pname = "hyperv-daemons-bin";
     inherit (kernel) src version;
 
     nativeBuildInputs = [ makeWrapper ];
+    buildInputs = [ python3 ];
 
-    # as of 4.9 compilation will fail due to -Werror=format-security
-    hardeningDisable = [ "format" ];
-
-    preConfigure = ''
+    postPatch = ''
       cd tools/hv
+      substituteInPlace hv_kvp_daemon.c \
+        --replace /usr/libexec/hypervkvpd/ $out/${libexec}/
     '';
 
-    installPhase = ''
-      runHook preInstall
-
-      for f in fcopy kvp vss ; do
-        install -Dm755 hv_''${f}_daemon -t $out/bin
-      done
-
-      install -Dm755 hv_get_dns_info.sh lsvmbus -t $out/bin
-
-      # I don't know why this isn't being handled automatically by fixupPhase
-      substituteInPlace $out/bin/lsvmbus \
-        --replace '/usr/bin/env python' ${python.interpreter}
-
-      runHook postInstall
-    '';
+    makeFlags = [
+      "ARCH=${stdenv.hostPlatform.parsed.cpu.name}"
+      "DESTDIR=$(out)"
+      "sbindir=/bin"
+      "libexecdir=/libexec"
+    ];
 
     postFixup = ''
-      # kvp needs to be able to find the script(s)
-      wrapProgram $out/bin/hv_kvp_daemon --prefix PATH : $out/bin
+      wrapProgram $out/bin/hv_kvp_daemon \
+        --prefix PATH : $out/bin:${
+          lib.makeBinPath [
+            gawk
+            iproute2
+          ]
+        }
     '';
   };
 
-  service = bin: title: check:
+  service =
+    bin: title: check:
     writeText "hv-${bin}.service" ''
       [Unit]
       Description=Hyper-V ${title} daemon
@@ -54,34 +69,45 @@ let
       WantedBy=hyperv-daemons.target
     '';
 
-in stdenv.mkDerivation rec {
-  name    = "hyperv-daemons-${version}";
-
+in
+stdenv.mkDerivation {
+  pname = "hyperv-daemons";
   inherit (kernel) version;
 
   # we just stick the bins into out as well as it requires "out"
-  outputs = [ "bin" "lib" "out" ];
-
-  phases = [ "installPhase" ];
+  outputs = [
+    "bin"
+    "lib"
+    "out"
+  ];
 
   buildInputs = [ daemons ];
+  passthru = {
+    inherit daemons;
+  };
 
-  installPhase = ''
+  buildCommand = ''
     system=$lib/lib/systemd/system
 
-    mkdir -p $system
-
-    cp ${service "fcopy" "file copy (FCOPY)" "hv_fcopy" } $system/hv-fcopy.service
-    cp ${service "kvp"   "key-value pair (KVP)"     ""  } $system/hv-kvp.service
-    cp ${service "vss"   "volume shadow copy (VSS)" ""  } $system/hv-vss.service
+    ${lib.optionalString (fcopy_name != null) ''
+      install -Dm444 ${
+        service fcopy_name "file copy (FCOPY)"
+          "/sys/bus/vmbus/devices/eb765408-105f-49b6-b4aa-c123b64d17d4/uio"
+      } $system/hv-fcopy.service
+    ''}
+    install -Dm444 ${service "kvp" "key-value pair (KVP)" "hv_kvp"} $system/hv-kvp.service
+    install -Dm444 ${service "vss" "volume shadow copy (VSS)" "hv_vss"} $system/hv-vss.service
 
     cat > $system/hyperv-daemons.target <<EOF
     [Unit]
     Description=Hyper-V Daemons
-    Wants=hv-fcopy.service hv-kvp.service hv-vss.service
+    Wants=hv-kvp.service hv-vss.service
+    ${lib.optionalString (fcopy_name != null) ''
+      Wants=hv-fcopy.service
+    ''}
     EOF
 
-    for f in $lib/lib/systemd/system/* ; do
+    for f in $lib/lib/systemd/system/*.service ; do
       substituteInPlace $f --replace @out@ ${daemons}/bin
     done
 
@@ -93,8 +119,9 @@ in stdenv.mkDerivation rec {
     done
   '';
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Integration Services for running NixOS under HyperV";
+    mainProgram = "lsvmbus";
     longDescription = ''
       This packages contains the daemons that are used by the Hyper-V hypervisor
       on the host.
@@ -102,8 +129,8 @@ in stdenv.mkDerivation rec {
       Microsoft calls their guest agents "Integration Services" which is why
       we use that name here.
     '';
-    homepage = https://kernel.org;
-    maintainers = with maintainers; [ peterhoeg ];
+    homepage = "https://kernel.org";
+    maintainers = with lib.maintainers; [ peterhoeg ];
     platforms = kernel.meta.platforms;
   };
 }

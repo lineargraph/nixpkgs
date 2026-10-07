@@ -1,18 +1,22 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, effects
-, containers
-, lightyear
-, test
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  effects,
+  containers,
+  lightyear,
+  test,
+  lib,
 }:
-build-idris-package  {
-  name = "config";
+build-idris-package {
+  pname = "config";
   version = "2017-11-06";
 
-  idrisDeps = [ prelude effects containers lightyear test ];
+  idrisDeps = [
+    effects
+    containers
+    lightyear
+    test
+  ];
 
   src = fetchFromGitHub {
     owner = "benclifford";
@@ -22,10 +26,9 @@ build-idris-package  {
   };
 
   meta = {
-    description = "Parsers for various configuration files written in Idris.";
-    homepage = https://github.com/benclifford/idris-config;
+    description = "Parsers for various configuration files written in Idris";
+    homepage = "https://github.com/benclifford/idris-config";
     license = lib.licenses.bsd3;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

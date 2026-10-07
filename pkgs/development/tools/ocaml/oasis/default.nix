@@ -1,34 +1,60 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, ocamlmod, ocamlify }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  ocaml,
+  findlib,
+  ocamlbuild,
+  ocamlmod,
+  ocamlify,
+}:
 
-stdenv.mkDerivation rec {
-  version = "0.4.10";
-  name = "ocaml-oasis-${version}";
+stdenv.mkDerivation {
+  version = "0.4.11";
+  pname = "ocaml-oasis";
 
-  # You must manually update the url, not just the version. OCamlforge keys off
-  # the number after download.php, not the filename.
   src = fetchurl {
-    url = https://forge.ocamlcore.org/frs/download.php/1694/oasis-0.4.10.tar.gz;
-    sha256 = "13ah03pbcvrjv5lmx971hvkm9rvbvimska5wmjfvgvd20ca0gn8w";
+    url = "https://download.ocamlcore.org/oasis/oasis/0.4.11/oasis-0.4.11.tar.gz";
+    hash = "sha256-GLc97vTtbpqDM38ks7vi3tZSaLP/cwn8wA0l5X4dwS4=";
   };
 
   createFindlibDestdir = true;
 
-  buildInputs =
-    [
-      ocaml findlib ocamlbuild ocamlmod ocamlify
-    ];
+  strictDeps = true;
 
-  configurePhase = "ocaml setup.ml -configure --prefix $out";
-  buildPhase     = "ocaml setup.ml -build";
-  installPhase   = "ocaml setup.ml -install";
+  nativeBuildInputs = [
+    ocaml
+    findlib
+    ocamlbuild
+    ocamlmod
+    ocamlify
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://oasis.forge.ocamlcore.org/;
+  buildInputs = [ ocamlbuild ];
+
+  configurePhase = ''
+    runHook preConfigure
+    ocaml setup.ml -configure --prefix $out
+    runHook postConfigure
+  '';
+  buildPhase = ''
+    runHook preBuild
+    ocaml setup.ml -build
+    runHook postBuild
+  '';
+  installPhase = ''
+    runHook preInstall
+    ocaml setup.ml -install
+    runHook postInstall
+  '';
+
+  meta = {
     description = "Configure, build and install system for OCaml projects";
-    license = licenses.lgpl21;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = with maintainers; [
-      vbgl z77z
-    ];
+    homepage = "https://github.com/ocaml/oasis";
+    license = lib.licenses.lgpl21;
+    maintainers = with lib.maintainers; [ vbgl ];
+    mainProgram = "oasis";
+    broken = lib.versionAtLeast ocaml.version "5.0";
+    inherit (ocaml.meta) platforms;
   };
 }

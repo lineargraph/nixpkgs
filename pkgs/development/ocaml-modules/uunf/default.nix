@@ -1,33 +1,69 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg, uchar, uutf, cmdliner }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  ocaml,
+  findlib,
+  ocamlbuild,
+  topkg,
+  uutf,
+  cmdliner,
+  cmdlinerSupport ? lib.versionAtLeast cmdliner.version "1.1",
+  version ? if lib.versionAtLeast ocaml.version "4.14" then "18.0.0" else "15.0.0",
+}:
+
 let
   pname = "uunf";
-  webpage = "http://erratique.ch/software/${pname}";
+  webpage = "https://erratique.ch/software/${pname}";
+  hash =
+    {
+      "15.0.0" = "sha256-B/prPAwfqS8ZPS3fyDDIzXWRbKofwOCyCfwvh9veuug=";
+      "18.0.0" = "sha256-PigyC3vjIFWo2pNa3yUJBv3qgcpZXWf6ytGIOoaiHiM=";
+    }
+    ."${version}";
 in
-
-assert stdenv.lib.versionAtLeast ocaml.version "4.01";
-
-stdenv.mkDerivation rec {
-  name = "ocaml-${pname}-${version}";
-  version = "10.0.0";
+stdenv.mkDerivation (finallAttrs: {
+  name = "ocaml${ocaml.version}-${finallAttrs.pname}-${finallAttrs.version}";
+  inherit version pname;
 
   src = fetchurl {
     url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "0c5lwica5668ybsffllk6x4p921nw4pljimgqikhf17k5hvyjsbr";
+    inherit hash;
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild topkg uutf cmdliner ];
+  nativeBuildInputs = [
+    ocaml
+    findlib
+    ocamlbuild
+    topkg
+  ];
+  buildInputs = [
+    topkg
+    uutf
+  ]
+  ++ lib.optional cmdlinerSupport cmdliner;
 
-  propagatedBuildInputs = [ uchar ];
+  strictDeps = true;
 
-  unpackCmd = "tar xjf $src";
+  prePatch = lib.optionalString stdenv.hostPlatform.isAarch64 "ulimit -s 16384";
 
-  inherit (topkg) buildPhase installPhase;
+  buildPhase = ''
+    runHook preBuild
+    ${topkg.run} build \
+      --with-uutf true \
+      --with-cmdliner ${lib.boolToString cmdlinerSupport}
+    runHook postBuild
+  '';
 
-  meta = with stdenv.lib; {
-    description = "An OCaml module for normalizing Unicode text";
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
-    license = licenses.bsd3;
-    maintainers = [ maintainers.vbgl ];
+  inherit (topkg) installPhase;
+
+  meta = {
+    description = "OCaml module for normalizing Unicode text";
+    homepage = webpage;
+    license = lib.licenses.bsd3;
+    maintainers = [ lib.maintainers.vbgl ];
+    mainProgram = "unftrip";
+    inherit (ocaml.meta) platforms;
+    broken = lib.versionOlder ocaml.version "4.03";
   };
-}
+})

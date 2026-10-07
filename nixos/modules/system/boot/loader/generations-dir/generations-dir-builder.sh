@@ -2,8 +2,7 @@
 
 shopt -s nullglob
 
-export PATH=/empty
-for i in @path@; do PATH=$PATH:$i/bin; done
+export PATH=/empty:@path@
 
 default=$1
 if test -z "$1"; then
@@ -63,7 +62,7 @@ addEntry() {
         copyToKernelsDir $kernel; kernel=$result
         copyToKernelsDir $initrd; initrd=$result
     fi
-    
+
     mkdir -p $outdir
     ln -sf $(readlink -f $path) $outdir/system
     ln -sf $(readlink -f $path/init) $outdir/init

@@ -1,15 +1,27 @@
-{ stdenv, ocaml, findlib, jbuilder, js_of_ocaml-compiler
-, ocamlbuild
+{
+  lib,
+  buildDunePackage,
+  fetchurl,
+  ocamlbuild,
 }:
 
-stdenv.mkDerivation rec {
-	name = "js_of_ocaml-ocamlbuild-${version}"; 
+buildDunePackage rec {
+  pname = "js_of_ocaml-ocamlbuild";
+  version = "5.0";
 
-	inherit (js_of_ocaml-compiler) version src installPhase meta;
+  minimalOCamlVersion = "4.03";
 
-	buildInputs = [ ocaml findlib jbuilder ];
+  src = fetchurl {
+    url = "https://github.com/ocsigen/js_of_ocaml-ocamlbuild/releases/download/${version}/js_of_ocaml-ocamlbuild-${version}.tbz";
+    sha256 = "sha256-qlm8vxzie8sqPrd6iiwf8X6d2+DyQOOhmMoc67ChwHs=";
+  };
 
-	propagatedBuildInputs = [ ocamlbuild ];
+  propagatedBuildInputs = [ ocamlbuild ];
 
-	buildPhase = "jbuilder build -p js_of_ocaml-ocamlbuild";
+  meta = {
+    description = "Ocamlbuild plugin to compile to JavaScript";
+    homepage = "https://github.com/ocsigen/js_of_ocaml-ocamlbuild";
+    license = lib.licenses.lgpl2Only;
+    maintainers = [ lib.maintainers.vbgl ];
+  };
 }

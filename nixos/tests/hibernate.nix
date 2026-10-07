@@ -1,43 +1,70 @@
 # Test whether hibernation from partition works.
 
-import ./make-test.nix (pkgs: {
-  name = "hibernate";
+{
+  system ? builtins.currentSystem,
+  config ? { },
+  pkgs ? import ../.. { inherit system config; },
+  systemdStage1,
+}:
+
+with import ../lib/testing-python.nix { inherit system pkgs; };
+
+makeTest {
+  name = "hibernate" + pkgs.lib.optionalString systemdStage1 "-systemd-stage-1";
 
   nodes = {
-    machine = { config, lib, pkgs, ... }: with lib; {
-      virtualisation.emptyDiskImages = [ config.virtualisation.memorySize ];
+    machine =
+      {
+        config,
+        lib,
+        pkgs,
+        ...
+      }:
+      {
+        imports = [
+          ./common/auto-format-root-device.nix
+        ];
 
-      systemd.services.backdoor.conflicts = [ "sleep.target" ];
+        powerManagement.powerDownCommands = "systemctl --no-block stop backdoor.service";
+        powerManagement.resumeCommands = "systemctl --no-block restart backdoor.service";
 
-      swapDevices = mkOverride 0 [ { device = "/dev/vdb"; } ];
+        virtualisation.emptyDiskImages = [ (2 * config.virtualisation.memorySize) ];
+        # virtiofs doesn't support hibernation
+        virtualisation.useNixStoreImage = true;
+        virtualisation.sharedDirectories = lib.mkForce { };
 
-      networking.firewall.allowedTCPPorts = [ 4444 ];
-
-      systemd.services.listener.serviceConfig.ExecStart = "${pkgs.netcat}/bin/nc -l 4444 -k";
-    };
-
-    probe = { config, lib, pkgs, ...}: {
-      environment.systemPackages = [ pkgs.netcat ];
-    };
+        swapDevices = lib.mkOverride 0 [
+          {
+            device = "/dev/vdc";
+            options = [ "x-systemd.makefs" ];
+          }
+        ];
+        boot.initrd.systemd.enable = systemdStage1;
+        virtualisation.useEFIBoot = true;
+      };
   };
 
-  # 9P doesn't support reconnection to virtio transport after a hibernation.
-  # Therefore, machine just hangs on any Nix store access.
-  # To work around it we run a daemon which listens to a TCP connection and
-  # try to connect to it as a test.
+  testScript = ''
+    # Drop in file that checks if we un-hibernated properly (and not booted fresh)
+    machine.wait_for_unit("default.target")
+    machine.succeed(
+        "mkdir /run/test",
+        "mount -t ramfs -o size=1m ramfs /run/test",
+        "echo not persisted to disk > /run/test/suspended",
+    )
 
-  testScript =
-    ''
-      $machine->waitForUnit("multi-user.target");
-      $machine->succeed("mkswap /dev/vdb");
-      $machine->succeed("swapon -a");
-      $machine->startJob("listener");
-      $machine->waitForOpenPort(4444);
-      $machine->succeed("systemctl hibernate &");
-      $machine->waitForShutdown;
-      $machine->start;
-      $probe->waitForUnit("network.target");
-      $probe->waitUntilSucceeds("echo test | nc machine 4444 -N");
-    '';
+    # Hibernate machine
+    machine.execute("systemctl hibernate >&2 &", check_return=False)
+    machine.wait_for_shutdown()
 
-})
+    # Restore machine from hibernation, validate our ramfs file is there.
+    machine.start()
+    machine.succeed("grep 'not persisted to disk' /run/test/suspended")
+
+    # Ensure we don't restore from hibernation when booting again
+    machine.crash()
+    machine.wait_for_unit("default.target")
+    machine.fail("grep 'not persisted to disk' /run/test/suspended")
+  '';
+
+}

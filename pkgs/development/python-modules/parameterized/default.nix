@@ -1,28 +1,59 @@
-{ stdenv, fetchPypi, buildPythonPackage, nose, six, glibcLocales, isPy3k }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  fetchpatch2,
+  mock,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "parameterized";
-  version = "0.6.1";
+  version = "0.9.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1qj1939shm48d9ql6fm1nrdy4p7sdyj8clz1szh5swwpf1qqxxfa";
+    hash = "sha256-f8kFJyzvpPNkwaNCnLvpwPmLeTmI77W/kKrIDwjbCbE=";
   };
 
-  # Tests require some python3-isms but code works without.
-  doCheck = isPy3k;
+  patches = [
+    (fetchpatch2 {
+      name = "parameterized-docstring-3.13-compat.patch";
+      url = "https://gitweb.gentoo.org/repo/gentoo.git/plain/dev-python/parameterized/files/parameterized-0.9.0-py313-test.patch?id=dec60bb6900d6ebdaaa6aa1dcb845b30b739f9b5";
+      hash = "sha256-tWcN0eRC0oRHrOaa/cctXLhi1WapDKvxO36e6gU6UIk=";
+    })
+  ];
 
-  checkInputs = [ nose glibcLocales ];
-  propagatedBuildInputs = [ six ];
-
-  checkPhase = ''
-    LC_ALL="en_US.UTF-8" nosetests -v
+  postPatch = ''
+    # broken with pytest 7 and python 3.12
+    # https://github.com/wolever/parameterized/issues/167
+    # https://github.com/wolever/parameterized/pull/162
+    substituteInPlace parameterized/test.py \
+      --replace 'assert_equal(missing, [])' "" \
+      --replace "assertRaisesRegexp" "assertRaisesRegex"
   '';
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ setuptools ];
+
+  # 'yield' keyword is allowed in fixtures, but not in tests (test_naked_function)
+  doCheck = false;
+
+  checkInputs = [
+    mock
+    pytestCheckHook
+  ];
+
+  enabledTestPaths = [ "parameterized/test.py" ];
+
+  pythonImportsCheck = [ "parameterized" ];
+
+  meta = {
     description = "Parameterized testing with any Python test framework";
-    homepage = https://pypi.python.org/pypi/parameterized;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ ma27 ];
+    homepage = "https://github.com/wolever/parameterized";
+    changelog = "https://github.com/wolever/parameterized/blob/v${version}/CHANGELOG.txt";
+    license = lib.licenses.bsd2;
+    maintainers = [ ];
   };
 }

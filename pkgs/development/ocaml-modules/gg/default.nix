@@ -1,35 +1,41 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, opaline }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  ocaml,
+  findlib,
+  topkg,
+  ocamlbuild,
+}:
 
 let
-  inherit (stdenv.lib) getVersion versionAtLeast;
-
-  pname = "gg";
-  version = "0.9.1";
-  webpage = "http://erratique.ch/software/${pname}";
+  homepage = "https://erratique.ch/software/gg";
+  version = "1.0.0";
 in
 
-assert versionAtLeast (getVersion ocaml) "4.01.0";
+stdenv.mkDerivation {
 
-stdenv.mkDerivation rec {
-
-  name = "ocaml-${pname}-${version}";
+  pname = "ocaml${ocaml.version}-gg";
+  inherit version;
 
   src = fetchurl {
-    url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "0czj41sr8jsivl3z8wyblf9k971j3kx2wc3s0c1nhzcc8allg9i2";
+    url = "${homepage}/releases/gg-${version}.tbz";
+    sha256 = "sha256:0j7bpj8k17csnz6v6frkz9aycywsb7xmznnb31g8rbfk3626f3ci";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild opaline ];
+  strictDeps = true;
 
-  createFindlibDestdir = true;
+  nativeBuildInputs = [
+    ocaml
+    findlib
+    ocamlbuild
+    topkg
+  ];
+  buildInputs = [ topkg ];
 
-  unpackCmd = "tar xjf $src";
+  inherit (topkg) buildPhase installPhase;
 
-  buildPhase = "ocaml pkg/build.ml native=true native-dynlink=true";
-
-  installPhase = "opaline -libdir $OCAMLFIND_DESTDIR";
-
-  meta = with stdenv.lib; {
+  meta = {
     description = "Basic types for computer graphics in OCaml";
     longDescription = ''
       Gg is an OCaml module providing basic types for computer graphics. It
@@ -37,9 +43,10 @@ stdenv.mkDerivation rec {
       matrices, quaternions, axis aligned boxes, colors, color spaces, and
       raster data.
     '';
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
-    license = licenses.bsd3;
-    maintainers = [ maintainers.jirkamarsik ];
+    inherit homepage;
+    inherit (ocaml.meta) platforms;
+    license = lib.licenses.bsd3;
+    maintainers = [ lib.maintainers.jirkamarsik ];
+    broken = !(lib.versionAtLeast ocaml.version "4.08");
   };
 }

@@ -1,7 +1,9 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.safeeyes;
@@ -16,10 +18,7 @@ in
 
     services.safeeyes = {
 
-      enable = mkOption {
-        default = false;
-        description = "Whether to enable the safeeyes OSGi service";
-      };
+      enable = lib.mkEnableOption "the safeeyes OSGi service";
 
     };
 
@@ -27,22 +26,24 @@ in
 
   ###### implementation
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
+
+    environment.systemPackages = [ pkgs.safeeyes ];
 
     systemd.user.services.safeeyes = {
       description = "Safeeyes";
 
       wantedBy = [ "graphical-session.target" ];
-      partOf   = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
 
+      startLimitIntervalSec = 350;
+      startLimitBurst = 10;
       serviceConfig = {
         ExecStart = ''
           ${pkgs.safeeyes}/bin/safeeyes
         '';
         Restart = "on-failure";
         RestartSec = 3;
-        StartLimitInterval = 350;
-        StartLimitBurst = 10;
       };
     };
 

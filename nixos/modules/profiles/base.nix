@@ -1,13 +1,18 @@
 # This module defines the software packages included in the "minimal"
-# installation CD.  It might be useful elsewhere.
+# installation CD. It might be useful elsewhere.
 
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 {
   # Include some utilities that are useful for installing or repairing
   # the system.
   environment.systemPackages = [
-    pkgs.w3m-nox # needed for the manual anyway
+    pkgs.w3m-nographics # needed for the manual anyway
     pkgs.testdisk # useful for repairing boot problems
     pkgs.ms-sys # for writing Microsoft boot sectors / MBRs
     pkgs.efibootmgr
@@ -17,7 +22,9 @@
     pkgs.ddrescue
     pkgs.ccrypt
     pkgs.cryptsetup # needed for dm-crypt volumes
-    pkgs.mkpasswd # for generating password files
+
+    # Some text editors.
+    pkgs.vim
 
     # Some networking tools.
     pkgs.fuse
@@ -25,6 +32,7 @@
     pkgs.sshfs-fuse
     pkgs.socat
     pkgs.screen
+    pkgs.tcpdump
 
     # Hardware-related tools.
     pkgs.sdparm
@@ -32,21 +40,33 @@
     pkgs.smartmontools # for diagnosing hard disks
     pkgs.pciutils
     pkgs.usbutils
-
-    # Tools to create / manipulate filesystems.
-    pkgs.ntfsprogs # for resizing NTFS partitions
-    pkgs.dosfstools
-    pkgs.xfsprogs.bin
-    pkgs.jfsutils
-    pkgs.f2fs-tools
+    pkgs.nvme-cli
 
     # Some compression/archiver tools.
     pkgs.unzip
     pkgs.zip
+
+    # Some utilities
+    pkgs.jq
   ];
 
-  # Include support for various filesystems.
-  boot.supportedFilesystems = [ "btrfs" "reiserfs" "vfat" "f2fs" "xfs" "ntfs" "cifs" ];
+  # Include support for various filesystems and tools to create / manipulate them.
+  boot.supportedFilesystems = lib.mkMerge [
+    [
+      "ext2"
+      "ext3"
+      "ext4"
+      "btrfs"
+      "cifs"
+      "f2fs"
+      "ntfs"
+      "vfat"
+      "xfs"
+    ]
+    (lib.mkIf (lib.meta.availableOn pkgs.stdenv.hostPlatform config.boot.zfs.package) {
+      zfs = lib.mkDefault true;
+    })
+  ];
 
   # Configure host id for ZFS to work
   networking.hostId = lib.mkDefault "8425e349";

@@ -1,19 +1,22 @@
-{ stdenv, jbuilder, ocaml, findlib, lwt, ppx_tools_versioned }:
+{
+  lib,
+  fetchFromGitHub,
+  buildDunePackage,
+  lwt,
+  ppxlib,
+}:
 
-stdenv.mkDerivation {
-  name = "ocaml${ocaml.version}-lwt_ppx-${lwt.version}";
+buildDunePackage {
+  pname = "lwt_ppx";
+  inherit (lwt) version src;
 
-  inherit (lwt) src;
-
-  buildInputs = [ jbuilder ocaml findlib ppx_tools_versioned ];
-
-  propagatedBuildInputs = [ lwt ];
-
-  buildPhase = "jbuilder build -p lwt_ppx";
-  installPhase = "${jbuilder.installPhase} lwt_ppx.install";
+  propagatedBuildInputs = [
+    lwt
+    ppxlib
+  ];
 
   meta = {
     description = "Ppx syntax extension for Lwt";
-    inherit (lwt.meta) license platforms homepage maintainers;
+    inherit (lwt.meta) license homepage maintainers;
   };
 }

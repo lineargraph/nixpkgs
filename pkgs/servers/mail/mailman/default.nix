@@ -1,29 +1,65 @@
-{ stdenv, fetchurl, python, pythonPackages }:
+{
+  newScope,
+  lib,
+  python3,
+}:
 
-stdenv.mkDerivation rec {
-  name = "mailman-${version}";
-  version = "2.1.24";
+let
+  self = lib.makeExtensible (
+    self:
+    let
+      inherit (self) callPackage;
+    in
+    {
+      callPackage = newScope self;
 
-  src = fetchurl {
-    url = "mirror://gnu/mailman/${name}.tgz";
-    sha256 = "1r6sjapjmbav45xibjzc2a8y1xf4ikz09470ma1kw7iz174wn8z7";
-  };
+      python3 = callPackage ./python.nix { inherit python3; };
 
-  buildInputs = [ python pythonPackages.dnspython ];
+      hyperkitty = callPackage ./hyperkitty.nix { };
 
-  patches = [ ./fix-var-prefix.patch ];
+      mailman = callPackage ./package.nix { };
 
-  configureFlags = "--without-permcheck --with-cgi-ext=.cgi --with-var-prefix=/var/lib/mailman";
+      mailman-hyperkitty = callPackage ./mailman-hyperkitty.nix { };
 
-  installTargets = "doinstall";         # Leave out the 'update' target that's implied by 'install'.
+      postorius = callPackage ./postorius.nix { };
 
-  makeFlags = [ "DIRSETGID=:" ];
+      web = callPackage ./web.nix { };
 
-  meta = {
-    homepage = http://www.gnu.org/software/mailman/;
-    description = "Free software for managing electronic mail discussion and e-newsletter lists";
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.peti ];
-  };
-}
+      buildEnvs =
+        {
+          web ? self.web,
+          mailman ? self.mailman,
+          mailman-hyperkitty ? self.mailman-hyperkitty,
+          withHyperkitty ? false,
+          withLDAP ? false,
+        }:
+        {
+          mailmanEnv = self.python3.withPackages (
+            ps:
+            [
+              mailman
+              ps.psycopg2
+            ]
+            ++ lib.optional withHyperkitty mailman-hyperkitty
+            ++ lib.optionals withLDAP [
+              ps.python-ldap
+              ps.django-auth-ldap
+            ]
+          );
+          webEnv = self.python3.withPackages (
+            ps:
+            [
+              web
+              ps.psycopg2
+            ]
+            ++ lib.optionals withLDAP [
+              ps.python-ldap
+              ps.django-auth-ldap
+            ]
+          );
+        };
+    }
+  );
+
+in
+self

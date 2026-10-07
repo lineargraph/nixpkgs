@@ -1,36 +1,52 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, isPyPy
-, nose
-, toolz
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  cython,
+  setuptools,
+  toolz,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "cytoolz";
-  version = "0.9.0.1";
+  version = "1.1.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "84cc06fa40aa310f2df79dd440fc5f84c3e20f01f9f7783fc9c38d0a11ba00e5";
+  src = fetchFromGitHub {
+    owner = "pytoolz";
+    repo = "cytoolz";
+    tag = finalAttrs.version;
+    hash = "sha256-beOEhm7+Nq7oA7iDcdORz03D1InHmypqsYUDUXEUPC0=";
   };
 
-  # Extension types
-  disabled = isPyPy;
-
-  checkInputs = [ nose ];
-  propagatedBuildInputs = [ toolz ];
-
-  # Disable failing test https://github.com/pytoolz/cytoolz/issues/97
-  checkPhase = ''
-    NOSE_EXCLUDE=test_curried_exceptions nosetests -v $out/${python.sitePackages}
+  postPatch = ''
+    sed -i "/setuptools-git-versioning >=/d" pyproject.toml
+    substituteInPlace pyproject.toml \
+      --replace-fail "dynamic = [\"version\"]" "version = \"${finalAttrs.version}\""
   '';
+
+  build-system = [
+    cython
+    setuptools
+  ];
+
+  dependencies = [ toolz ];
+
+  # tests are located in cytoolz/tests, but we need to prevent import from the cytoolz source
+  preCheck = ''
+    mv cytoolz/tests tests
+    rm -rf cytoolz
+    sed -i "/testpaths/d" pyproject.toml
+  '';
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   meta = {
     homepage = "https://github.com/pytoolz/cytoolz/";
+    changelog = "https://github.com/pytoolz/cytoolz/releases/tag/${finalAttrs.src.tag}";
     description = "Cython implementation of Toolz: High performance functional utilities";
-    license = "licenses.bsd3";
-    maintainers = with lib.maintainers; [ fridh ];
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ sarahec ];
   };
-}
+})

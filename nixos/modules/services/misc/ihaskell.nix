@@ -1,12 +1,14 @@
-{ pkgs, lib, config, ... }:
-
-with lib;
-
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 let
 
   cfg = config.services.ihaskell;
   ihaskell = pkgs.ihaskell.override {
-    packages = self: cfg.extraPackages self;
+    packages = cfg.extraPackages;
   };
 
 in
@@ -14,14 +16,17 @@ in
 {
   options = {
     services.ihaskell = {
-      enable = mkOption {
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = "Autostart an IHaskell notebook service.";
       };
 
-      extraPackages = mkOption {
-        default = self: [];
-        example = literalExample ''
+      extraPackages = lib.mkOption {
+        type = lib.types.functionTo (lib.types.listOf lib.types.package);
+        default = haskellPackages: [ ];
+        defaultText = lib.literalExpression "haskellPackages: []";
+        example = lib.literalExpression ''
           haskellPackages: [
             haskellPackages.wreq
             haskellPackages.lens
@@ -30,31 +35,31 @@ in
         description = ''
           Extra packages available to ghc when running ihaskell. The
           value must be a function which receives the attrset defined
-          in <varname>haskellPackages</varname> as the sole argument.
+          in {var}`haskellPackages` as the sole argument.
         '';
       };
     };
   };
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
 
-    users.extraUsers.ihaskell = {
-      group = config.users.extraGroups.ihaskell.name;
+    users.users.ihaskell = {
+      group = config.users.groups.ihaskell.name;
       description = "IHaskell user";
       home = "/var/lib/ihaskell";
       createHome = true;
       uid = config.ids.uids.ihaskell;
     };
 
-    users.extraGroups.ihaskell.gid = config.ids.gids.ihaskell;
+    users.groups.ihaskell.gid = config.ids.gids.ihaskell;
 
     systemd.services.ihaskell = {
       description = "IHaskell notebook instance";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
       serviceConfig = {
-        User = config.users.extraUsers.ihaskell.name;
-        Group = config.users.extraGroups.ihaskell.name;
+        User = config.users.users.ihaskell.name;
+        Group = config.users.groups.ihaskell.name;
         ExecStart = "${pkgs.runtimeShell} -c \"cd $HOME;${ihaskell}/bin/ihaskell-notebook\"";
       };
     };

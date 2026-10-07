@@ -1,22 +1,45 @@
-{ stdenv, buildPythonPackage, fetchPypi, six }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  six,
+  pythonAtLeast,
+  distutils,
+}:
 
 buildPythonPackage rec {
   pname = "docker-pycreds";
-  version = "0.2.3";
+  version = "0.4.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "e3732a03610a00461a716997670c7010bf1c214a3edc440f7d6a2a3a830ecd9d";
+  src = fetchFromGitHub {
+    owner = "shin-";
+    repo = "dockerpy-creds";
+    tag = version;
+    hash = "sha256-yYsMsRW6Bb8vmwT0mPjs0pRqBbznGtHnGb3JNHjLjys=";
   };
+
+  build-system = [
+    setuptools
+  ];
+
+  dependencies = [
+    six
+  ]
+  ++ lib.optionals (pythonAtLeast "3.12") [
+    distutils
+  ];
+
+  pythonImportsCheck = [ "dockerpycreds" ];
 
   # require docker-credential-helpers binaries
   doCheck = false;
 
-  propagatedBuildInputs = [ six ];
-
-  meta = with stdenv.lib; {
-    description = "Python bindings for the docker credentials store API.";
-    homepage = https://github.com/shin-/dockerpy-creds;
-    license = licenses.asl20;
+  meta = {
+    description = "Python bindings for the docker credentials store API";
+    homepage = "https://github.com/shin-/dockerpy-creds";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ GaetanLepage ];
   };
 }

@@ -1,88 +1,83 @@
-{ stdenv
-, fetchurl
-, substituteAll
+{
+  lib,
+  stdenv,
+  fetchurl,
+  replaceVars,
+  nixosTests,
 
-, autoreconfHook
-, docbook_xml_dtd_412
-, docbook_xml_dtd_42
-, docbook_xml_dtd_43
-, docbook_xsl
-, gettext
-, libxml2
-, libxslt
-, pkgconfig
-, xmlto
+  docbook_xml_dtd_45,
+  docbook_xsl,
+  gettext,
+  libxml2,
+  libxslt,
+  pkg-config,
+  xmlto,
+  meson,
+  ninja,
+  gnome,
+  librsvg,
+  makeWrapper,
 
-, acl
-, bazaar
-, binutils
-, bzip2
-, coreutils
-, cpio
-, elfutils
-, flatpak
-, gitMinimal
-, glib
-, gnutar
-, json_glib
-, libcap
-, libdwarf
-, libsoup
-, ostree
-, patch
-, rpm
-, unzip
+  acl,
+  appstream,
+  breezy,
+  binutils,
+  bzip2,
+  coreutils,
+  cpio,
+  curl,
+  debugedit,
+  elfutils,
+  flatpak,
+  gitMinimal,
+  glib,
+  glibcLocales,
+  gnumake,
+  gnupg,
+  gnutar,
+  json-glib,
+  libarchive,
+  libcap,
+  libyaml,
+  ostree,
+  patch,
+  rpm,
+  attr,
 }:
 
 let
-  version = "0.10.10";
-in stdenv.mkDerivation rec {
-  name = "flatpak-builder-${version}";
-
-  outputs = [ "out" "doc" "man" ];
-
-  src = fetchurl {
-    url = "https://github.com/flatpak/flatpak-builder/releases/download/${version}/${name}.tar.xz";
-    sha256 = "0b0c2rmf2vj596600blbhsiv2dg7qwpr33lgdcn0bnqc4ddri6f2";
+  gdkPixbufLoadersCache = gnome._gdkPixbufCacheBuilder_DO_NOT_USE {
+    extraLoaders = [ librsvg ];
   };
+in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "flatpak-builder";
+  version = "1.4.10";
 
-  nativeBuildInputs = [
-    autoreconfHook
-    docbook_xml_dtd_412
-    docbook_xml_dtd_42
-    docbook_xml_dtd_43
-    docbook_xsl
-    gettext
-    libxml2
-    libxslt
-    pkgconfig
-    xmlto
+  outputs = [
+    "out"
+    "doc"
+    "man"
+    "installedTests"
   ];
 
-  buildInputs = [
-    acl
-    bzip2
-    elfutils
-    flatpak
-    glib
-    json_glib
-    libcap
-    libdwarf
-    libsoup
-    libxml2
-    ostree
-  ];
+  # fetchFromGitHub fetches an archive which does not contain the full source (https://github.com/flatpak/flatpak-builder/issues/558)
+  src = fetchurl {
+    url = "https://github.com/flatpak/flatpak-builder/releases/download/${finalAttrs.version}/flatpak-builder-${finalAttrs.version}.tar.xz";
+    hash = "sha256-sXIQeMBpfIyh19uWUjK1CdGqh/aLTa43jrUAvd3bnME=";
+  };
 
   patches = [
     # patch taken from gtk_doc
     ./respect-xml-catalog-files-var.patch
-    (substituteAll {
-      src = ./fix-paths.patch;
-      bzr = "${bazaar}/bin/bzr";
+
+    # Hardcode paths
+    (replaceVars ./fix-paths.patch {
+      brz = "${breezy}/bin/brz";
       cp = "${coreutils}/bin/cp";
       patch = "${patch}/bin/patch";
       tar = "${gnutar}/bin/tar";
-      unzip = "${unzip}/bin/unzip";
+      bsdunzip = "${libarchive}/bin/bsdunzip";
       rpm2cpio = "${rpm}/bin/rpm2cpio";
       cpio = "${cpio}/bin/cpio";
       git = "${gitMinimal}/bin/git";
@@ -91,13 +86,85 @@ in stdenv.mkDerivation rec {
       eustrip = "${elfutils}/bin/eu-strip";
       euelfcompress = "${elfutils}/bin/eu-elfcompress";
     })
+
+    (replaceVars ./fix-test-paths.patch {
+      inherit glibcLocales;
+    })
+    ./fix-test-prefix.patch
   ];
 
-  meta = with stdenv.lib; {
-    description = "Tool to build flatpaks from source";
-    homepage = https://flatpak.org/;
-    license = licenses.lgpl21;
-    maintainers = with maintainers; [ jtojnar ];
-    platforms = platforms.linux;
+  nativeBuildInputs = [
+    meson
+    ninja
+    docbook_xml_dtd_45
+    docbook_xsl
+    gettext
+    libxml2
+    libxslt
+    pkg-config
+    xmlto
+    makeWrapper
+  ];
+
+  buildInputs = [
+    acl
+    appstream
+    bzip2
+    curl
+    debugedit
+    elfutils
+    flatpak
+    glib
+    json-glib
+    libcap
+    libxml2
+    libyaml
+    ostree
+  ];
+
+  mesonFlags = [
+    "-Dinstalled_tests=true"
+    "-Dinstalled_test_prefix=${placeholder "installedTests"}"
+  ];
+
+  # Some scripts used by tests  need to use shebangs that are available in Flatpak runtimes.
+  dontPatchShebangs = true;
+
+  enableParallelBuilding = true;
+
+  # Installed tests
+  postFixup =
+    let
+      installed_testdir = "${placeholder "installedTests"}/libexec/installed-tests/flatpak-builder";
+    in
+    ''
+      for file in ${installed_testdir}/{test-builder.sh,test-builder-python.sh,test-builder-deprecated.sh}; do
+        patchShebangs $file
+      done
+      wrapProgram $out/bin/flatpak-builder --set GDK_PIXBUF_MODULE_FILE ${gdkPixbufLoadersCache}
+    '';
+
+  passthru = {
+    installedTestsDependencies = [
+      gnupg
+      ostree
+      gnumake
+      attr
+      libxml2
+      appstream
+    ];
+
+    tests = {
+      installedTests = nixosTests.installed-tests.flatpak-builder;
+    };
   };
-}
+
+  meta = {
+    description = "Tool to build flatpaks from source";
+    mainProgram = "flatpak-builder";
+    homepage = "https://github.com/flatpak/flatpak-builder";
+    license = lib.licenses.lgpl21Plus;
+    maintainers = [ ];
+    platforms = lib.platforms.linux;
+  };
+})

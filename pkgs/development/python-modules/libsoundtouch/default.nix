@@ -1,35 +1,53 @@
-{ buildPythonPackage
-, fetchFromGitHub
-, stdenv
-, lib
-, pythonOlder
-, requests
-, enum34
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  requests,
+  websocket-client,
+  zeroconf,
+  pytestCheckHook,
+  setuptools,
 }:
 
 buildPythonPackage rec {
-  name    = "${pname}-${version}";
-  pname   = "libsoundtouch";
-  version = "0.4.0";
+  pname = "libsoundtouch";
+  version = "0.8.0";
+  pyproject = true;
 
   src = fetchFromGitHub {
-    owner  = "CharlesBlonde";
-    repo   = "libsoundtouch";
-    rev    = "875074b7a23734021974345b3dc297918e453aa2";
-    sha256 = "1psd556j4x77hjxahxxgdgnq2mcd769whvnf0gmwf3jy2svfkqlg";
+    owner = "CharlesBlonde";
+    repo = "libsoundtouch";
+    tag = version;
+    hash = "sha256-am8nHPdtKMh8ZA/jKgz2jnltpvgEga8/BjvP5nrhgvI=";
   };
 
-  postPatch = lib.optionalString (! (pythonOlder "3.4")) ''
-    substituteInPlace setup.py --replace "'enum34>=1.1.6'" ""
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace-fail "'enum-compat>=0.0.2'," ""
   '';
 
-  propagatedBuildInputs = [ requests enum34 ];
+  build-system = [ setuptools ];
 
-  doCheck = false;
+  dependencies = [
+    requests
+    websocket-client
+    zeroconf
+  ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTests = [
+    # mock data order mismatch
+    "test_select_content_item"
+    "test_snapshot_restore"
+  ];
+
+  pythonImportsCheck = [ "libsoundtouch" ];
+
+  meta = {
     description = "Bose Soundtouch Python library";
-    homepage    = https://github.com/CharlesBlonde/libsoundtouch;
-    license     = licenses.asl20;
+    homepage = "https://github.com/CharlesBlonde/libsoundtouch";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
   };
 }

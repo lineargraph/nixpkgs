@@ -1,110 +1,170 @@
-{ pkgs, stdenv, fetchurl, fetchFromGitHub, makeWrapper, gawk, gnum4, gnused
-, libxml2, libxslt, ncurses, openssl, perl, autoreconfHook
-, openjdk ? null # javacSupport
-, unixODBC ? null # odbcSupport
-, libGLU_combined ? null, wxGTK ? null, wxmac ? null, xorg ? null # wxSupport
+{
+  # options set through beam-packages
+  # systemd support for epmd only
+  systemdSupport ? null,
+  wxSupport ? true,
+
+  # options set by version specific files, e.g. 28.nix
+  version,
+  hash ? null,
+
 }:
+{
+  # overridable options
+  enableDebugInfo ? false,
+  enableHipe ? true,
+  enableKernelPoll ? true,
+  enableSmpSupport ? true,
+  enableThreads ? true,
+  javacSupport ? false,
+  odbcSupport ? false,
+  parallelBuild ? true,
 
-{ baseName ? "erlang"
-, version
-, sha256 ? null
-, rev ? "OTP-${version}"
-, src ? fetchFromGitHub { inherit rev sha256; owner = "erlang"; repo = "otp"; }
-, enableHipe ? true
-, enableDebugInfo ? false
-, enableThreads ? true
-, enableSmpSupport ? true
-, enableKernelPoll ? true
-, javacSupport ? false, javacPackages ? [ openjdk ]
-, odbcSupport ? false, odbcPackages ? [ unixODBC ]
-, wxSupport ? true, wxPackages ? [ libGLU_combined wxGTK xorg.libX11 ]
-, preUnpack ? "", postUnpack ? ""
-, patches ? [], patchPhase ? "", prePatch ? "", postPatch ? ""
-, configureFlags ? [], configurePhase ? "", preConfigure ? "", postConfigure ? ""
-, buildPhase ? "", preBuild ? "", postBuild ? ""
-, installPhase ? "", preInstall ? "", postInstall ? ""
-, installTargets ? "install install-docs"
-, checkPhase ? "", preCheck ? "", postCheck ? ""
-, fixupPhase ? "", preFixup ? "", postFixup ? ""
-, meta ? {}
+  fetchFromGitHub,
+  gawk,
+  gnum4,
+  gnused,
+  lib,
+  libGL,
+  libGLU,
+  libxml2,
+  libxslt,
+  makeWrapper,
+  ncurses,
+  nix-update-script,
+  openjdk11,
+  openssl,
+  perl,
+  runtimeShell,
+  stdenv,
+  systemd,
+  unixodbc,
+  wrapGAppsHook3,
+  wxwidgets_3_2,
+  libx11,
+  zlib,
 }:
-
-assert wxSupport -> (if stdenv.isDarwin
-  then wxmac != null
-  else libGLU_combined != null && wxGTK != null && xorg != null);
-
-assert odbcSupport -> unixODBC != null;
-assert javacSupport -> openjdk != null;
-
 let
-  inherit (stdenv.lib) optional optionals optionalAttrs optionalString;
-  wxPackages2 = if stdenv.isDarwin then [ wxmac ] else wxPackages;
+  inherit (lib)
+    optional
+    optionals
+    optionalString
+    ;
 
-in stdenv.mkDerivation ({
-  name = "${baseName}-${version}"
-    + optionalString javacSupport "-javac"
-    + optionalString odbcSupport "-odbc";
+  wxPackages2 =
+    if stdenv.hostPlatform.isDarwin then
+      [ wxwidgets_3_2 ]
+    else
+      [
+        libGL
+        libGLU
+        wxwidgets_3_2
+        libx11
+        wrapGAppsHook3
+      ];
 
-  inherit src version;
+  major = builtins.head (builtins.splitVersion version);
 
-  nativeBuildInputs = [ autoreconfHook makeWrapper perl gnum4 libxslt libxml2 ];
+  enableSystemd =
+    if (systemdSupport == null) then
+      lib.meta.availableOn stdenv.hostPlatform systemd
+    else
+      systemdSupport;
 
-  buildInputs = [ ncurses openssl ]
-    ++ optionals wxSupport wxPackages2
-    ++ optionals odbcSupport odbcPackages
-    ++ optionals javacSupport javacPackages
-    ++ optionals stdenv.isDarwin (with pkgs.darwin.apple_sdk.frameworks; [ Carbon Cocoa ]);
+  runtimePath = lib.makeBinPath [
+    gawk
+    gnused
+  ];
+in
+stdenv.mkDerivation {
+  pname = "erlang" + optionalString javacSupport "_javac" + optionalString odbcSupport "_odbc";
+  inherit version;
+
+  src = fetchFromGitHub {
+    owner = "erlang";
+    repo = "otp";
+    tag = "OTP-${version}";
+    inherit hash;
+  };
+
+  env = {
+    # only build man pages and shell/IDE docs
+    DOC_TARGETS = "man chunks";
+    LANG = "C.UTF-8";
+  };
+
+  nativeBuildInputs = [
+    makeWrapper
+    perl
+    gnum4
+    libxslt
+    libxml2
+  ];
+
+  buildInputs = [
+    ncurses
+    openssl
+    zlib
+  ]
+  ++ optionals wxSupport wxPackages2
+  ++ optionals odbcSupport [ unixodbc ]
+  ++ optionals javacSupport [ openjdk11 ]
+  ++ optionals enableSystemd [ systemd ];
+
+  # disksup requires a shell
+  postPatch = ''
+    substituteInPlace lib/os_mon/src/disksup.erl --replace-fail '"sh ' '"${runtimeShell} '
+  '';
 
   debugInfo = enableDebugInfo;
 
-  # Clang 4 (rightfully) thinks signed comparisons of pointers with NULL are nonsense
-  prePatch = ''
-    substituteInPlace lib/wx/c_src/wxe_impl.cpp --replace 'temp > NULL' 'temp != NULL'
+  # On some machines, parallel build reliably crashes on `GEN    asn1ct_eval_ext.erl` step
+  enableParallelBuilding = parallelBuild;
 
-    ${prePatch}
-  '';
+  configureFlags = [
+    "--with-ssl=${lib.getOutput "out" openssl}"
+    "--with-ssl-incl=${lib.getDev openssl}"
+  ]
+  ++ optional enableThreads "--enable-threads"
+  ++ optional enableSmpSupport "--enable-smp-support"
+  ++ optional enableKernelPoll "--enable-kernel-poll"
+  ++ optional enableHipe "--enable-hipe"
+  ++ optional javacSupport "--with-javac"
+  ++ optional odbcSupport "--with-odbc=${unixodbc}"
+  ++ optional wxSupport "--enable-wx"
+  ++ optional enableSystemd "--enable-systemd"
+  ++ optional stdenv.hostPlatform.isDarwin "--enable-darwin-64bit"
+  # make[3]: *** [yecc.beam] Segmentation fault: 11
+  ++ optional (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isx86_64) "--disable-jit";
 
-  postPatch = ''
-    patchShebangs make
-
-    ${postPatch}
-  '';
-
-  preConfigure = ''
-    ./otp_build autoconf
-  '';
-
-  configureFlags = [ "--with-ssl=${openssl.dev}" ]
-    ++ optional enableThreads "--enable-threads"
-    ++ optional enableSmpSupport "--enable-smp-support"
-    ++ optional enableKernelPoll "--enable-kernel-poll"
-    ++ optional enableHipe "--enable-hipe"
-    ++ optional javacSupport "--with-javac"
-    ++ optional odbcSupport "--with-odbc=${unixODBC}"
-    ++ optional wxSupport "--enable-wx"
-    ++ optional stdenv.isDarwin "--enable-darwin-64bit";
-
-  # install-docs will generate and install manpages and html docs
-  # (PDFs are generated only when fop is available).
+  installTargets = [
+    "install"
+    "install-docs"
+  ];
 
   postInstall = ''
-    ln -s $out/lib/erlang/lib/erl_interface*/bin/erl_call $out/bin/erl_call
+    ln -sv $out/lib/erlang/lib/erl_interface*/bin/erl_call $out/bin/erl_call
 
-    ${postInstall}
+    wrapProgram $out/lib/erlang/bin/erl --prefix PATH ":" "${runtimePath}"
+    wrapProgram $out/lib/erlang/bin/start_erl --prefix PATH ":" "${runtimePath}"
   '';
 
-  # Some erlang bin/ scripts run sed and awk
-  postFixup = ''
-    wrapProgram $out/lib/erlang/bin/erl --prefix PATH ":" "${gnused}/bin/"
-    wrapProgram $out/lib/erlang/bin/start_erl --prefix PATH ":" "${stdenv.lib.makeBinPath [ gnused gawk ]}"
-  '';
+  passthru = {
+    updateScript = nix-update-script {
+      extraArgs = [
+        "--version-regex"
+        "OTP-(${major}.*)"
+        "--override-filename"
+        "pkgs/development/interpreters/erlang/${major}.nix"
+      ];
+    };
+  };
 
-  setupHook = ./setup-hook.sh;
-
-  meta = with stdenv.lib; ({
-    homepage = http://www.erlang.org/;
-    downloadPage = "http://www.erlang.org/download.html";
+  meta = {
+    homepage = "https://www.erlang.org/";
+    downloadPage = "https://www.erlang.org/download.html";
     description = "Programming language used for massively scalable soft real-time systems";
+    changelog = "https://github.com/erlang/otp/releases/tag/OTP-${version}";
 
     longDescription = ''
       Erlang is a programming language used to build massively scalable
@@ -115,29 +175,8 @@ in stdenv.mkDerivation ({
       tolerance.
     '';
 
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ the-kenny sjmackenzie couchemar gleber ];
-    license = licenses.asl20;
-  } // meta);
+    platforms = lib.platforms.unix;
+    teams = [ lib.teams.beam ];
+    license = lib.licenses.asl20;
+  };
 }
-// optionalAttrs (preUnpack != "")      { inherit preUnpack; }
-// optionalAttrs (postUnpack != "")     { inherit postUnpack; }
-// optionalAttrs (patches != [])        { inherit patches; }
-// optionalAttrs (patchPhase != "")     { inherit patchPhase; }
-// optionalAttrs (configureFlags != []) { inherit configureFlags; }
-// optionalAttrs (configurePhase != "") { inherit configurePhase; }
-// optionalAttrs (preConfigure != "")   { inherit preConfigure; }
-// optionalAttrs (postConfigure != "")  { inherit postConfigure; }
-// optionalAttrs (buildPhase != "")     { inherit buildPhase; }
-// optionalAttrs (preBuild != "")       { inherit preBuild; }
-// optionalAttrs (postBuild != "")      { inherit postBuild; }
-// optionalAttrs (checkPhase != "")     { inherit checkPhase; }
-// optionalAttrs (preCheck != "")       { inherit preCheck; }
-// optionalAttrs (postCheck != "")      { inherit postCheck; }
-// optionalAttrs (installPhase != "")   { inherit installPhase; }
-// optionalAttrs (installTargets != "") { inherit installTargets; }
-// optionalAttrs (preInstall != "")     { inherit preInstall; }
-// optionalAttrs (fixupPhase != "")     { inherit fixupPhase; }
-// optionalAttrs (preFixup != "")       { inherit preFixup; }
-// optionalAttrs (postFixup != "")      { inherit postFixup; }
-)

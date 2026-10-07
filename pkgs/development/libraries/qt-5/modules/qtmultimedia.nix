@@ -1,17 +1,42 @@
-{ qtModule, stdenv, qtbase, qtdeclarative, pkgconfig
-, alsaLib, gstreamer, gst-plugins-base, libpulseaudio
-, darwin
+{
+  qtModule,
+  lib,
+  stdenv,
+  qtbase,
+  qtdeclarative,
+  pkg-config,
+  alsa-lib,
+  gst_all_1,
+  libpulseaudio,
+  wayland,
 }:
 
-with stdenv.lib;
-
 qtModule {
-  name = "qtmultimedia";
-  qtInputs = [ qtbase qtdeclarative ];
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ gstreamer gst-plugins-base libpulseaudio]
-    ++ optional (stdenv.isLinux) alsaLib;
-  outputs = [ "bin" "dev" "out" ];
+  pname = "qtmultimedia";
+  propagatedBuildInputs = [
+    qtbase
+    qtdeclarative
+  ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs =
+    with gst_all_1;
+    [
+      gstreamer
+      gst-plugins-base
+    ]
+    # https://github.com/NixOS/nixpkgs/pull/169336 regarding libpulseaudio
+    ++ lib.optionals stdenv.hostPlatform.isLinux [
+      libpulseaudio
+      alsa-lib
+      wayland
+    ];
+  outputs = [
+    "bin"
+    "dev"
+    "out"
+  ];
   qmakeFlags = [ "GST_VERSION=1.0" ];
-  NIX_LDFLAGS = optionalString (stdenv.isDarwin) "-lobjc";
+  env = lib.optionalAttrs (stdenv.hostPlatform.isDarwin) {
+    NIX_LDFLAGS = "-lobjc";
+  };
 }

@@ -1,27 +1,67 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, libxml2
-, libxslt
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  cython,
+  setuptools,
+  pkg-config,
+
+  # native dependencies
+  libxml2,
+  libxslt,
+  zlib,
+  xcodebuild,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "lxml";
-  version = "4.2.1";
+  version = "6.1.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "e2629cdbcad82b83922a3488937632a4983ecc0fed3e5cfbf430d069382eeb9b";
+  src = fetchFromGitHub {
+    owner = "lxml";
+    repo = "lxml";
+    tag = "lxml-${finalAttrs.version}";
+    hash = "sha256-SRJaegK4PxgK0rdILVp3J92VnjPmExiD2AuMLoGQIbA=";
   };
 
-  buildInputs = [ libxml2 libxslt ];
+  build-system = [
+    cython
+    setuptools
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [ xcodebuild ];
 
-  hardeningDisable = stdenv.lib.optional stdenv.isDarwin "format";
+  # required for build time dependency check
+  nativeBuildInputs = [
+    pkg-config
+  ];
+
+  buildInputs = [
+    libxml2
+    libxslt
+    zlib
+  ];
+
+  env = lib.optionalAttrs stdenv.cc.isClang {
+    NIX_CFLAGS_COMPILE = "-Wno-error=incompatible-function-pointer-types";
+  };
+
+  # tests are meant to be ran "in-place" in the same directory as src
+  doCheck = false;
+
+  pythonImportsCheck = [
+    "lxml"
+    "lxml.etree"
+  ];
 
   meta = {
+    changelog = "https://github.com/lxml/lxml/blob/${finalAttrs.src.tag}/CHANGES.txt";
     description = "Pythonic binding for the libxml2 and libxslt libraries";
-    homepage = http://lxml.de;
-    license = stdenv.lib.licenses.bsd3;
-    maintainers = with stdenv.lib.maintainers; [ sjourdois ];
+    homepage = "https://lxml.de";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
-}
+})

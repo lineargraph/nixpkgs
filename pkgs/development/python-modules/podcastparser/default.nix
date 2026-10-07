@@ -1,26 +1,37 @@
-{ lib, buildPythonPackage, fetchFromGitHub, nose }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytest-cov-stub,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "podcastparser";
-  version = "0.6.2";
-  name = "${pname}-${version}";
+  version = "0.6.11";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "gpodder";
     repo = "podcastparser";
-    rev = version;
-    sha256 = "1mhg7192d6s1ll9mx1b63yfj6k4cnv4i95jllbnydyjv9ykkv0k1";
+    tag = version;
+    hash = "sha256-eF/YHKSCMZnavkoX3LcAFHPSPABijn+aPVzaeRYY3WI=";
   };
 
-  propagatedBuildInputs = [ ];
+  build-system = [ setuptools ];
 
-  buildInputs = [ nose ];
+  nativeCheckInputs = [
+    pytest-cov-stub
+    pytestCheckHook
+  ];
 
-  checkPhase = "nosetests test_*.py";
+  pythonImportsCheck = [ "podcastparser" ];
 
   meta = {
-    description = "podcastparser is a simple, fast and efficient podcast parser written in Python.";
-    homepage = http://gpodder.org/podcastparser/;
+    description = "Module to parse podcasts";
+    homepage = "http://gpodder.org/podcastparser/";
+    changelog = "https://github.com/gpodder/podcastparser/releases/tag/${src.tag}";
     license = lib.licenses.bsd2;
     maintainers = with lib.maintainers; [ mic92 ];
   };

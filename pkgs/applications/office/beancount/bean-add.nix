@@ -1,7 +1,14 @@
-{ stdenv, fetchFromGitHub, python3Packages }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  python3Packages,
+  installShellFiles,
+}:
 
-stdenv.mkDerivation rec {
-  name = "bean-add-2018-01-08";
+stdenv.mkDerivation {
+  pname = "bean-add";
+  version = "0-unstable-2018-01-08";
 
   src = fetchFromGitHub {
     owner = "simon-v";
@@ -12,20 +19,17 @@ stdenv.mkDerivation rec {
 
   propagatedBuildInputs = with python3Packages; [ python ];
 
-  installPhase = ''
-    mkdir -p $out/bin/
-    cp bean-add $out/bin/bean-add
-    chmod +x $out/bin/bean-add
+  nativeBuildInputs = [ installShellFiles ];
+
+  postInstall = ''
+    installBin bean-add
   '';
 
   meta = {
-    homepage = https://github.com/simon-v/bean-add/;
-    description = "beancount transaction entry assistant";
-
-    # The (only) source file states:
-    #   License: "Do what you feel is right, but don't be a jerk" public license.
-
-    maintainers = with stdenv.lib.maintainers; [ ];
+    homepage = "https://github.com/simon-v/bean-add/";
+    description = "Beancount transaction entry assistant";
+    mainProgram = "bean-add";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ matthiasbeyer ];
   };
 }
-

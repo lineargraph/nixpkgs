@@ -1,32 +1,22 @@
-{ stdenv, fetchurl, ocaml, findlib, jbuilder }:
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+}:
 
-assert stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "4.01";
-
-stdenv.mkDerivation rec {
+buildDunePackage (finalAttrs: {
   pname = "wtf8";
-  name = "ocaml-${pname}-${version}";
-  version = "1.0.1";
+  version = "1.0.2";
 
   src = fetchurl {
-    url = "https://github.com/flowtype/ocaml-${pname}/releases/download/v${version}/${pname}-${version}.tbz";
-    sha256 = "1msg3vycd3k8qqj61sc23qks541cxpb97vrnrvrhjnqxsqnh6ygq";
+    url = "https://github.com/flowtype/ocaml-wtf8/releases/download/v${finalAttrs.version}/wtf8-v${finalAttrs.version}.tbz";
+    hash = "sha256-d5/3KUBAWRj8tntr4RkJ74KWW7wvn/B/m1nx0npnzyc=";
   };
 
-  unpackCmd = "tar xjf $src";
-
-  buildInputs = [ ocaml findlib jbuilder ];
-
-  buildPhase = "jbuilder build -p wtf8";
-
-  inherit (jbuilder) installPhase;
-
-  createFindLibDestdir = true;
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/flowtype/ocaml-wtf8;
-    description = "WTF-8 is a superset of UTF-8 that allows unpaired surrogates.";
-    license = licenses.mit;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = [ maintainers.eqyiel ];
+  meta = {
+    homepage = "https://github.com/flowtype/ocaml-wtf8";
+    description = "WTF-8 is a superset of UTF-8 that allows unpaired surrogates";
+    license = lib.licenses.mit;
+    maintainers = [ lib.maintainers.eqyiel ];
   };
-}
+})

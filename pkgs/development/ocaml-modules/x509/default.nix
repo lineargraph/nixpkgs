@@ -1,33 +1,53 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg
-, asn1-combinators, astring, nocrypto, ppx_sexp_conv
-, ounit, cstruct-unix
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+  alcotest,
+  asn1-combinators,
+  domain-name,
+  fmt,
+  gmap,
+  kdf,
+  mirage-crypto,
+  mirage-crypto-ec,
+  mirage-crypto-pk,
+  ipaddr,
+  logs,
+  base64,
+  ohex,
 }:
 
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-x509-${version}";
-  version = "0.6.1";
+buildDunePackage (finalAttrs: {
+  pname = "x509";
+  version = "1.2.0";
 
   src = fetchurl {
-    url = "https://github.com/mirleft/ocaml-x509/releases/download/${version}/x509-${version}.tbz";
-    sha256 = "1c62mw9rnzq0rs3ihbhfs18nv4mdzwag7893hlqgji3wmaai70pk";
+    url = "https://github.com/mirleft/ocaml-x509/releases/download/v${finalAttrs.version}/x509-${finalAttrs.version}.tbz";
+    hash = "sha256-SD9SkJah/O3D+YJ7gmgZ1qKU+Xq6CPkD62v4n7D2FnQ=";
   };
 
-  unpackCmd = "tar -xjf $curSrc";
-
-  buildInputs = [ ocaml findlib ocamlbuild topkg ppx_sexp_conv ounit cstruct-unix ];
-  propagatedBuildInputs = [ asn1-combinators astring nocrypto ];
-
-  buildPhase = "${topkg.run} build --tests true";
+  checkInputs = [ alcotest ];
+  propagatedBuildInputs = [
+    asn1-combinators
+    domain-name
+    fmt
+    gmap
+    mirage-crypto
+    mirage-crypto-pk
+    mirage-crypto-ec
+    kdf
+    logs
+    base64
+    ipaddr
+    ohex
+  ];
 
   doCheck = true;
-  checkPhase = "${topkg.run} test";
 
-  inherit (topkg) installPhase;
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mirleft/ocaml-x509;
+  meta = {
+    homepage = "https://github.com/mirleft/ocaml-x509";
     description = "X509 (RFC5280) handling in OCaml";
-    license = licenses.bsd2;
-    maintainers = with maintainers; [ vbgl ];
+    license = lib.licenses.bsd2;
+    maintainers = [ ];
   };
-}
+})

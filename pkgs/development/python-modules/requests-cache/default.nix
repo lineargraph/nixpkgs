@@ -1,21 +1,105 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, mock, requests, six, urllib3 }:
+{
+  lib,
+  attrs,
+  buildPythonPackage,
+  hatchling,
+  boto3,
+  botocore,
+  cattrs,
+  fetchFromGitHub,
+  itsdangerous,
+  platformdirs,
+  psutil,
+  pymongo,
+  pytestCheckHook,
+  pytest-rerunfailures,
+  pytest-xdist,
+  pyyaml,
+  redis,
+  requests,
+  requests-mock,
+  responses,
+  rich,
+  tenacity,
+  time-machine,
+  ujson,
+  orjson,
+  urllib3,
+  url-normalize,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "requests-cache";
-  version = "0.4.13";
+  version = "1.3.3";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "18jpyivnq5pjbkymk3i473rihpj2bgikafpha7xvr6w736hiqmpy";
+  src = fetchFromGitHub {
+    owner = "requests-cache";
+    repo = "requests-cache";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-iqoP7NalipY3BXMQkh+lrzPtPQehYg3bB/3azgx0iuo=";
   };
 
-  buildInputs = [ mock ];
-  propagatedBuildInputs = [ requests six urllib3 ];
+  build-system = [ hatchling ];
 
-  meta = with stdenv.lib; {
+  dependencies = [
+    attrs
+    cattrs
+    platformdirs
+    requests
+    urllib3
+    url-normalize
+  ];
+
+  optional-dependencies = {
+    dynamodb = [
+      boto3
+      botocore
+    ];
+    mongodb = [ pymongo ];
+    redis = [ redis ];
+    security = [ itsdangerous ];
+    yaml = [ pyyaml ];
+    all = [
+      orjson
+      ujson
+    ]
+    ++ lib.concatAttrValues (lib.removeAttrs finalAttrs.passthru.optional-dependencies [ "all" ]);
+  };
+
+  nativeCheckInputs = [
+    psutil
+    pytestCheckHook
+    pytest-rerunfailures
+    pytest-xdist
+    requests-mock
+    responses
+    rich
+    tenacity
+    time-machine
+  ];
+
+  preCheck = ''
+    export HOME=$(mktemp -d);
+  '';
+
+  enabledTestPaths = [
+    # Integration tests require local DBs
+    "tests/unit"
+  ];
+
+  disabledTests = [
+    # Flaky
+    "test_request_only_if_cached__stale_if_error__expired"
+  ];
+
+  pythonImportsCheck = [ "requests_cache" ];
+
+  meta = {
     description = "Persistent cache for requests library";
-    homepage = https://pypi.python.org/pypi/requests-cache;
-    license = licenses.bsd3;
+    homepage = "https://github.com/reclosedev/requests-cache";
+    changelog = "https://github.com/requests-cache/requests-cache/blob/v${finalAttrs.version}/HISTORY.md";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ fab ];
   };
-}
+})

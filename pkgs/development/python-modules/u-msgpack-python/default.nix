@@ -1,32 +1,31 @@
-{ buildPythonPackage
-, lib
-, fetchurl
-, glibcLocales
-, python
+{
+  buildPythonPackage,
+  lib,
+  fetchPypi,
+  glibcLocales,
+  unittestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "u-msgpack-python";
-  version = "2.5.0";
-  name = "${pname}-${version}";
+  version = "2.8.0";
+  format = "setuptools";
 
-  src = fetchurl {
-    url = "mirror://pypi/${builtins.substring 0 1 pname}/${pname}/${name}.tar.gz";
-    sha256 = "7ff18ae3721fa75571f9329c08f7c0120416a6ae36194bd8674f65b3b78d0702";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-uAGoPW7XXm30HkRRi08qnCIdwtpLzVOA46D+2lILxho=";
   };
 
-  LC_ALL="en_US.UTF-8";
+  env.LC_ALL = "en_US.UTF-8";
 
   buildInputs = [ glibcLocales ];
 
-  checkPhase = ''
-    ${python.interpreter} -m unittest discover
-  '';
+  nativeCheckInputs = [ unittestCheckHook ];
 
   meta = {
-    description = "A portable, lightweight MessagePack serializer and deserializer written in pure Python";
-    homepage = https://github.com/vsergeev/u-msgpack-python;
+    description = "Portable, lightweight MessagePack serializer and deserializer written in pure Python";
+    homepage = "https://github.com/vsergeev/u-msgpack-python";
+    changelog = "https://github.com/vsergeev/u-msgpack-python/blob/v${version}/CHANGELOG.md";
     license = lib.licenses.mit;
   };
-
 }

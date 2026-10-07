@@ -1,14 +1,20 @@
-{ stdenv, lib, fetchFromGitHub, runCommand, rubies ? null }:
+{
+  stdenv,
+  lib,
+  fetchFromGitHub,
+  runCommand,
+  rubies ? null,
+}:
 
 let
   rubiesEnv = runCommand "chruby-env" { preferLocalBuild = true; } ''
     mkdir $out
-    ${lib.concatStrings
-        (lib.mapAttrsToList (name: path: "ln -s ${path} $out/${name}\n") rubies)}
+    ${lib.concatStrings (lib.mapAttrsToList (name: path: "ln -s ${path} $out/${name}\n") rubies)}
   '';
 
-in stdenv.mkDerivation rec {
-  name = "chruby-${version}";
+in
+stdenv.mkDerivation rec {
+  pname = "chruby";
 
   version = "0.3.9";
 
@@ -18,8 +24,6 @@ in stdenv.mkDerivation rec {
     rev = "v${version}";
     sha256 = "1894g6fymr8kra9vwhbmnrcr58l022mcd7g9ans4zd3izla2j3gx";
   };
-
-  phases = [ "unpackPhase" "patchPhase" "installPhase" "fixupPhase" ];
 
   patches = lib.optionalString (rubies != null) [
     ./env.patch
@@ -35,11 +39,12 @@ in stdenv.mkDerivation rec {
     cp -r share $out
   '';
 
-  meta = with lib; {
+  meta = {
     description = "Changes the current Ruby";
-    homepage = https://github.com/postmodern/chruby;
-    license = licenses.mit;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ cstrahan ];
+    homepage = "https://github.com/postmodern/chruby";
+    license = lib.licenses.mit;
+    maintainers = [ ];
+    mainProgram = "chruby-exec";
+    platforms = lib.platforms.unix;
   };
 }

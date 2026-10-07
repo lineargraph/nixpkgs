@@ -1,23 +1,40 @@
-{ lib, buildPythonPackage, fetchPypi, pytestcache, pytest, isort }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  isort,
+  poetry-core,
+  pytest,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pytest-isort";
-  version = "0.1.0";
+  version = "4.0.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "e92798127e21d22513c62070989f0fb3b712650e48a4db13e5b8e8034d367cfe";
+  src = fetchFromGitHub {
+    owner = "stephrdev";
+    repo = "pytest-isort";
+    tag = version;
+    hash = "sha256-fMt2tYc+Ngb57T/VJYxI2UN25qvIrgIsEoImVIitDK4=";
   };
 
-  propagatedBuildInputs = [ pytestcache pytest isort ];
+  nativeBuildInputs = [ poetry-core ];
 
-  # no tests in PyPI tarball, no tags on GitHub
-  # https://github.com/moccu/pytest-isort/pull/8
-  doCheck = false;
+  buildInputs = [ pytest ];
 
-  meta = with lib; {
+  propagatedBuildInputs = [ isort ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "pytest_isort" ];
+
+  meta = {
     description = "Pytest plugin to perform isort checks (import ordering)";
-    homepage = https://github.com/moccu/pytest-isort/;
-    license = licenses.bsd3;
+    homepage = "https://github.com/moccu/pytest-isort/";
+    changelog = "https://github.com/stephrdev/pytest-isort/blob/${version}/CHANGELOG.rst";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

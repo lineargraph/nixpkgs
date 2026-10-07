@@ -1,27 +1,70 @@
-{ stdenv, fetchurl, python, exiv2, scons, boost }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  setuptools,
+  pybind11,
+  psutil,
+  pkgs,
+}:
 
-stdenv.mkDerivation rec {
+buildPythonPackage (finalAttrs: {
   pname = "pyexiv2";
-  version = "0.3.2";
-  name = "${pname}-${version}";
-  
-  src = fetchurl {
-    url = "http://launchpad.net/pyexiv2/0.3.x/0.3.2/+download/${name}.tar.bz2";
-    sha256 = "09r1ga6kj5cnmrldpkqzvdhh7xi7aad9g4fbcr1gawgsd9y13g0a";
+  version = "2.16.0";
+  pyproject = true;
+  __structuredAttrs = true;
+
+  src = fetchFromGitHub {
+    owner = "LeoHsiao1";
+    repo = "pyexiv2";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-FH5nbbh0vaErJzBl6L2HPh0SQXkQ558abTBml7nSLU8=";
   };
 
-  buildPhase = ''
-    sed -i -e "s@env = Environment()@env = Environment( ENV = os.environ )@" src/SConscript
-    scons
-  '';
-  installPhase = ''
-    sed -i -e "s@    python_lib_path = get_python_lib(plat_specific=True)@    python_lib_path = \'/lib/python2.7/site-packages\'@" src/SConscript
-    scons install DESTDIR=$out
+  build-system = [
+    setuptools
+  ];
+
+  buildInputs = [
+    pybind11
+    pkgs.exiv2
+  ];
+
+  preBuild = ''
+    ln -s ${lib.getLib pkgs.exiv2}/lib/libexiv2${stdenv.hostPlatform.extensions.sharedLibrary} pyexiv2/lib/libexiv2${stdenv.hostPlatform.extensions.sharedLibrary}
   '';
 
-  buildInputs = [ python exiv2 scons boost ];
+  nativeCheckInputs = [
+    pytestCheckHook
+    psutil
+  ];
+
+  # Remove source to prevent it trying to import from it instead of the built package
+  preCheck = ''
+    shopt -s extglob
+    rm -r pyexiv2/!(tests)
+  '';
+
+  disabledTests = [
+    # Asserts a specific exiv2 version
+    "test_version"
+    # Broken with exiv2 0.28.9, remove on next version bump
+    "test_read_raw_xmp"
+    "test_modify_raw_xmp"
+    "test_memory_leak_when_reading"
+  ];
+
+  pythonImportsCheck = [
+    "pyexiv2"
+  ];
 
   meta = {
-    platforms = stdenv.lib.platforms.linux;
+    description = "Python library for reading and writing image metadata, including EXIF, IPTC, XMP, ICC Profile";
+    homepage = "https://github.com/LeoHsiao1/pyexiv2";
+    changelog = "https://github.com/LeoHsiao1/pyexiv2/releases/tag/v${finalAttrs.version}";
+    license = lib.licenses.gpl3Only;
+    maintainers = with lib.maintainers; [ ambossmann ];
   };
-}
+})

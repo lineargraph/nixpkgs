@@ -1,25 +1,36 @@
-{ stdenv, buildPythonPackage, fetchPypi, psutil, docutils }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  psutil,
+  typing-extensions,
+}:
 
 buildPythonPackage rec {
   pname = "pynisher";
-  version = "0.4.2";
+  version = "1.0.10";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0sqa3zzqcr4vl5yhnafw1y187z62m4alajggc7dm2riw2ihd9kxl";
+    hash = "sha256-JyK3ldIhKd3VJHA4u6cnrgbs2zpZQgcIF758jUpoDjE=";
   };
 
-  propagatedBuildInputs = [ psutil docutils ];
+  propagatedBuildInputs = [
+    psutil
+    typing-extensions
+  ];
 
-  # no tests in the Pypi archive
+  # No tests in the Pypi archive
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "The pynisher is a little module intended to limit a functions resources.";
-    homepage = https://github.com/sfalkner/pynisher;
-    license = licenses.mit;
-    maintainers = with maintainers; [ psyanticy ];
+  pythonImportsCheck = [ "pynisher" ];
+
+  meta = {
+    description = "Module intended to limit a functions resources";
+    homepage = "https://github.com/automl/pynisher";
+    changelog = "https://github.com/automl/pynisher/releases/tag/v${version}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ psyanticy ];
   };
-
 }
-

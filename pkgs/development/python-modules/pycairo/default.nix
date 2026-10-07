@@ -1,35 +1,56 @@
-{ lib, fetchFromGitHub, python, buildPythonPackage, pytest, pkgconfig, cairo, xlibsWrapper, isPyPy }:
+{
+  lib,
+  fetchFromGitHub,
+  meson,
+  ninja,
+  buildPythonPackage,
+  pytestCheckHook,
+  pkg-config,
+  cairo,
+  python,
+}:
 
 buildPythonPackage rec {
   pname = "pycairo";
-  version = "1.16.3";
+  version = "1.29.0";
 
-  disabled = isPyPy;
+  pyproject = false;
 
   src = fetchFromGitHub {
     owner = "pygobject";
     repo = "pycairo";
-    rev = "v${version}";
-    sha256 = "0clk6wrfls3fa1xrn844762qfaw6gs4ivwkrfysidbzmlbxhpngl";
+    tag = "v${version}";
+    hash = "sha256-ErWxSQFYpqTZ9TPrcEUjVTa0LU619nm04TWTshGgttQ=";
   };
 
-  # We need to create the pkgconfig file but it cannot be installed as a wheel since wheels
-  # are supposed to be relocatable and do not support --prefix option
-  buildPhase = ''
-    ${python.interpreter} setup.py build
-  '';
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+  ];
 
-  installPhase = ''
-    ${python.interpreter} setup.py install --skip-build --prefix="$out" --optimize=1
-  '';
+  buildInputs = [ cairo ];
 
-  checkPhase = ''
-    ${python.interpreter} setup.py test
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ python cairo xlibsWrapper ];
-  checkInputs = [ pytest ];
+  # Cairo tries to load system fonts by default.
+  # It's surfaced as a Cairo "out of memory" error in tests.
+  __impureHostDeps = [ "/System/Library/Fonts" ];
 
-  meta.platforms = lib.platforms.linux ++ lib.platforms.darwin;
+  mesonFlags = [
+    # This is only used for figuring out what version of Python is in
+    # use, and related stuff like figuring out what the install prefix
+    # should be, but it does need to be able to execute Python code.
+    "-Dpython=${python.pythonOnBuildForHost.interpreter}"
+  ];
+
+  meta = {
+    description = "Python 3 bindings for cairo";
+    homepage = "https://pycairo.readthedocs.io/";
+    license = with lib.licenses; [
+      lgpl21Only
+      mpl11
+    ];
+    platforms = lib.platforms.unix;
+  };
 }

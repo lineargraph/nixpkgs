@@ -1,32 +1,45 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
-, sphinx
-, CommonMark_54
-, docutils
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  commonmark,
+  docutils,
+  sphinx,
+  isPy3k,
 }:
 
 buildPythonPackage rec {
   pname = "recommonmark";
-  name = "${pname}-${version}";
-  version = "0.4.0";
+  version = "0.7.1";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "6e29c723abcf5533842376d87c4589e62923ecb6002a8e059eb608345ddaff9d";
+  src = fetchFromGitHub {
+    owner = "rtfd";
+    repo = "recommonmark";
+    rev = version;
+    sha256 = "0kwm4smxbgq0c0ybkxfvlgrfb3gq9amdw94141jyykk9mmz38379";
   };
 
-  checkInputs = [ pytest sphinx ];
-  propagatedBuildInputs = [ CommonMark_54 docutils ];
+  nativeCheckInputs = [ pytestCheckHook ];
+  propagatedBuildInputs = [
+    commonmark
+    docutils
+    sphinx
+  ];
 
-  # No tests in archive
-  doCheck = false;
+  disabledTests = [
+    # https://github.com/readthedocs/recommonmark/issues/164
+    "test_lists"
+    "test_integration"
+  ];
+
+  doCheck = !isPy3k; # Not yet compatible with latest Sphinx.
+  pythonImportsCheck = [ "recommonmark" ];
 
   meta = {
-    description = "A docutils-compatibility bridge to CommonMark";
-    homepage = https://github.com/rtfd/recommonmark;
+    description = "Docutils-compatibility bridge to CommonMark";
+    homepage = "https://github.com/rtfd/recommonmark";
     license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ fridh ];
   };
 }

@@ -1,32 +1,71 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pkginfo
-, requests
-, requests_toolbelt
-, tqdm
-, pyblake2
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  id,
+  keyring,
+  packaging,
+  pkginfo,
+  readme-renderer,
+  requests,
+  requests-toolbelt,
+  rich,
+  rfc3986,
+  setuptools,
+  setuptools-scm,
+  urllib3,
+  build,
+  pretend,
+  pytest-socket,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "twine";
-  version = "1.11.0";
-  name = "${pname}-${version}";
+  version = "6.2.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "09cz9v63f8mrs4znbjapjj2z3wdfryq8q364zm0wzjhbzzcs9n9g";
+    hash = "sha256-5e0NL9cMmVl3Dc5RyPOciUXFdOGBc6e4GALatRtLdc8=";
   };
 
-  propagatedBuildInputs = [ pkginfo requests requests_toolbelt tqdm pyblake2 ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
-  # Requires network
-  doCheck = false;
+  dependencies = [
+    id
+    keyring
+    packaging
+    pkginfo
+    readme-renderer
+    requests
+    requests-toolbelt
+    rfc3986
+    rich
+    urllib3
+  ];
+
+  nativeCheckInputs = [
+    build
+    pretend
+    pytest-socket
+    pytestCheckHook
+  ];
+
+  disabledTests = [
+    # docutils 0.23 string changes
+    "test_fails_rst_syntax_error"
+  ];
+
+  pythonImportsCheck = [ "twine" ];
 
   meta = {
     description = "Collection of utilities for interacting with PyPI";
-    homepage = https://github.com/pypa/twine;
+    mainProgram = "twine";
+    homepage = "https://github.com/pypa/twine";
     license = lib.licenses.asl20;
-    maintainers = with lib.maintainers; [ fridh ];
   };
 }

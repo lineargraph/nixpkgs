@@ -1,24 +1,35 @@
-{ lib, fetchurl, buildPythonPackage
-, six, systemd, pytest, mock, hypothesis, docutils
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  six,
+  udev,
+  pytest,
+  mock,
+  hypothesis,
+  docutils,
+  stdenvNoCC,
+  setuptools,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "pyudev";
-  name = "${pname}-${version}";
-  version = "0.21.0";
+  version = "0.24.4";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/p/pyudev/${name}.tar.gz";
-    sha256 = "0arz0dqp75sszsmgm6vhg92n1lsx91ihddx3m944f4ah0487ljq9";
+  src = fetchPypi {
+    inherit (finalAttrs) pname version;
+    hash = "sha256-54i7mDcAsahO/C6IhisKUa8qmV1bhryZl1RlBc97Nrw=";
   };
 
-  postPatch = ''
+  postPatch = lib.optionalString stdenvNoCC.hostPlatform.isLinux ''
     substituteInPlace src/pyudev/_ctypeslib/utils.py \
-      --replace "find_library(name)" "'${systemd.lib}/lib/libudev.so'"
-    '';
+      --replace "find_library(name)" "'${lib.getLib udev}/lib/libudev.so'"
+  '';
 
-  buildInputs = [ pytest mock hypothesis docutils ];
-  propagatedBuildInputs = [ systemd six ];
+  build-system = [ setuptools ];
+
+  dependencies = [ six ];
 
   checkPhase = ''
     py.test
@@ -28,9 +39,18 @@ buildPythonPackage rec {
   # https://github.com/pyudev/pyudev/issues/187
   doCheck = false;
 
+  nativeCheckInputs = [
+    pytest
+    mock
+    hypothesis
+    docutils
+  ];
+
   meta = {
-    homepage = http://pyudev.readthedocs.org/;
+    homepage = "https://pyudev.readthedocs.org/";
     description = "Pure Python libudev binding";
+    changelog = "https://github.com/pyudev/pyudev/blob/v${finalAttrs.version}/CHANGES.rst";
     license = lib.licenses.lgpl21Plus;
+    maintainers = [ ];
   };
-}
+})

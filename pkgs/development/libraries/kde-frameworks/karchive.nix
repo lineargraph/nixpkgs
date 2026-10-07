@@ -1,17 +1,31 @@
 {
-  mkDerivation, lib,
+  mkDerivation,
+  cmake,
   extra-cmake-modules,
-  bzip2, lzma, qtbase, zlib,
+  bzip2,
+  xz,
+  qtbase,
+  qttools,
+  zlib,
+  zstd,
 }:
 
 mkDerivation {
-  name = "karchive";
-  meta = {
-    maintainers = [ lib.maintainers.ttuegel ];
-    broken = builtins.compareVersions qtbase.version "5.7.0" < 0;
-  };
-  nativeBuildInputs = [ extra-cmake-modules ];
-  buildInputs = [ bzip2 lzma zlib ];
+  pname = "karchive";
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
+    qttools
+  ];
+  buildInputs = [
+    bzip2
+    xz
+    zlib
+    zstd
+  ];
   propagatedBuildInputs = [ qtbase ];
-  outputs = [ "out" "dev" ];
+  outputs = [
+    "out"
+    "dev"
+  ];
 }

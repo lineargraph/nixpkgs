@@ -1,24 +1,32 @@
-{ stdenv, buildPythonPackage, isPy3k, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  setuptools,
+  fetchPypi,
+  unittestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pyhomematic";
-  version = "0.1.43";
-
-  disabled = !isPy3k;
+  version = "0.1.78";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0b6f4f5c8ddca15e0a1df367bafdffb2f08f1e42f17c78b9470573287e5b20bc";
+    hash = "sha256-uB9aDa1urIwL2DBdBwPi0sHWPW7SUZ3EaAjuMLSOudc=";
   };
 
-  # PyPI tarball does not include tests/ directory
-  # Unreliable timing: https://github.com/danielperna84/pyhomematic/issues/126
-  doCheck = false;
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ unittestCheckHook ];
+
+  pythonImportsCheck = [ "pyhomematic" ];
+
+  meta = {
     description = "Python 3 Interface to interact with Homematic devices";
-    homepage = https://github.com/danielperna84/pyhomematic;
-    license = licenses.mit;
-    maintainers = with maintainers; [ dotlambda ];
+    homepage = "https://github.com/danielperna84/pyhomematic";
+    changelog = "https://github.com/danielperna84/pyhomematic/releases/tag/${version}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

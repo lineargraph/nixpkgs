@@ -1,62 +1,35 @@
-{ stdenv, fetchurl, fetchpatch, pkgs }:
+{
+  lib,
+  fetchpatch,
+  fetchurl,
+}:
 
-rec {
-  bridge_stp_helper =
-    { name = "bridge-stp-helper";
-      patch = ./bridge-stp-helper.patch;
-    };
-
-  p9_fixes =
-    { name = "p9-fixes";
-      patch = ./p9-fixes.patch;
-    };
-
-  modinst_arg_list_too_long =
-    { name = "modinst-arglist-too-long";
-      patch = ./modinst-arg-list-too-long.patch;
-    };
-
-  genksyms_fix_segfault =
-    { name = "genksyms-fix-segfault";
-      patch = ./genksyms-fix-segfault.patch;
-    };
-
-  cpu-cgroup-v2 = import ./cpu-cgroup-v2-patches;
-
-  tag_hardened = rec {
-    name = "tag-hardened";
-    patch = ./tag-hardened.patch;
-  };
-
-  copperhead_4_14 = rec {
-    name = "copperhead-4.14";
-    patch = ./copperhead-4-14.patch;
-  };
-
-  copperhead_4_16 = rec {
-    name = "copperhead-4.16";
-    patch = ./copperhead-4-16.patch;
-  };
-
-  # https://bugzilla.kernel.org/show_bug.cgi?id=197591#c6
-  iwlwifi_mvm_support_version_7_scan_req_umac_fw_command = rec {
-    name = "iwlwifi_mvm_support_version_7_scan_req_umac_fw_command";
+{
+  ath_regd_optional = rec {
+    name = "ath_regd_optional";
     patch = fetchpatch {
       name = name + ".patch";
-      url = https://bugzilla.kernel.org/attachment.cgi?id=260597;
-      sha256 = "09096npxpgvlwdz3pb3m9brvxh7vy0xc9z9p8hh85xyczyzcsjhr";
+      url = "https://github.com/openwrt/openwrt/raw/ed2015c38617ed6624471e77f27fbb0c58c8c660/package/kernel/mac80211/patches/ath/402-ath_regd_optional.patch";
+      sha256 = "1ssDXSweHhF+pMZyd6kSrzeW60eb6MO6tlf0il17RC0=";
+      postFetch = ''
+        sed -i 's/CPTCFG_/CONFIG_/g' $out
+        sed -i '/--- a\/local-symbols/,$d' $out
+      '';
     };
   };
 
-  # https://patchwork.kernel.org/patch/9626797/
-  # Should be included in 4.17, so this patch can be dropped when 4.16 becomes obsolete.
-  bcm2835_mmal_v4l2_camera_driver = rec {
-    name = "bcm2835_mmal_v4l2_camera_driver";
-    patch = fetchpatch {
-      name = name + ".patch";
-      url = https://patchwork.kernel.org/patch/9626797/raw/;
-      sha256 = "0iwb0yxsf95zv4qxkvlvhqfmzx0rk13g9clvxsharvwkb4w5lwa0";
-    };
+  bridge_stp_helper = {
+    name = "bridge-stp-helper";
+    patch = ./bridge-stp-helper.patch;
   };
 
+  request_key_helper = {
+    name = "request-key-helper";
+    patch = ./request-key-helper.patch;
+  };
+
+  libbpf_C23_compat = {
+    name = "c23-compat-libbpf";
+    patch = ./C23-compat-6.1.patch;
+  };
 }

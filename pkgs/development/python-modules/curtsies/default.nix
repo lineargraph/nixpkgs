@@ -1,25 +1,43 @@
-{ stdenv, buildPythonPackage, fetchPypi, blessings, mock, nose, pyte, wcwidth, typing }:
+{
+  lib,
+  stdenv,
+  blessed,
+  buildPythonPackage,
+  cwcwidth,
+  fetchPypi,
+  pyte,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "curtsies";
-  version = "0.3.0";
+  version = "0.4.3";
+  pyproject = true;
+
   src = fetchPypi {
     inherit pname version;
-    sha256 = "89c802ec051d01dec6fc983e9856a3706e4ea8265d2940b1f6d504a9e26ed3a9";
+    hash = "sha256-ECoP+/lSEk8b4iL9aYnaTsfM4E5J9hMAnl9UrTdhiCU=";
   };
 
-  propagatedBuildInputs = [ blessings wcwidth typing ];
+  nativeBuildInputs = [ setuptools ];
 
-  checkInputs = [ mock pyte nose ];
+  propagatedBuildInputs = [
+    blessed
+    cwcwidth
+  ];
 
-  checkPhase = ''
-    nosetests tests
-  '';
+  nativeCheckInputs = [
+    pyte
+    pytestCheckHook
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Curses-like terminal wrapper, with colored strings!";
-    homepage = https://pypi.python.org/pypi/curtsies;
-    license = licenses.mit;
-    maintainers = with maintainers; [ flokli ];
+  meta = {
+    description = "Curses-like terminal wrapper, with colored strings";
+    homepage = "https://github.com/bpython/curtsies";
+    changelog = "https://github.com/bpython/curtsies/blob/v${version}/CHANGELOG.md";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ flokli ];
+    broken = stdenv.hostPlatform.isDarwin;
   };
 }

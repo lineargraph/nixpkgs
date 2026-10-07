@@ -1,31 +1,71 @@
-{ stdenv, fetchurl, ocaml, findlib, pkgconfig, gtk2, libgnomecanvas, libglade, gtksourceview }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  fetchFromGitHub,
+  fetchpatch,
+  ocaml,
+  findlib,
+  pkg-config,
+  gtk2,
+  camlp-streams,
+}:
 
-let param =
-  let check = stdenv.lib.versionAtLeast ocaml.version; in
-  if check "4.06" then {
-    version = "2.18.6";
-    url = https://forge.ocamlcore.org/frs/download.php/1726/lablgtk-2.18.6.tar.gz;
-    sha256 = "1y38fdvswy6hmppm65qvgdk4pb3ghhnvz7n4ialf46340r1s5p2d";
-  } else if check "3.12" then {
-    version = "2.18.5";
-    url = https://forge.ocamlcore.org/frs/download.php/1627/lablgtk-2.18.5.tar.gz;
-    sha256 = "0cyj6sfdvzx8hw7553lhgwc0krlgvlza0ph3dk9gsxy047dm3wib";
-  } else throw "lablgtk is not available for OCaml ${ocaml.version}";
+let
+  param =
+    let
+      check = lib.versionAtLeast ocaml.version;
+    in
+    if check "4.06" then
+      rec {
+        version = "2.18.13";
+        src = fetchFromGitHub {
+          owner = "garrigue";
+          repo = "lablgtk";
+          rev = version;
+          sha256 = "sha256-69Svno0qLaUifMscnVuPUJlCo9d8Lee+1qiYx34G3Po=";
+        };
+        env = { };
+        buildInputs = [ camlp-streams ];
+      }
+    else if check "3.12" then
+      {
+        version = "2.18.5";
+        src = fetchurl {
+          url = "https://forge.ocamlcore.org/frs/download.php/1627/lablgtk-2.18.5.tar.gz";
+          sha256 = "0cyj6sfdvzx8hw7553lhgwc0krlgvlza0ph3dk9gsxy047dm3wib";
+        };
+        # Workaround build failure on -fno-common toolchains like upstream
+        # gcc-10. Otherwise build fails as:
+        #   ld: ml_gtktree.o:(.bss+0x0): multiple definition of
+        #     `ml_table_extension_events'; ml_gdkpixbuf.o:(.bss+0x0): first defined here
+        env.NIX_CFLAGS_COMPILE = "-fcommon";
+      }
+    else
+      throw "lablgtk is not available for OCaml ${ocaml.version}";
 in
 
-stdenv.mkDerivation rec {
-  name = "lablgtk-${version}";
-  inherit (param) version;
+stdenv.mkDerivation {
+  pname = "ocaml${ocaml.version}-lablgtk";
+  inherit (param) version src env;
 
-  src = fetchurl {
-    inherit (param) url sha256;
-  };
+  # https://github.com/garrigue/lablgtk/issues/162
+  patches = [
+    (fetchpatch {
+      url = "https://github.com/garrigue/lablgtk/commit/c9717249954d1713815d435c84f9953a685af4be.patch";
+      hash = "sha256-jxmcAIIpdee7sPKfeLAijBnwgKDTjXuiWlh6c9rs+18=";
+    })
+  ];
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ ocaml findlib gtk2 libgnomecanvas libglade gtksourceview ];
+  nativeBuildInputs = [
+    pkg-config
+    ocaml
+    findlib
+  ];
+  buildInputs = [ gtk2 ] ++ param.buildInputs or [ ];
 
-  configureFlags = "--with-libdir=$(out)/lib/ocaml/${ocaml.version}/site-lib";
-  buildFlags = "world";
+  configureFlags = [ "--with-libdir=$(out)/lib/ocaml/${ocaml.version}/site-lib" ];
+  buildFlags = [ "world" ];
 
   preInstall = ''
     mkdir -p $out/lib/ocaml/${ocaml.version}/site-lib
@@ -34,13 +74,15 @@ stdenv.mkDerivation rec {
 
   dontStrip = true;
 
-  meta = with stdenv.lib; {
-    platforms = ocaml.meta.platforms or [];
-    maintainers = with maintainers; [
-      z77z roconnor vbgl
+  meta = {
+    description = "OCaml interface to GTK";
+    homepage = "http://lablgtk.forge.ocamlcore.org/";
+    license = lib.licenses.lgpl21Plus;
+    maintainers = with lib.maintainers; [
+      roconnor
+      vbgl
     ];
-    homepage = http://lablgtk.forge.ocamlcore.org/;
-    description = "An OCaml interface to gtk+";
-    license = licenses.lgpl21Plus;
+    mainProgram = "lablgtk2";
+    inherit (ocaml.meta) platforms;
   };
 }

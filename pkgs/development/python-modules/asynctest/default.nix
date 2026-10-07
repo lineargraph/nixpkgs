@@ -1,17 +1,22 @@
-{ lib, buildPythonPackage, fetchPypi, fetchFromGitHub, pythonOlder, python }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  python,
+  pythonAtLeast,
+}:
 
 buildPythonPackage rec {
   pname = "asynctest";
-  version = "0.12.0";
+  version = "0.13.0";
+  format = "setuptools";
 
-  disabled = pythonOlder "3.4";
+  # Unmaintained and incompatible python 3.11
+  disabled = pythonAtLeast "3.11";
 
-  # PyPI tarball doesn't ship test/__init__.py
-  src = fetchFromGitHub {
-    owner = "Martiusweb";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "0rcb3kz2m0iwvgxpx2avfz9cqsd9xbaq93zykr2fki3ikmnp3vyg";
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "1b3zsy7p84gag6q8ai2ylyrhx213qdk2h2zb6im3xn0m5n264y62";
   };
 
   postPatch = ''
@@ -24,10 +29,10 @@ buildPythonPackage rec {
     ${python.interpreter} -m unittest test
   '';
 
-  meta = with lib; {
+  meta = {
     description = "Enhance the standard unittest package with features for testing asyncio libraries";
-    homepage = https://github.com/Martiusweb/asynctest;
-    license = licenses.asl20;
-    maintainers = with maintainers; [ dotlambda ];
+    homepage = "https://github.com/Martiusweb/asynctest";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

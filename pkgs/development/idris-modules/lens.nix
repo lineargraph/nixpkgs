@@ -1,16 +1,14 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, bifunctors
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  bifunctors,
+  lib,
 }:
-
-build-idris-package  {
-  name = "lens";
+build-idris-package {
+  pname = "lens";
   version = "2017-09-25";
 
-  idrisDeps = [ prelude bifunctors ];
+  idrisDeps = [ bifunctors ];
 
   src = fetchFromGitHub {
     owner = "HuwCampbell";
@@ -21,9 +19,8 @@ build-idris-package  {
 
   meta = {
     description = "van Laarhoven lenses for Idris";
-    homepage = https://github.com/HuwCampbell/idris-lens;
+    homepage = "https://github.com/HuwCampbell/idris-lens";
     license = lib.licenses.bsd3;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

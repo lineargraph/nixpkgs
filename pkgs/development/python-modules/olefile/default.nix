@@ -1,19 +1,34 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
-buildPythonPackage rec {
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "olefile";
-  version = "0.45.1";
-  name = "${pname}-${version}";
+  version = "0.47";
+  format = "setuptools";
 
   src = fetchPypi {
-    inherit pname version;
+    inherit (finalAttrs) pname version;
     extension = "zip";
-    sha256 = "2b6575f5290de8ab1086f8c5490591f7e0885af682c7c1793bdaf6e64078d385";
+    hash = "sha256-WZODOBoL89+9kyygymUVrNF07UiHDL9/7hI9aYwZLBw=";
   };
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "olefile" ];
+
+  meta = {
     description = "Python package to parse, read and write Microsoft OLE2 files";
-    homepage = https://www.decalage.info/python/olefileio;
-    # BSD like + reference to Pillow
-    license = "http://olefile.readthedocs.io/en/latest/License.html";
+    homepage = "https://www.decalage.info/python/olefileio";
+    # BSD2 + reference to Pillow
+    # http://olefile.readthedocs.io/en/latest/License.html
+    license = with lib.licenses; [
+      bsd2 # and
+      hpnd
+    ];
+    maintainers = with lib.maintainers; [ fab ];
   };
-}
+})

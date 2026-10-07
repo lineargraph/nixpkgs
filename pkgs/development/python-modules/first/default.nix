@@ -1,21 +1,28 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+}:
 
 buildPythonPackage rec {
   pname = "first";
-  version = "2.0.1";
-  name = pname + "-" + version;
+  version = "2.0.2";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0pn9hl2y0pz61la1xhkdz6vl9i2dg3nh0ksizcf0f9ybh8sxxcrv";
+    hash = "sha256-/yhbCMVfjJfOTqcBJ0OvJJXJ8SkXhfFjcivTb2r2078=";
   };
 
   doCheck = false; # no tests
 
-  meta = with stdenv.lib; {
-    description = "The function you always missed in Python";
-    homepage = https://github.com/hynek/first/;
-    license = licenses.mit;
-    maintainers = with maintainers; [ zimbatm ];
+  pythonImportsCheck = [ "first" ];
+
+  meta = {
+    description = "Function you always missed in Python";
+    homepage = "https://github.com/hynek/first/";
+    changelog = "https://github.com/hynek/first/blob/${version}/HISTORY.rst";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ zimbatm ];
   };
 }

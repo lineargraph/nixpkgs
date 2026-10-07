@@ -1,23 +1,69 @@
-{ lib, buildPythonPackage, fetchPypi, isPy3k
-, wrapGAppsHook, gobjectIntrospection, pygobject3, graphviz, gnome3 }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  python,
+  xvfb-run,
+  wrapGAppsHook3,
+  gobject-introspection,
+  pygobject3,
+  graphviz,
+  gtk3,
+  numpy,
+  packaging,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "xdot";
-  version = "0.9";
+  version = "1.6";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "01v9vmgdxz1q2m2vq2b4aqx4ycw7grc0l4is673ygvyg9rk02dx3";
+  src = fetchFromGitHub {
+    owner = "jrfonseca";
+    repo = "xdot.py";
+    rev = version;
+    hash = "sha256-eOuD8q7qN2MAFklIy28lfR0nEMsKDqVO+HE3+M0k5T0=";
   };
 
-  disabled = !isPy3k;
+  build-system = [ setuptools ];
 
-  nativeBuildInputs = [ wrapGAppsHook ];
-  propagatedBuildInputs = [ gobjectIntrospection pygobject3 graphviz gnome3.gtk ];
+  nativeBuildInputs = [
+    gobject-introspection
+    wrapGAppsHook3
+  ];
 
-  meta = with lib; {
-    description = "xdot.py is an interactive viewer for graphs written in Graphviz's dot";
-    homepage = https://github.com/jrfonseca/xdot.py;
-    license = licenses.lgpl3Plus;
+  buildInputs = [
+    graphviz
+    gtk3
+  ];
+
+  dependencies = [
+    pygobject3
+    numpy
+    packaging
+  ];
+  nativeCheckInputs = [ xvfb-run ];
+
+  dontWrapGApps = true;
+  # Arguments to be passed to `makeWrapper`, only used by buildPython*
+  preFixup = ''
+    makeWrapperArgs+=("''${gappsWrapperArgs[@]}")
+    makeWrapperArgs+=(--prefix PATH : ${lib.makeBinPath [ graphviz ]})
+  '';
+
+  checkPhase = ''
+    runHook preCheck
+
+    xvfb-run -s '-screen 0 800x600x24' ${python.interpreter} test.py
+
+    runHook postCheck
+  '';
+
+  meta = {
+    description = "Interactive viewer for graphs written in Graphviz's dot";
+    mainProgram = "xdot";
+    homepage = "https://github.com/jrfonseca/xdot.py";
+    license = lib.licenses.lgpl3Plus;
   };
 }

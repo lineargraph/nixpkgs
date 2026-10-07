@@ -1,38 +1,72 @@
-{ lib
-, python
-, buildPythonPackage
-, fetchPypi
-, backports_abc
-, backports_ssl_match_hostname
-, certifi
-, singledispatch
-, pythonOlder
-, futures
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  pytestCheckHook,
+
+  # for passthru.tests
+  distributed,
+  jupyter-server,
+  jupyterlab,
+  matplotlib,
+  mitmproxy,
+  pytest-tornado,
+  pytest-tornasync,
+  pyzmq,
+  sockjs-tornado,
+  urllib3,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "tornado";
-  version = "5.0.2";
+  version = "6.5.7";
+  pyproject = true;
 
+  src = fetchFromGitHub {
+    owner = "tornadoweb";
+    repo = "tornado";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-iE0Tf95zmPoZJhw7FDLzTmv8HaWds3ZU5xzZSMvxFH4=";
+  };
 
-  propagatedBuildInputs = [ backports_abc  certifi singledispatch ]
-    ++ lib.optional (pythonOlder "3.5") backports_ssl_match_hostname
-    ++ lib.optional (pythonOlder "3.2") futures;
+  build-system = [ setuptools ];
 
-  # We specify the name of the test files to prevent
-  # https://github.com/NixOS/nixpkgs/issues/14634
-  checkPhase = ''
-    ${python.interpreter} -m unittest discover *_test.py
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1b83d5c10550f2653380b4c77331d6f8850f287c4f67d7ce1e1c639d9222fbc7";
+  # To allow tests to pass on slower/high-load machines
+  env.ASYNC_TEST_TIMEOUT = 30;
+
+  disabledTestPaths = [
+    # additional tests that have extra dependencies, run slowly, or produce more output than a simple pass/fail
+    # https://github.com/tornadoweb/tornado/blob/v6.2.0/maint/test/README
+    "maint/test"
+  ];
+
+  pythonImportsCheck = [ "tornado" ];
+
+  __darwinAllowLocalNetworking = true;
+
+  passthru.tests = {
+    inherit
+      distributed
+      jupyter-server
+      jupyterlab
+      matplotlib
+      mitmproxy
+      pytest-tornado
+      pytest-tornasync
+      pyzmq
+      sockjs-tornado
+      urllib3
+      ;
   };
 
   meta = {
-    description = "A web framework and asynchronous networking library";
-    homepage = http://www.tornadoweb.org/;
+    changelog = "https://www.tornadoweb.org/en/stable/releases/${finalAttrs.src.tag}.html";
+    description = "Web framework and asynchronous networking library";
+    homepage = "https://www.tornadoweb.org/";
     license = lib.licenses.asl20;
+    maintainers = [ ];
   };
-}
+})

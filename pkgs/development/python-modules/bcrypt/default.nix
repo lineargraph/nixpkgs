@@ -1,24 +1,74 @@
-{ stdenv, buildPythonPackage, isPyPy, fetchurl
-, cffi, pycparser, mock, pytest, py, six }:
-
-with stdenv.lib;
+{
+  lib,
+  buildPythonPackage,
+  cargo,
+  rustPlatform,
+  rustc,
+  setuptools,
+  setuptools-rust,
+  fetchFromGitHub,
+  pytestCheckHook,
+  # for passthru.tests
+  asyncssh,
+  django,
+  fastapi,
+  paramiko,
+  twisted,
+}:
 
 buildPythonPackage rec {
-  version = "3.1.4";
   pname = "bcrypt";
-  name = "${pname}-${version}";
+  version = "5.0.0";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/b/bcrypt/${name}.tar.gz";
-    sha256 = "67ed1a374c9155ec0840214ce804616de49c3df9c5bc66740687c1c9b1cd9e8d";
+  src = fetchFromGitHub {
+    owner = "pyca";
+    repo = "bcrypt";
+    tag = version;
+    hash = "sha256-7Dp07xoq6h+fiP7d7/TRRoYszWsyQF1c4vuFUpZ7u6U=";
   };
-  buildInputs = [ pycparser mock pytest py ];
-  propagatedBuildInputs = [ six ] ++ optional (!isPyPy) cffi;
+
+  cargoRoot = "src/_bcrypt";
+  cargoDeps = rustPlatform.fetchCargoVendor {
+    inherit
+      pname
+      version
+      src
+      cargoRoot
+      ;
+    hash = "sha256-hYMJlwxnXA0ZOJiyZ8rDp9govVcc1SGkDfqUVngnUPQ=";
+  };
+
+  build-system = [
+    setuptools
+    setuptools-rust
+  ];
+
+  nativeBuildInputs = [
+    rustPlatform.cargoSetupHook
+    cargo
+    rustc
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "bcrypt" ];
+
+  passthru.tests = {
+    inherit
+      asyncssh
+      django
+      fastapi
+      paramiko
+      twisted
+      ;
+  };
 
   meta = {
-    maintainers = with maintainers; [ domenkozar ];
+    changelog = "https://github.com/pyca/bcrypt/blob/${src.tag}/CHANGELOG.rst";
     description = "Modern password hashing for your software and your servers";
-    license = licenses.asl20;
-    homepage = https://github.com/pyca/bcrypt/;
+    homepage = "https://github.com/pyca/bcrypt/";
+    license = lib.licenses.asl20;
+    maintainers = [ lib.maintainers.dotlambda ];
   };
 }

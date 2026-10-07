@@ -1,20 +1,35 @@
-{ stdenv, buildPythonPackage, fetchPypi, isPy3k, progressbar231, progressbar33, mock }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  hatchling,
+  pytestCheckHook,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "bitmath";
-  version = "1.3.1.2";
+  version = "2.1.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1k8d1wmxqjc8cqzaixpxf45k6dl1kqhblr0g4wyjl0qa18q8wasd";
+  src = fetchFromGitHub {
+    owner = "timlnx";
+    repo = "bitmath";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-9hiwIpDIAU+N+LhlJ9qlKBZQibbrwwhGM77fvEnABRI=";
   };
 
-  checkInputs = [ (if isPy3k then progressbar33 else progressbar231) mock ];
+  build-system = [ hatchling ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "bitmath" ];
+
+  meta = {
     description = "Module for representing and manipulating file sizes with different prefix";
-    homepage = https://github.com/tbielawa/bitmath;
-    license = licenses.mit;
-    maintainers = with maintainers; [ twey ];
+    homepage = "https://github.com/timlnx/bitmath";
+    changelog = "https://github.com/timlnx/bitmath/releases/tag/${finalAttrs.src.tag}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ twey ];
+    mainProgram = "bitmath";
   };
-}
+})

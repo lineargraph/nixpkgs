@@ -1,32 +1,47 @@
-{ stdenv
-, buildPythonApplication
-, fetchPypi
-, capstone
-, filebytes
-, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  capstone,
+  filebytes,
+  keystone-engine,
+  pytestCheckHook,
+  setuptools,
 }:
 
-buildPythonApplication rec {
+buildPythonPackage rec {
   pname = "ropper";
-  version = "1.11.6";
+  version = "1.13.13";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "33777d0c3ddd9ca7bc48f53dbe2c4a222a567f1125c43b1c34fb1b360d0b19dc";
+  src = fetchFromGitHub {
+    owner = "sashs";
+    repo = "Ropper";
+    tag = "v${version}";
+    hash = "sha256-MOAbACLDdeKCMV4K/n1rAQlxDN0JoDIiUF6Zr3yPw8o=";
   };
-  # XXX tests rely on user-writeable /dev/shm to obtain process locks and return PermissionError otherwise
-  # workaround: sudo chmod 777 /dev/shm
-  checkPhase = ''
-    py.test testcases
-  '';
-  doCheck = false; # Tests not included in archive
 
-  checkInputs = [pytest];
-  propagatedBuildInputs = [ capstone filebytes ];
-  meta = with stdenv.lib; {
-    homepage = https://scoding.de/ropper/;
-    license = licenses.gpl2;
+  build-system = [ setuptools ];
+
+  dependencies = [
+    capstone
+    filebytes
+  ];
+
+  optional-dependencies = {
+    ropchain = [ keystone-engine ];
+  };
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "ropper" ];
+
+  meta = {
     description = "Show information about files in different file formats";
-    maintainers = with maintainers; [ bennofs ];
+    homepage = "https://scoding.de/ropper/";
+    changelog = "https://github.com/sashs/Ropper/releases/tag/${src.tag}";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ bennofs ];
+    mainProgram = "ropper";
   };
 }

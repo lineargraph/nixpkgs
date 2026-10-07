@@ -5,10 +5,11 @@
 # dependency by another derivation, the passed dictionaries will be
 # missing. However, invoking aspell directly should be fine.
 
-{ aspell
-, aspellDicts
-, makeWrapper
-, buildEnv
+{
+  aspell,
+  aspellDicts,
+  makeWrapper,
+  buildEnv,
 }:
 
 f:
@@ -17,9 +18,10 @@ let
   # Dictionaries we want
   dicts = f aspellDicts;
 
-in buildEnv {
+in
+buildEnv {
   name = "aspell-env";
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
   paths = [ aspell ] ++ dicts;
   postBuild = ''
     # Construct wrappers in /bin
@@ -28,7 +30,7 @@ in buildEnv {
     pushd "${aspell}/bin"
     for prg in *; do
       if [ -f "$prg" ]; then
-        makeWrapper "${aspell}/bin/$prg" "$out/bin/$prg" --set ASPELL_CONF "dict-dir $out/lib/aspell"
+        makeWrapper "${aspell}/bin/$prg" "$out/bin/$prg" --set ASPELL_CONF "dict-dir $out/lib/aspell; data-dir $out/lib/aspell"
       fi
     done
     popd

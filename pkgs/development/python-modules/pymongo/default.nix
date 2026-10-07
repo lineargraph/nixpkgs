@@ -1,20 +1,60 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  hatchling,
+  hatch-requirements-txt,
+  setuptools,
+  dnspython,
+
+  # for passthru.tests
+  celery, # check-input only
+  flask-pymongo,
+  kombu, # check-input only
+  mongoengine,
+  motor,
+  pymongo-inmemory,
+}:
 
 buildPythonPackage rec {
   pname = "pymongo";
-  version = "3.6.1";
-  name  = "${pname}-${version}";
+  version = "4.17.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "f7ebcb846962ee40374db2d9014a89bea9c983ae63c1877957c3a0a756974796";
+    inherit version;
+    pname = "pymongo";
+    hash = "sha256-cP+gi6ZBRozAaM9GwGs08BqM40ifZBEwn8tc6r5rL8A=";
   };
 
+  build-system = [
+    hatchling
+    hatch-requirements-txt
+    setuptools
+  ];
+
+  dependencies = [ dnspython ];
+
+  # Tests call a running mongodb instance
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = "http://github.com/mongodb/mongo-python-driver";
-    license = licenses.asl20;
-    description = "Python driver for MongoDB ";
+  pythonImportsCheck = [ "pymongo" ];
+
+  passthru.tests = {
+    inherit
+      celery
+      flask-pymongo
+      kombu
+      mongoengine
+      motor
+      pymongo-inmemory
+      ;
+  };
+
+  meta = {
+    description = "Python driver for MongoDB";
+    homepage = "https://github.com/mongodb/mongo-python-driver";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
   };
 }

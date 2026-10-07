@@ -1,22 +1,32 @@
-{ stdenv, buildPythonPackage, fetchPypi, isPy3k, twisted }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  isPy3k,
+  twisted,
+}:
 
 buildPythonPackage rec {
-  pname = "Nevow";
-  version = "0.14.3";
+  pname = "nevow";
+  version = "0.14.5";
+  format = "setuptools";
   disabled = isPy3k;
 
   src = fetchPypi {
-    inherit version pname;
-    sha256 = "0pid8dj3p8ai715n9a59cryfxrrbxidpda3f8hvgmfpcrjdmnmmb";
+    pname = "Nevow";
+    inherit version;
+    sha256 = "afb6ba85a5351953578c018fcdb9dfbd62f29a8d46c58bc9652bc000a27223f3";
   };
 
   propagatedBuildInputs = [ twisted ];
+
+  nativeCheckInputs = [ twisted ];
 
   checkPhase = ''
     trial formless nevow
   '';
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Nevow, a web application construction kit for Python";
     longDescription = ''
       Nevow - Pronounced as the French "nouveau", or "noo-voh", Nevow
@@ -35,7 +45,7 @@ buildPythonPackage rec {
       pages if appropriate.  Once a form post has validated
       successfully, the method will be called with the coerced values.
     '';
-    homepage = https://github.com/twisted/nevow;
-    license = licenses.mit;
+    homepage = "https://github.com/twisted/nevow";
+    license = lib.licenses.mit;
   };
 }

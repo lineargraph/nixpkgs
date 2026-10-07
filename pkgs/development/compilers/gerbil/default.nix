@@ -1,11 +1,22 @@
-{ callPackage, fetchurl, gambit }:
+{
+  callPackage,
+  fetchFromGitHub,
+  gambit-support,
+}:
 
-callPackage ./build.nix {
-  version = "0.12-RELEASE";
-  git-version = "0.12";
-  GAMBIT = gambit;
-  SRC = fetchurl {
-    url = "https://github.com/vyzo/gerbil/archive/v0.12.tar.gz";
-    sha256 = "0nigr3mgrzai57q2jqac8f39zj8rcmic3277ynyzlgm8hhps71pq";
+callPackage ./build.nix rec {
+  version = "0.18.1";
+  git-version = "0.18.1";
+  src = fetchFromGitHub {
+    owner = "mighty-gerbils";
+    repo = "gerbil";
+    rev = "23c30a6062cd7e63f9d85300ce01585bb9035d2d";
+    sha256 = "15fh0zqkmnjhan1mgymq5fgbjsh5z9d2v6zjddplqib5zd2s3z6k";
+    fetchSubmodules = true;
   };
+  inherit gambit-support;
+  gambit-params = gambit-support.unstable-params;
+  gambit-git-version = "4.9.5-78-g8b18ab69";
+  gambit-stampYmd = "20231029";
+  gambit-stampHms = "163035";
 }

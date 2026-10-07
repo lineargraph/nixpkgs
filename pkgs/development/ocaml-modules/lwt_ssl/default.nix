@@ -1,24 +1,31 @@
-{ stdenv, fetchzip, ocaml, findlib, jbuilder, ssl, lwt }:
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+  ssl,
+  lwt,
+}:
 
-stdenv.mkDerivation rec {
-  version = "1.1.2";
-  name = "ocaml${ocaml.version}-lwt_ssl-${version}";
+buildDunePackage (finalAttrs: {
+  pname = "lwt_ssl";
+  version = "1.2.0";
 
-  src = fetchzip {
-    url = "https://github.com/aantron/lwt_ssl/archive/${version}.tar.gz";
-    sha256 = "1q0an3djqjxv83v3iswi7m81braqx93kcrcwrxwmf6jzhdm4pn15";
+  duneVersion = "3";
+
+  src = fetchurl {
+    url = "https://github.com/ocsigen/lwt_ssl/releases/download/${finalAttrs.version}/lwt_ssl-${finalAttrs.version}.tbz";
+    hash = "sha256-swIK0nrs83fhw/J0Cgizbcu6mR+EMGZRE1dBBUiImnc=";
   };
 
-  buildInputs = [ ocaml findlib jbuilder ];
-  propagatedBuildInputs = [ ssl lwt ];
-
-  inherit (jbuilder) installPhase;
+  propagatedBuildInputs = [
+    ssl
+    lwt
+  ];
 
   meta = {
     homepage = "https://github.com/aantron/lwt_ssl";
     description = "OpenSSL binding with concurrent I/O";
-    license = stdenv.lib.licenses.lgpl21;
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
-    inherit (ocaml.meta) platforms;
+    license = lib.licenses.lgpl21;
+    maintainers = [ lib.maintainers.vbgl ];
   };
-}
+})

@@ -1,6 +1,8 @@
-{ callPackage, ... } @ args:
-
-callPackage ./generic.nix (args // {
-  version = "3.0.15";
-  sha256 = "1n92wpp5gm41r4agjwjw9ymnnn114pmaqf04c1dx3fksk100wd5g";
-})
+{ callPackage, lib, ... }@args:
+callPackage ./generic.nix (
+  args
+  // lib.importJSON ./3.0.json
+  // {
+    generation = "3_0";
+  }
+)

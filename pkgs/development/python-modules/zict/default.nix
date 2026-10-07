@@ -1,22 +1,42 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pytest, heapdict }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  pytest-asyncio,
+  pytest-repeat,
+  pytest-timeout,
+  setuptools,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "zict";
-  version = "0.1.3";
+  version = "3.0.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "63377f063086fc92e5c16e4d02162c571f6470b9e796cf3411ef9e815c96b799";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-4yHiY7apeq/AeQw8+zwEZWtwZuZzjDf//MqV2APJ+6U=";
   };
 
-  buildInputs = [ pytest ];
-  propagatedBuildInputs = [ heapdict ];
+  nativeBuildInputs = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "Mutable mapping tools.";
-    homepage = https://github.com/dask/zict;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ teh ];
+  nativeCheckInputs = [
+    pytest-asyncio
+    pytestCheckHook
+    pytest-repeat
+    pytest-timeout
+  ];
+
+  disabledTests = [
+    # timeout
+    "test_stress_different_keys_threadsafe"
+  ];
+
+  meta = {
+    description = "Mutable mapping tools";
+    homepage = "https://github.com/dask/zict";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ teh ];
   };
-}
+})

@@ -1,25 +1,90 @@
-{ stdenv, buildPythonPackage, fetchPypi, pygments, greenlet, curtsies, urwid, requests, mock }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  fetchpatch,
+  curtsies,
+  cwcwidth,
+  greenlet,
+  jedi,
+  pygments,
+  pytestCheckHook,
+  pyperclip,
+  pyxdg,
+  requests,
+  setuptools,
+  urwid,
+  watchdog,
+  gitUpdater,
+}:
 
 buildPythonPackage rec {
   pname = "bpython";
-  version = "0.17.1";
+  version = "0.26";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "8907c510bca3c4d9bc0a157279bdc5e3b739cc68c0f247167279b6fe4becb02f";
+  src = fetchFromGitHub {
+    owner = "bpython";
+    repo = "bpython";
+    tag = "${version}-release";
+    hash = "sha256-NmWM0fdzS9n5FSnNJOCdS1JE5ZHrmJXqCuHa54rT8GU=";
   };
 
-  propagatedBuildInputs = [ curtsies greenlet pygments requests urwid ];
+  patches = [
+    # This should be removed in the next release.
+    (fetchpatch {
+      url = "https://github.com/bpython/bpython/commit/870e81cb5a6860f1ba15744c81b97f71467eedf9.patch";
+      hash = "sha256-z55EkLT51ulz/V3XgjP1cbQza9ztb5YHu1UlXlbaWTQ=";
+    })
+  ];
 
-  checkInputs = [ mock ];
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace-fail 'version = "unknown"' 'version = "${version}"'
+  '';
 
-  # tests fail: https://github.com/bpython/bpython/issues/712
-  doCheck = false;
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "A fancy curses interface to the Python interactive interpreter";
+  dependencies = [
+    curtsies
+    cwcwidth
+    greenlet
+    pygments
+    pyxdg
+    requests
+  ];
+
+  optional-dependencies = {
+    clipboard = [ pyperclip ];
+    jedi = [ jedi ];
+    urwid = [ urwid ];
+    watch = [ watchdog ];
+  };
+
+  postInstall = ''
+    substituteInPlace "$out/share/applications/org.bpython-interpreter.bpython.desktop" \
+      --replace "Exec=/usr/bin/bpython" "Exec=bpython"
+  '';
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ]
+  ++ lib.concatAttrValues optional-dependencies;
+
+  pythonImportsCheck = [ "bpython" ];
+
+  passthru.updateScript = gitUpdater {
+    rev-suffix = "-release";
+  };
+
+  meta = {
+    changelog = "https://github.com/bpython/bpython/blob/${src.tag}/CHANGELOG.rst";
+    description = "Fancy curses interface to the Python interactive interpreter";
     homepage = "https://bpython-interpreter.org/";
-    license = licenses.mit;
-    maintainers = with maintainers; [ flokli ];
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [
+      flokli
+      dotlambda
+    ];
   };
 }

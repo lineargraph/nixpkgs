@@ -1,30 +1,38 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, funcsigs
-, six
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools-scm,
+  pytestCheckHook,
+  testfixtures,
 }:
 
 buildPythonPackage rec {
   pname = "logfury";
-  name = "${pname}-${version}";
-  version = "0.1.2";
+  version = "1.0.1";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1lywirv3d1lw691mc4mfpz7ak6r49klri43bbfgdnvsfppxminj2";
+    hash = "sha256-EwpdrOq5rVNJJCUt33BIKqLJZmKzo4JafTCYHQO3aiY=";
   };
 
-  propagatedBuildInputs = [
-    funcsigs
-    six
+  nativeBuildInputs = [ setuptools-scm ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    testfixtures
   ];
 
-  # No tests
-  doCheck = false;
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace "'setuptools_scm<6.0'" "'setuptools_scm'"
+  '';
+
+  pythonImportsCheck = [ "logfury" ];
 
   meta = {
-    description = "Logfury is for python library maintainers. It allows for responsible, low-boilerplate logging of method calls.";
+    description = "Python module that allows for responsible, low-boilerplate logging of method calls";
     homepage = "https://github.com/ppolewicz/logfury";
     license = lib.licenses.bsd3;
     maintainers = with lib.maintainers; [ jwiegley ];

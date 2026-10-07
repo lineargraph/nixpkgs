@@ -1,13 +1,16 @@
-  # Upgrading? We have a test! nix-build ./nixos/tests/wordpress.nix
-{ fetchFromGitHub, lib } : fetchFromGitHub {
-  owner = "WordPress";
-  repo = "WordPress";
-  rev = "4.9.1";
-  sha256 = "0d931mv6wbgnc7f15nisnn5al0ffi19zya2iwdzw98s4klpaq955";
-  meta = {
-    homepage = https://wordpress.org;
-    description = "WordPress is open source software you can use to create a beautiful website, blog, or app.";
-    license = lib.licenses.gpl2;
-    maintainers = [ lib.maintainers.basvandijk ];
+{ callPackage }:
+builtins.mapAttrs (_: callPackage ./generic.nix) rec {
+  wordpress = wordpress_7_1;
+  wordpress_6_9 = {
+    version = "6.9.9";
+    hash = "sha256-MiMbmsvnY6hhOOi7t7XE8/EjvsnWX8OJi8s7ZFBqc1g=";
+  };
+  wordpress_7_0 = {
+    version = "7.0.6";
+    hash = "sha256-W+/iSslL8f8YKSoaHzD9DHEbAJ+Rz9ytqo/rbgr6dc0=";
+  };
+  wordpress_7_1 = {
+    version = "7.1.2";
+    hash = "sha256-wMZmaJ1muHDYglUAu45ALtBN5SYCxhpvUWxiNrjJrGc=";
   };
 }

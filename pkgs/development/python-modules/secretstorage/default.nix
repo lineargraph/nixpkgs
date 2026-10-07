@@ -1,26 +1,41 @@
-{ stdenv, fetchFromGitHub, buildPythonPackage
-, dbus-python, cryptography }:
+{
+  lib,
+  buildPythonPackage,
+  cryptography,
+  fetchFromGitHub,
+  jeepney,
+  setuptools,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "secretstorage";
-  version = "2.3.1";
-  name = "${pname}-${version}";
+  version = "3.5.0";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "mitya57";
     repo = "secretstorage";
-    rev = version;
-    sha256 = "1sjd2jjbxgkkxyrfwx89x0hsnn39w2cr2qkxbg1iz52znr4sqism";
+    tag = finalAttrs.version;
+    hash = "sha256-oDna9i6ny/mKHpOzrtfaYPnd12qsZ84TTxl4g+RWE24=";
   };
 
-  propagatedBuildInputs = [ dbus-python cryptography ];
+  build-system = [ setuptools ];
 
-  doCheck = false; # requires dbus session
+  dependencies = [
+    cryptography
+    jeepney
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = "https://github.com/mitya57/secretstorage";
+  # Needs a D-Bus session
+  doCheck = false;
+
+  pythonImportsCheck = [ "secretstorage" ];
+
+  meta = {
+    changelog = "https://github.com/mitya57/secretstorage/blob/${finalAttrs.src.tag}/changelog";
     description = "Python bindings to FreeDesktop.org Secret Service API";
-    license = licenses.bsdOriginal;
-    maintainers = with maintainers; [ teto ];
+    homepage = "https://github.com/mitya57/secretstorage";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ teto ];
   };
-}
+})

@@ -1,24 +1,52 @@
-{ stdenv, fetchurl, ocaml, findlib, piqi, ulex, easy-format, xmlm, camlp4 }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  ocaml,
+  findlib,
+  piqi,
+  stdlib-shims,
+  num,
+}:
 
 stdenv.mkDerivation rec {
-  version = "0.7.5";
-  name    = "piqi-ocaml-${version}";
+  version = "0.7.8";
+  pname = "piqi-ocaml";
+  name = "ocaml${ocaml.version}-${pname}-${version}";
 
-  src = fetchurl {
-    url = "https://github.com/alavrik/piqi-ocaml/archive/v${version}.tar.gz";
-    sha256 = "0ngz6y8i98i5v2ma8nk6mc83pdsmf2z0ks7m3xi6clfg3zqbddrv";
+  src = fetchFromGitHub {
+    owner = "alavrik";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-6Luq49sbo+AqLSq57mc6fLhrRx0K6G5LCUIzkGPfqYo=";
   };
 
-  buildInputs = [ ocaml findlib piqi camlp4 ];
+  nativeBuildInputs = [
+    ocaml
+    findlib
+  ];
+  buildInputs = [
+    piqi
+    stdlib-shims
+  ];
+
+  checkInputs = [ num ];
+
+  strictDeps = true;
 
   createFindlibDestdir = true;
 
-  installPhase = "DESTDIR=$out make install";
+  installPhase = ''
+    runHook preInstall
+    DESTDIR=$out make install
+    runHook postInstall
+  '';
 
-  meta = with stdenv.lib; {
-    homepage = http://piqi.org;
+  meta = {
     description = "Universal schema language and a collection of tools built around it. These are the ocaml bindings";
-    license = licenses.asl20;
-    maintainers = [ maintainers.maurer ];
+    homepage = "https://github.com/alavrik/piqi";
+    license = lib.licenses.asl20;
+    maintainers = [ lib.maintainers.maurer ];
+    mainProgram = "piqic-ocaml";
   };
 }

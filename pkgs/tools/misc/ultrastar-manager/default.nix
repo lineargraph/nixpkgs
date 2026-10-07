@@ -1,11 +1,29 @@
-{ stdenv, fetchFromGitHub, pkgconfig, symlinkJoin, qmake, diffPlugins
-, qtbase, qtmultimedia, taglib, libmediainfo, libzen, libbass }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  pkg-config,
+  qt5,
+  symlinkJoin,
+  diffPlugins,
+  taglib,
+  libmediainfo,
+  libzen,
+  libbass,
+}:
 
 let
-  version = "2017-05-24";
-  rev = "eed5dc41c849ab29b2dee37d97852fffdb45e390";
-  sha256 = "1ymdgaffazndg9vhh47qqjr5873ld7j066hycp670r08bm519ysg";
-  buildInputs = [ qtbase qtmultimedia taglib libmediainfo libzen libbass ];
+  version = "2019-04-23";
+  rev = "ef4524e2239ddbb60f26e05bfba1f4f28cb7b54f";
+  sha256 = "0dl2qp686vbs160b3i9qypb7sv37phy2wn21kgzljbk3wnci3yv4";
+  buildInputs = [
+    qt5.qtbase
+    qt5.qtmultimedia
+    taglib
+    libmediainfo
+    libzen
+    libbass
+  ];
 
   plugins = [
     "albumartex"
@@ -16,34 +34,39 @@ let
     "lyric"
     "preparatory"
     "rename"
- ];
+  ];
 
   patchedSrc =
-    let src = fetchFromGitHub {
-      owner = "UltraStar-Deluxe";
-      repo = "UltraStar-Manager";
-      inherit rev sha256;
-    };
-    in stdenv.mkDerivation {
+    let
+      src = fetchFromGitHub {
+        owner = "UltraStar-Deluxe";
+        repo = "UltraStar-Manager";
+        inherit rev sha256;
+      };
+    in
+    stdenv.mkDerivation {
       name = "${src.name}-patched";
       inherit src;
-      phases = [ "unpackPhase" "patchPhase" ];
 
-      patchPhase = with stdenv.lib; ''
+      nativeBuildInputs = [ qt5.wrapQtAppsHook ];
+
+      dontInstall = true;
+
+      patchPhase = ''
         # we don’t want prebuild binaries checked into version control!
         rm -rf lib include
 
         # fix up main project file
         sed -e 's|-L.*unix.*lbass.*$|-lbass|' \
             -e "/QMAKE_POST_LINK/d" \
-            -e "s|../include/bass|${getLib libbass}/include|g" \
-            -e "s|../include/taglib|${getLib taglib}/include|g" \
-            -e "s|../include/mediainfo|${getLib libmediainfo}/include|g" \
+            -e "s|../include/bass|${lib.getLib libbass}/include|g" \
+            -e "s|../include/taglib|${lib.getLib taglib}/include|g" \
+            -e "s|../include/mediainfo|${lib.getLib libmediainfo}/include|g" \
             -i src/UltraStar-Manager.pro
 
         # if more plugins start depending on ../../../include,
         # it should be abstracted out for all .pro files
-        sed -e "s|../../../include/taglib|${getLib taglib}/include/taglib|g" \
+        sed -e "s|../../../include/taglib|${lib.getLib taglib}/include/taglib|g" \
             -i src/plugins/audiotag/audiotag.pro
 
         mkdir $out
@@ -55,35 +78,40 @@ let
     sed -e "s|QCore.*applicationDirPath()|QString(\"${path}\")|" -i "${file}"
   '';
 
-  buildPlugin = name: stdenv.mkDerivation {
-    name = "ultrastar-manager-${name}-plugin-${version}";
-    src = patchedSrc;
+  buildPlugin =
+    name:
+    stdenv.mkDerivation {
+      name = "ultrastar-manager-${name}-plugin-${version}";
+      src = patchedSrc;
 
-    buildInputs = [ qmake ] ++ buildInputs;
+      nativeBuildInputs = [ qt5.wrapQtAppsHook ];
 
-    postPatch = ''
-      sed -e "s|DESTDIR = .*$|DESTDIR = $out|" \
-          -i src/plugins/${name}/${name}.pro
+      buildInputs = [ qt5.qmake ] ++ buildInputs;
 
-      # plugins use the application’s binary folder (wtf)
-      for f in $(grep -lr "QCoreApplication::applicationDirPath" src/plugins); do
-        ${patchApplicationPath "$f" "\$out"}
-      done
+      postPatch = ''
+        sed -e "s|DESTDIR = .*$|DESTDIR = $out|" \
+            -i src/plugins/${name}/${name}.pro
 
-    '';
-    preConfigure = ''
-      cd src/plugins/${name}
-    '';
-  };
+        # plugins use the application’s binary folder (wtf)
+        for f in $(grep -lr "QCoreApplication::applicationDirPath" src/plugins); do
+          ${patchApplicationPath "$f" "\$out"}
+        done
 
-  builtPlugins =
-    symlinkJoin {
-      name = "ultrastar-manager-plugins-${version}";
-      paths = map buildPlugin plugins;
+      '';
+      preConfigure = ''
+        cd src/plugins/${name}
+      '';
     };
 
-in stdenv.mkDerivation {
-  name = "ultrastar-manager-${version}";
+  builtPlugins = symlinkJoin {
+    name = "ultrastar-manager-plugins-${version}";
+    paths = map buildPlugin plugins;
+  };
+
+in
+stdenv.mkDerivation {
+  pname = "ultrastar-manager";
+  inherit version;
   src = patchedSrc;
 
   postPatch = ''
@@ -108,13 +136,18 @@ in stdenv.mkDerivation {
     make install
   '';
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [
+    pkg-config
+    qt5.wrapQtAppsHook
+  ];
+
   inherit buildInputs;
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Ultrastar karaoke song manager";
-    homepage = https://github.com/UltraStar-Deluxe/UltraStar-Manager;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ Profpatsch ];
+    mainProgram = "UltraStar-Manager";
+    homepage = "https://github.com/UltraStar-Deluxe/UltraStar-Manager";
+    license = lib.licenses.gpl2Only;
+    maintainers = [ ];
   };
 }

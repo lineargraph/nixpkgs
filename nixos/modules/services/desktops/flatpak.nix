@@ -1,52 +1,71 @@
 # flatpak service.
-{ config, lib, pkgs, ... }:
-
-with lib;
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.services.flatpak;
-in {
+in
+
+{
   meta = {
-    doc = ./flatpak.xml;
+    doc = ./flatpak.md;
     maintainers = pkgs.flatpak.meta.maintainers;
   };
 
   ###### interface
   options = {
     services.flatpak = {
-      enable = mkEnableOption "flatpak";
+      enable = lib.mkEnableOption "flatpak";
 
-      extraPortals = mkOption {
-        type = types.listOf types.package;
-        default = [];
-        description = ''
-          List of additional portals to add to path. Portals allow interaction
-          with system, like choosing files or taking screenshots. At minimum,
-          a desktop portal implementation should be listed. GNOME already
-          adds <package>xdg-desktop-portal-gtk</package>; for KDE, there
-          is <package>xdg-desktop-portal-kde</package>. Other desktop
-          environments will probably want to do the same.
-        '';
-      };
+      package = lib.mkPackageOption pkgs "flatpak" { };
     };
   };
 
-
   ###### implementation
-  config = mkIf cfg.enable {
-    environment.systemPackages = [ pkgs.flatpak ];
+  config = lib.mkIf cfg.enable {
 
-    services.dbus.packages = [ pkgs.flatpak pkgs.xdg-desktop-portal ] ++ cfg.extraPortals;
+    assertions = [
+      {
+        assertion = (config.xdg.portal.enable == true);
+        message = "To use Flatpak you must enable XDG Desktop Portals with xdg.portal.enable.";
+      }
+    ];
 
-    systemd.packages = [ pkgs.flatpak pkgs.xdg-desktop-portal ] ++ cfg.extraPortals;
+    environment.systemPackages = [
+      cfg.package
+      pkgs.fuse3
+    ];
+
+    programs.fuse.enable = true;
+
+    security.polkit.enable = true;
+
+    fonts.fontDir.enable = true;
+
+    services.dbus.packages = [ cfg.package ];
+
+    systemd.packages = [ cfg.package ];
+    systemd.tmpfiles.packages = [ cfg.package ];
 
     environment.profiles = [
       "$HOME/.local/share/flatpak/exports"
       "/var/lib/flatpak/exports"
     ];
 
-    environment.variables = {
-      XDG_DESKTOP_PORTAL_PATH = map (p: "${p}/share/xdg-desktop-portal/portals") cfg.extraPortals;
+    # It has been possible since https://github.com/flatpak/flatpak/releases/tag/1.3.2
+    # to build a SELinux policy module.
+
+    # TODO: use sysusers.d
+    users.users.flatpak = {
+      description = "Flatpak system helper";
+      group = "flatpak";
+      isSystemUser = true;
     };
+
+    users.groups.flatpak = { };
   };
 }

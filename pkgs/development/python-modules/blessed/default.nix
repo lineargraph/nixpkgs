@@ -1,28 +1,56 @@
-{ stdenv, buildPythonPackage, fetchPypi, six, wcwidth, pytest, mock
-, glibcLocales }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  flit-core,
+  wcwidth,
+  six,
+  pytestCheckHook,
+  mock,
+  glibcLocales,
+}:
 
-buildPythonPackage rec {
-  name = "${pname}-${version}";
+buildPythonPackage {
   pname = "blessed";
-  version = "1.14.2";
+  # We need https://github.com/jquast/blessed/pull/311 to fix 3.13
+  version = "1.25-unstable-2025-12-05";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0fv9f0074kxy1849h0kwwxw12sifpq3bv63pcz900zzjsigi4hi3";
+  src = fetchFromGitHub {
+    owner = "jquast";
+    repo = "blessed";
+    rev = "cee680ff7fb3ad31f42ae98582ba74629f1fd6b0";
+    hash = "sha256-4K1W0LXJKkb2wKE6D+IkX3oI5KxkpKbO661W/VTHgts=";
   };
 
-  checkInputs = [ pytest mock glibcLocales ];
+  build-system = [ flit-core ];
 
-  checkPhase = ''
-    LANG=en_US.utf-8 py.test blessed/tests
+  dependencies = [
+    wcwidth
+    six
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    mock
+    glibcLocales
+  ];
+
+  # Default tox.ini parameters not needed
+  preCheck = ''
+    rm tox.ini
   '';
 
-  propagatedBuildInputs = [ wcwidth six ];
+  disabledTestPaths = lib.optionals stdenv.hostPlatform.isDarwin [
+    # Fail with several AssertionError
+    "tests/test_sixel.py"
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/jquast/blessed;
-    description = "A thin, practical wrapper around terminal capabilities in Python.";
-    maintainers = with maintainers; [ eqyiel ];
-    license = licenses.mit;
+  meta = {
+    homepage = "https://github.com/jquast/blessed";
+    description = "Thin, practical wrapper around terminal capabilities in Python";
+    maintainers = with lib.maintainers; [ eqyiel ];
+    license = lib.licenses.mit;
   };
 }

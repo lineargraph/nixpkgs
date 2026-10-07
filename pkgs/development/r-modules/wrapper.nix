@@ -1,22 +1,45 @@
-{ stdenv, R, makeWrapper, recommendedPackages, packages }:
-
-stdenv.mkDerivation {
+{
+  lib,
+  symlinkJoin,
+  R,
+  makeBinaryWrapper,
+  recommendedPackages,
+  packages,
+}:
+symlinkJoin {
   name = R.name + "-wrapper";
+  preferLocalBuild = true;
+  allowSubstitutes = false;
 
-  buildInputs = [makeWrapper R] ++ recommendedPackages ++ packages;
+  outputs = [
+    "out"
+    "man"
+  ];
 
-  unpackPhase = ":";
+  buildInputs = [ R ] ++ recommendedPackages ++ packages;
+  paths = [ R ];
 
-  installPhase = ''
-    mkdir -p $out/bin
+  nativeBuildInputs = [ makeBinaryWrapper ];
+
+  postBuild = ''
     cd ${R}/bin
     for exe in *; do
-      makeWrapper ${R}/bin/$exe $out/bin/$exe \
+      rm "$out/bin/$exe"
+
+      makeWrapper "${R}/bin/$exe" "$out/bin/$exe" \
         --prefix "R_LIBS_SITE" ":" "$R_LIBS_SITE"
     done
+
+    ln -s ${R.man} $man
   '';
 
-  meta = {
-    platforms = stdenv.lib.platforms.unix;
+  # Make the list of recommended R packages accessible to other packages such as rpy2
+  passthru = { inherit recommendedPackages; };
+
+  meta = R.meta // {
+    # To prevent builds on hydra
+    hydraPlatforms = [ ];
+    # prefer wrapper over the package
+    priority = (R.meta.priority or lib.meta.defaultPriority) - 1;
   };
 }

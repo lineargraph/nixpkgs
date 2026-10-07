@@ -1,9 +1,13 @@
-{ callPackage, ... } @ args:
+{ callPackage, ... }@args:
 
-callPackage ./generic.nix (args // {
-  brand = "Behringer";
-  type = "X32";
-  version = "3.2";
-  sha256 = "1lzmhd0sqnlzc0khpwm82sfi48qhv7rg153a57qjih7hhhy41mzk";
-  homepage = http://www.musictri.be/Categories/Behringer/Mixers/Digital/X32/p/P0ASF/downloads;
-})
+callPackage ./generic.nix (
+  args
+  // rec {
+    brand = "Behringer";
+    type = "X32";
+    version = "4.4.1";
+    url = "https://cdn-media.empowertribe.com/23b991ede2e6473d916c7ac56f53d71d/${type}-Edit_LINUX_${version}.tar.gz";
+    hash = "sha256-HrSPDWnWF2s1U8Khj6VnLptPdcMVyTivewWAIIdArMc=";
+    homepage = "https://www.behringer.com/en/products/0603-ACE";
+  }
+)

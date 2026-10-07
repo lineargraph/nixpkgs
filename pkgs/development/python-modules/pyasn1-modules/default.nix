@@ -1,22 +1,37 @@
-{ stdenv, buildPythonPackage, fetchPypi, pyasn1, isPyPy }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pyasn1,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "pyasn1-modules";
-  version = "0.2.1";
-  disabled = isPyPy;
+  version = "0.4.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "af00ea8f2022b6287dc375b2c70f31ab5af83989fc6fe9eacd4976ce26cd7ccc";
+  src = fetchFromGitHub {
+    owner = "pyasn1";
+    repo = "pyasn1-modules";
+    tag = "v${version}";
+    hash = "sha256-jpMIxQ4BJ7MY3cV276sVJv+3M/MMFKRIoL2m2QJFxRY=";
   };
 
-  propagatedBuildInputs = [ pyasn1 ];
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "A collection of ASN.1-based protocols modules";
-    homepage = https://pypi.python.org/pypi/pyasn1-modules;
-    license = licenses.bsd3;
-    platforms = platforms.unix;  # same as pyasn1
+  dependencies = [ pyasn1 ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "pyasn1_modules" ];
+
+  meta = {
+    description = "Collection of ASN.1-based protocols modules";
+    homepage = "https://pyasn1.readthedocs.io";
+    changelog = "https://github.com/pyasn1/pyasn1-modules/releases/tag/v${version}";
+    license = lib.licenses.bsd2;
+    maintainers = [ ];
   };
 }

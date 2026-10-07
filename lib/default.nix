@@ -1,136 +1,626 @@
-/* Library of low-level helper functions for nix expressions.
- *
- * Please implement (mostly) exhaustive unit tests
- * for new functions in `./tests.nix'.
- */
+/*
+  Library of low-level helper functions for nix expressions.
+
+  Please implement (mostly) exhaustive unit tests
+  for new functions in `./tests.nix`.
+*/
 let
 
-  inherit (import ./fixed-points.nix {}) makeExtensible;
+  # A copy of `lib.makeExtensible'` in order to document `extend`.
+  # It has been leading to some trouble, so we have to document it specially.
+  makeExtensible' =
+    rattrs:
+    let
+      self = rattrs self // {
+        /**
+          Patch the Nixpkgs library
 
-  lib = makeExtensible (self: let
-    callLibs = file: import file { lib = self; };
-  in with self; {
+          A function that applies patches onto the nixpkgs library.
+          Usage is discouraged for most scenarios.
 
-    # often used, or depending on very little
-    trivial = callLibs ./trivial.nix;
-    fixedPoints = callLibs ./fixed-points.nix;
+          :::{.note}
+          The name `extends` is a bit misleading, as it doesn't actually extend the library, but rather patches it.
+          It is merely a consequence of being implemented by `makeExtensible`.
+          :::
 
-    # datatypes
-    attrsets = callLibs ./attrsets.nix;
-    lists = callLibs ./lists.nix;
-    strings = callLibs ./strings.nix;
-    stringsWithDeps = callLibs ./strings-with-deps.nix;
+          # Inputs
 
-    # packaging
-    customisation = callLibs ./customisation.nix;
-    maintainers = import ../maintainers/maintainer-list.nix;
-    meta = callLibs ./meta.nix;
-    sources = callLibs ./sources.nix;
-    versions = callLibs ./versions.nix;
+          - An "extension function" `f` that returns attributes that will be updated in the returned Nixpkgs library.
 
-    # module system
-    modules = callLibs ./modules.nix;
-    options = callLibs ./options.nix;
-    types = callLibs ./types.nix;
+          # Output
 
-    # constants
-    licenses = callLibs ./licenses.nix;
-    systems = callLibs ./systems;
+          A patched Nixpkgs library.
 
-    # misc
-    debug = callLibs ./debug.nix;
+          :::{.warning}
+          This functionality is intended as an escape hatch for when the provided version of the Nixpkgs library has a flaw.
 
-    generators = callLibs ./generators.nix;
-    misc = callLibs ./deprecated.nix;
-    # domain-specific
-    fetchers = callLibs ./fetchers.nix;
+          If you were to use it to add new functionality, you will run into compatibility and interoperability issues.
+          :::
+        */
+        extend = f: lib.makeExtensible (lib.extends f rattrs);
+      };
+    in
+    self;
 
-    # Eval-time filesystem handling
-    filesystem = callLibs ./filesystem.nix;
+  lib = makeExtensible' (
+    self:
+    let
+      callLibs = file: import file { lib = self; };
+    in
+    {
 
-    # back-compat aliases
-    platforms = systems.forMeta;
+      # often used, or depending on very little
+      trivial = callLibs ./trivial.nix;
+      fixedPoints = callLibs ./fixed-points.nix;
 
-    inherit (builtins) add addErrorContext attrNames concatLists
-      deepSeq elem elemAt filter genericClosure genList getAttr
-      hasAttr head isAttrs isBool isInt isList isString length
-      lessThan listToAttrs pathExists readFile replaceStrings seq
-      stringLength sub substring tail;
-    inherit (trivial) id const concat or and bitAnd bitOr bitXor bitNot
-      boolToString mergeAttrs flip mapNullable inNixShell min max
-      importJSON warn info nixpkgsVersion version mod compare
-      splitByAndCompare functionArgs setFunctionArgs isFunction;
+      # datatypes
+      attrsets = callLibs ./attrsets.nix;
+      lists = callLibs ./lists.nix;
+      strings = callLibs ./strings.nix;
+      stringsWithDeps = callLibs ./strings-with-deps.nix;
 
-    inherit (fixedPoints) fix fix' extends composeExtensions
-      makeExtensible makeExtensibleWithCustomName;
-    inherit (attrsets) attrByPath hasAttrByPath setAttrByPath
-      getAttrFromPath attrVals attrValues catAttrs filterAttrs
-      filterAttrsRecursive foldAttrs collect nameValuePair mapAttrs
-      mapAttrs' mapAttrsToList mapAttrsRecursive mapAttrsRecursiveCond
-      genAttrs isDerivation toDerivation optionalAttrs
-      zipAttrsWithNames zipAttrsWith zipAttrs recursiveUpdateUntil
-      recursiveUpdate matchAttrs overrideExisting getOutput getBin
-      getLib getDev chooseDevOutputs zipWithNames zip;
-    inherit (lists) singleton foldr fold foldl foldl' imap0 imap1
-      concatMap flatten remove findSingle findFirst any all count
-      optional optionals toList range partition zipListsWith zipLists
-      reverseList listDfs toposort sort naturalSort compareLists take
-      drop sublist last init crossLists unique intersectLists
-      subtractLists mutuallyExclusive groupBy groupBy';
-    inherit (strings) concatStrings concatMapStrings concatImapStrings
-      intersperse concatStringsSep concatMapStringsSep
-      concatImapStringsSep makeSearchPath makeSearchPathOutput
-      makeLibraryPath makeBinPath makePerlPath optionalString
-      hasPrefix hasSuffix stringToCharacters stringAsChars escape
-      escapeShellArg escapeShellArgs replaceChars lowerChars
-      upperChars toLower toUpper addContextFrom splitString
-      removePrefix removeSuffix versionOlder versionAtLeast getVersion
-      nameFromURL enableFeature enableFeatureAs withFeature
-      withFeatureAs fixedWidthString fixedWidthNumber isStorePath
-      toInt readPathsFromFile fileContents;
-    inherit (stringsWithDeps) textClosureList textClosureMap
-      noDepEntry fullDepEntry packEntry stringAfter;
-    inherit (customisation) overrideDerivation makeOverridable
-      callPackageWith callPackagesWith extendDerivation hydraJob
-      makeScope;
-    inherit (meta) addMetaAttrs dontDistribute setName updateName
-      appendToName mapDerivationAttrset lowPrio lowPrioSet hiPrio
-      hiPrioSet;
-    inherit (sources) pathType pathIsDirectory cleanSourceFilter
-      cleanSource sourceByRegex sourceFilesBySuffices
-      commitIdFromGitRepo cleanSourceWith pathHasContext
-      canCleanSource;
-    inherit (modules) evalModules closeModules unifyModuleSyntax
-      applyIfFunction unpackSubmodule packSubmodule mergeModules
-      mergeModules' mergeOptionDecls evalOptionValue mergeDefinitions
-      pushDownProperties dischargeProperties filterOverrides
-      sortProperties fixupOptionType mkIf mkAssert mkMerge mkOverride
-      mkOptionDefault mkDefault mkForce mkVMOverride mkStrict
-      mkFixStrictness mkOrder mkBefore mkAfter mkAliasDefinitions
-      mkAliasAndWrapDefinitions fixMergeModules mkRemovedOptionModule
-      mkRenamedOptionModule mkMergedOptionModule mkChangedOptionModule
-      mkAliasOptionModule doRename filterModules;
-    inherit (options) isOption mkEnableOption mkSinkUndeclaredOptions
-      mergeDefaultOption mergeOneOption mergeEqualOption getValues
-      getFiles optionAttrSetToDocList optionAttrSetToDocList'
-      scrubOptionValue literalExample showOption showFiles
-      unknownModule mkOption;
-    inherit (types) isType setType defaultTypeMerge defaultFunctor
-      isOptionType mkOptionType;
-    inherit (debug) addErrorContextToAttrs traceIf traceVal traceValFn
-      traceXMLVal traceXMLValMarked traceSeq traceSeqN traceValSeq
-      traceValSeqFn traceValSeqN traceValSeqNFn traceShowVal
-      traceShowValMarked showVal traceCall traceCall2 traceCall3
-      traceValIfNot runTests testAllTrue traceCallXml attrNamesToStr;
-    inherit (misc) maybeEnv defaultMergeArg defaultMerge foldArgs
-      defaultOverridableDelayableArgs composedArgsAndFun
-      maybeAttrNullable maybeAttr ifEnable checkFlag getValue
-      checkReqs uniqList uniqListExt condConcat lazyGenericClosure
-      innerModifySumArgs modifySumArgs innerClosePropagation
-      closePropagation mapAttrsFlatten nvs setAttr setAttrMerge
-      mergeAttrsWithFunc mergeAttrsConcatenateValues
-      mergeAttrsNoOverride mergeAttrByFunc mergeAttrsByFuncDefaults
-      mergeAttrsByFuncDefaultsClean mergeAttrBy prepareDerivationArgs
-      nixType imap overridableDelayableArgs;
-  });
-in lib
+      # packaging
+      customisation = callLibs ./customisation.nix;
+      derivations = callLibs ./derivations.nix;
+      maintainers = import ../maintainers/maintainer-list.nix;
+      teams = callLibs ../maintainers/computed-team-list.nix;
+      meta = callLibs ./meta.nix;
+      versions = callLibs ./versions.nix;
+
+      # module system
+      modules = callLibs ./modules.nix;
+      options = callLibs ./options.nix;
+      types = callLibs ./types.nix;
+
+      # constants
+      licenses = callLibs ./licenses;
+      sourceTypes = callLibs ./source-types.nix;
+      systems = callLibs ./systems;
+
+      # serialization
+      cli = callLibs ./cli.nix;
+      gvariant = callLibs ./gvariant.nix;
+      generators = callLibs ./generators.nix;
+
+      # misc
+      asserts = callLibs ./asserts.nix;
+      debug = callLibs ./debug.nix;
+      misc = callLibs ./deprecated/misc.nix;
+
+      # domain-specific
+      fetchers = callLibs ./fetchers.nix;
+      services = callLibs ./services/lib.nix;
+      importService = self.modules.importApply ./services/service.nix;
+
+      # Modules that are not specific to a module class
+      genericModules = {
+        meta-maintainers = ./modules/generic/meta-maintainers.nix;
+        assertions = ./modules/generic/assertions.nix;
+      };
+
+      # Eval-time filesystem handling
+      path = callLibs ./path;
+      filesystem = callLibs ./filesystem.nix;
+      fileset = callLibs ./fileset;
+      sources = callLibs ./sources.nix;
+
+      # back-compat aliases
+      platforms = self.systems.doubles;
+
+      # linux kernel configuration
+      kernel = callLibs ./kernel.nix;
+
+      # network
+      network = callLibs ./network;
+
+      # flakes
+      flakes = callLibs ./flakes.nix;
+
+      inherit (builtins)
+        getContext
+        hasContext
+        convertHash
+        hashString
+        parseDrvName
+        placeholder
+        fromJSON
+        fromTOML
+        toFile
+        toJSON
+        toString
+        toXML
+        tryEval
+        ;
+      inherit (self.trivial)
+        id
+        const
+        pipe
+        concat
+        "or"
+        and
+        mul
+        div
+        xor
+        bitAnd
+        bitOr
+        bitXor
+        bitNot
+        boolToString
+        boolToYesNo
+        mergeAttrs
+        flip
+        defaultTo
+        mapNullable
+        inNixShell
+        isFloat
+        min
+        max
+        importJSON
+        importTOML
+        warn
+        warnIf
+        warnIfNot
+        throwIf
+        throwIfNot
+        checkListOfEnum
+        info
+        showWarnings
+        nixpkgsVersion
+        version
+        isInOldestRelease
+        oldestSupportedReleaseIsAtLeast
+        mod
+        compare
+        splitByAndCompare
+        seq
+        deepSeq
+        lessThan
+        add
+        sub
+        functionArgs
+        setFunctionArgs
+        isFunction
+        toFunction
+        mirrorFunctionArgs
+        fromHexString
+        toHexString
+        toBaseDigits
+        inPureEvalMode
+        isBool
+        isInt
+        pathExists
+        genericClosure
+        readFile
+        ceil
+        floor
+        ;
+      inherit (self.fixedPoints)
+        fix
+        fix'
+        converge
+        extends
+        composeExtensions
+        composeManyExtensions
+        makeExtensible
+        makeExtensibleWithCustomName
+        toExtension
+        ;
+      inherit (self.attrsets)
+        attrByPath
+        hasAttrByPath
+        setAttrByPath
+        getAttrFromPath
+        attrVals
+        attrNames
+        attrValues
+        getAttrs
+        catAttrs
+        filterAttrs
+        filterAttrsRecursive
+        foldlAttrs
+        foldAttrs
+        collect
+        nameValuePair
+        mapAttrs
+        mapAttrs'
+        mapAttrsToList
+        attrsToList
+        concatMapAttrs
+        mapAttrsRecursive
+        mapAttrsRecursiveCond
+        mapAttrsToListRecursive
+        mapAttrsToListRecursiveCond
+        genAttrs
+        genAttrs'
+        isDerivation
+        toDerivation
+        optionalAttrs
+        zipAttrsWithNames
+        zipAttrsWith
+        zipAttrs
+        recursiveUpdateUntil
+        recursiveUpdate
+        matchAttrs
+        mergeAttrsList
+        overrideExisting
+        showAttrPath
+        getOutput
+        getFirstOutput
+        getBin
+        getLib
+        getStatic
+        getDev
+        getInclude
+        getMan
+        chooseDevOutputs
+        recurseIntoAttrs
+        dontRecurseIntoAttrs
+        cartesianProduct
+        mapCartesianProduct
+        updateManyAttrsByPath
+        listToAttrs
+        hasAttr
+        getAttr
+        isAttrs
+        intersectAttrs
+        removeAttrs
+        ;
+      inherit (self.lists)
+        singleton
+        forEach
+        map
+        foldr
+        fold
+        foldl
+        foldl'
+        imap0
+        imap1
+        filter
+        ifilter0
+        concatMap
+        flatten
+        remove
+        findSingle
+        findFirst
+        any
+        all
+        count
+        optional
+        optionals
+        toList
+        range
+        replicate
+        partition
+        zipListsWith
+        zipLists
+        reverseList
+        listDfs
+        toposort
+        sort
+        sortOn
+        naturalSort
+        compareLists
+        take
+        takeEnd
+        drop
+        dropEnd
+        sublist
+        last
+        init
+        crossLists
+        unique
+        uniqueStrings
+        allUnique
+        intersectLists
+        subtractLists
+        mutuallyExclusive
+        groupBy
+        groupBy'
+        concatLists
+        genList
+        length
+        head
+        tail
+        elem
+        elemAt
+        isList
+        concatAttrValues
+        replaceElemAt
+        ;
+      inherit (self.strings)
+        concatStrings
+        concatMapStrings
+        concatImapStrings
+        stringLength
+        substring
+        isString
+        replaceString
+        replaceStrings
+        intersperse
+        concatStringsSep
+        concatMapStringsSep
+        concatMapAttrsStringSep
+        concatImapStringsSep
+        concatLines
+        makeSearchPath
+        makeSearchPathOutput
+        makeLibraryPath
+        makeIncludePath
+        makeBinPath
+        optionalString
+        hasInfix
+        hasPrefix
+        hasSuffix
+        join
+        stringToCharacters
+        stringAsChars
+        escape
+        escapeShellArg
+        escapeShellArgs
+        isStorePath
+        isStringLike
+        isValidPosixName
+        toShellVar
+        toShellVars
+        trim
+        trimWith
+        escapeRegex
+        escapeURL
+        escapeXML
+        lowerChars
+        upperChars
+        toLower
+        toUpper
+        toCamelCase
+        toSentenceCase
+        typeOf
+        addContextFrom
+        splitString
+        splitStringBy
+        removePrefix
+        removeSuffix
+        versionOlder
+        versionAtLeast
+        getName
+        getVersion
+        match
+        split
+        cmakeOptionType
+        cmakeBool
+        cmakeFeature
+        mesonOption
+        mesonBool
+        mesonEnable
+        nameFromURL
+        enableFeature
+        enableFeatureAs
+        withFeature
+        withFeatureAs
+        fixedWidthString
+        fixedWidthNumber
+        toInt
+        toIntBase10
+        fileContents
+        appendContext
+        unsafeDiscardStringContext
+        ;
+      inherit (self.stringsWithDeps)
+        textClosureList
+        textClosureMap
+        noDepEntry
+        fullDepEntry
+        packEntry
+        stringAfter
+        ;
+      inherit (self.customisation)
+        overrideDerivation
+        makeOverridable
+        callPackageWith
+        callPackagesWith
+        extendDerivation
+        hydraJob
+        makeScope
+        makeScopeWithSplicing
+        makeScopeWithSplicing'
+        extendMkDerivation
+        renameCrossIndexFrom
+        renameCrossIndexTo
+        mapCrossIndex
+        ;
+      inherit (self.derivations)
+        lazyDerivation
+        optionalDrvAttr
+        warnOnInstantiate
+        addDrvOutputDependencies
+        unsafeDiscardOutputDependency
+        ;
+      inherit (self.generators) mkLuaInline;
+      inherit (self.meta)
+        addMetaAttrs
+        dontDistribute
+        setName
+        updateName
+        appendToName
+        mapDerivationAttrset
+        setPrio
+        lowPrio
+        lowPrioSet
+        hiPrio
+        hiPrioSet
+        licensesSpdx
+        getLicenseFromSpdxId
+        getLicenseFromSpdxIdOr
+        getExe
+        getExe'
+        getDarwinApp
+        getDarwinApp'
+        ;
+      inherit (self.filesystem)
+        pathType
+        pathIsDirectory
+        pathIsRegularFile
+        baseNameOf
+        dirOf
+        isPath
+        packagesFromDirectoryRecursive
+        hashFile
+        readDir
+        readFileType
+        ;
+      inherit (self.sources)
+        cleanSourceFilter
+        cleanSource
+        sourceByRegex
+        sourceFilesBySuffices
+        commitIdFromGitRepo
+        cleanSourceWith
+        pathHasContext
+        canCleanSource
+        pathIsGitRepo
+        revOrTag
+        repoRevToName
+        filterSource
+        ;
+      inherit (self.modules)
+        evalModules
+        setDefaultModuleLocation
+        unifyModuleSyntax
+        applyModuleArgsIfFunction
+        mergeModules
+        mergeModules'
+        mergeOptionDecls
+        mergeDefinitions
+        pushDownProperties
+        dischargeProperties
+        filterOverrides
+        sortProperties
+        fixupOptionType
+        mkIf
+        mkAssert
+        mkDefinition
+        mkMerge
+        mkOverride
+        mkOptionDefault
+        mkDefault
+        mkImageMediaOverride
+        mkForce
+        mkVMOverride
+        mkFixStrictness
+        mkOrder
+        mkBefore
+        mkAfter
+        mkAliasDefinitions
+        mkAliasAndWrapDefinitions
+        fixMergeModules
+        mkRemovedOptionModule
+        mkRenamedOptionModule
+        mkRenamedOptionModuleWith
+        mkMergedOptionModule
+        mkChangedOptionModule
+        mkAliasOptionModule
+        mkDerivedConfig
+        doRename
+        mkAliasOptionModuleMD
+        ;
+      evalOptionValue = lib.warn "External use of `lib.evalOptionValue` is deprecated. If your use case isn't covered by non-deprecated functions, we'd like to know more and perhaps support your use case well, instead of providing access to these low level functions. In this case please open an issue in https://github.com/nixos/nixpkgs/issues/." self.modules.evalOptionValue;
+      inherit (self.options)
+        isOption
+        mkEnableOption
+        mkSinkUndeclaredOptions
+        mergeDefaultOption
+        mergeOneOption
+        mergeEqualOption
+        mergeUniqueOption
+        getValues
+        getFiles
+        optionAttrSetToDocList
+        optionAttrSetToDocList'
+        scrubOptionValue
+        literalExpression
+        showOption
+        showOptionWithDefLocs
+        showFiles
+        unknownModule
+        mkOption
+        mkPackageOption
+        literalMD
+        ;
+      inherit (self.types)
+        isType
+        setType
+        defaultTypeMerge
+        defaultFunctor
+        isOptionType
+        mkOptionType
+        ;
+      inherit (self.asserts)
+        assertMsg
+        assertOneOf
+        ;
+      inherit (self.debug)
+        trace
+        traceIf
+        traceVal
+        traceValFn
+        traceSeq
+        traceSeqN
+        traceValSeq
+        traceValSeqFn
+        traceValSeqN
+        traceValSeqNFn
+        traceFnSeqN
+        addErrorContext
+        unsafeGetAttrPos
+        runTests
+        testAllTrue
+        ;
+      inherit (self.misc)
+        maybeEnv
+        defaultMergeArg
+        defaultMerge
+        foldArgs
+        maybeAttrNullable
+        maybeAttr
+        ifEnable
+        checkFlag
+        getValue
+        checkReqs
+        uniqList
+        uniqListExt
+        condConcat
+        lazyGenericClosure
+        innerModifySumArgs
+        modifySumArgs
+        innerClosePropagation
+        closePropagation
+        nvs
+        setAttr
+        setAttrMerge
+        mergeAttrsWithFunc
+        mergeAttrsConcatenateValues
+        mergeAttrsNoOverride
+        mergeAttrByFunc
+        mergeAttrsByFuncDefaults
+        mergeAttrsByFuncDefaultsClean
+        mergeAttrBy
+        fakeHash
+        fakeSha256
+        fakeSha512
+        nixType
+        imap
+        ;
+      inherit (self.versions)
+        compareVersions
+        splitVersion
+        ;
+      inherit (self.network.ipv6)
+        mkEUI64Suffix
+        ;
+      inherit (self.flakes)
+        parseFlakeRef
+        flakeRefToString
+        ;
+    }
+  );
+in
+lib

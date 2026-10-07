@@ -1,43 +1,71 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, nose
-, isPy27
-, mock
-, ipython
-, jupyter_client
-, pexpect
-, traitlets
-, tornado
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  callPackage,
+  fetchPypi,
+  hatchling,
+  appnope,
+  comm,
+  ipython,
+  jupyter-client,
+  jupyter-core,
+  matplotlib-inline,
+  nest-asyncio2,
+  packaging,
+  psutil,
+  pyzmq,
+  tornado,
+  traitlets,
+
+  # Reverse dependency
+  sage,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "ipykernel";
-  version = "4.8.2";
-  name = "${pname}-${version}";
+  version = "7.3.0";
+  pyproject = true;
+  __structuredAttrs = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "c091449dd0fad7710ddd9c4a06e8b9e15277da306590bc07a3a1afa6b4453c8f";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-msqq+X0WNVFm5Aha/p0iW/vfK371IPnfO+jyskgnXgk=";
   };
 
-  buildInputs = [ nose ] ++ lib.optional isPy27 mock;
-  propagatedBuildInputs = [
-    ipython
-    jupyter_client
-    pexpect
-    traitlets
-    tornado
-  ];
+  # debugpy is optional, see https://github.com/ipython/ipykernel/pull/767
+  pythonRemoveDeps = [ "debugpy" ];
 
-  # Tests require backends.
-  # I don't want to add all supported backends as propagatedBuildInputs
+  nativeBuildInputs = [ hatchling ];
+
+  propagatedBuildInputs = [
+    comm
+    ipython
+    jupyter-client
+    jupyter-core
+    matplotlib-inline
+    nest-asyncio2
+    packaging
+    psutil
+    pyzmq
+    tornado
+    traitlets
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [ appnope ];
+
+  # check in passthru.tests.pytest to escape infinite recursion with ipyparallel
   doCheck = false;
+
+  passthru.tests = {
+    pytest = callPackage ./tests.nix { };
+    inherit sage;
+  };
 
   meta = {
     description = "IPython Kernel for Jupyter";
-    homepage = http://ipython.org/;
+    homepage = "https://ipython.org/";
+    changelog = "https://github.com/ipython/ipykernel/releases/tag/v${finalAttrs.version}";
     license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ fridh ];
+    teams = [ lib.teams.jupyter ];
   };
-}
+})

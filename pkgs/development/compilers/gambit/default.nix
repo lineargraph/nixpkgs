@@ -1,11 +1,10 @@
 { callPackage, fetchurl }:
 
-callPackage ./build.nix {
-  version = "4.8.9";
-  git-version = "4.8.9";
-
-  SRC = fetchurl {
-    url = "http://www.iro.umontreal.ca/~gambit/download/gambit/v4.8/source/gambit-v4_8_9-devel.tgz";
-    sha256 = "1gwzz1ag9hlv266nvfq1bhwzrps3f2yghhffasjjqy8i8xwnry5p";
+callPackage ./build.nix rec {
+  version = "4.9.5";
+  git-version = "v${version}";
+  src = fetchurl {
+    url = "https://gambitscheme.org/4.9.5/gambit-v4_9_5.tgz";
+    sha256 = "sha256-4o74218OexFZcgwVAFPcq498TK4fDlyDiUR5cHP4wdw=";
   };
 }

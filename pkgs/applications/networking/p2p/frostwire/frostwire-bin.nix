@@ -1,31 +1,53 @@
-{ stdenv, fetchurl, jre, makeWrapper }:
-
-with stdenv.lib;
+{
+  lib,
+  stdenv,
+  fetchurl,
+  jre,
+  makeWrapper,
+}:
 
 stdenv.mkDerivation rec {
-  version = "6.6.7";
-  name = "frostwire-${version}";
+  version = "6.13.3";
+  pname = "frostwire";
 
   src = fetchurl {
-    url = "http://dl.frostwire.com/frostwire/${version}/frostwire-${version}.noarch.tar.gz";
-    sha256 = "01ah0cwr3ahihfz1xxs0irw4rsa7wjgnlkcqfyg5q9rmzwbnxkyh";
+    url = "https://github.com/frostwire/frostwire/releases/download/frostwire-desktop-${version}-build-322/frostwire-${version}.amd64.tar.gz";
+    hash = "sha256-wRT8Oo+niOFBpEnq3pgjO9jpagZMgSE44V9RBYnGwig=";
   };
 
   nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/java
     mv $(ls */*.jar) $out/share/java
 
     makeWrapper $out/share/java/frostwire $out/bin/frostwire \
-      --prefix PATH : ${jre}/bin/
+      --prefix PATH : ${jre}/bin \
+      --prefix LD_LIBRARY_PATH : $out/share/java \
+      --set JAVA_HOME "${jre}"
+
+    substituteInPlace $out/share/java/frostwire \
+      --replace "export JAVA_PROGRAM_DIR=/usr/lib/frostwire/jre/bin" \
+        "export JAVA_PROGRAM_DIR=${jre}/bin/"
+
+    substituteInPlace $out/share/java/frostwire.desktop \
+      --replace "Exec=/usr/bin/frostwire %U" "Exec=${placeholder "out"}/bin/frostwire %U"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.frostwire.com/;
+  meta = {
+    homepage = "https://www.frostwire.com/";
     description = "BitTorrent Client and Cloud File Downloader";
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ gavin ];
-    platforms = platforms.all;
+    mainProgram = "frostwire";
+    sourceProvenance = with lib.sourceTypes; [
+      binaryBytecode
+      binaryNativeCode
+    ];
+    license = lib.licenses.gpl3Plus;
+    maintainers = with lib.maintainers; [ gavin ];
+    platforms = [ "x86_64-linux" ];
   };
 }

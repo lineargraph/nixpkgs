@@ -1,20 +1,43 @@
-{ stdenv, fetchzip, findlib, jbuilder, ocaml, configurator, cppo, lablgtk }:
-stdenv.mkDerivation rec {
-  name = "camlimages-${version}";
-  version = "5.0.0";
-  src = fetchzip {
-    url = "https://bitbucket.org/camlspotter/camlimages/get/${version}.tar.gz";
-    sha256 = "00qvwxkfnhv93yi1iq7vy3p5lxyi9xigxcq464s4ii6bmp32d998";
+{
+  lib,
+  fetchFromGitLab,
+  buildDunePackage,
+  findlib,
+  dune-configurator,
+  cppo,
+  graphics,
+  stdio,
+}:
+
+buildDunePackage (finalAttrs: {
+  pname = "camlimages";
+  version = "5.0.5";
+
+  src = fetchFromGitLab {
+    owner = "camlspotter";
+    repo = "camlimages";
+    rev = finalAttrs.version;
+    hash = "sha256-/Dkj8IBVPjGCJCXrLOuJtuaa+nD/a9e8/N+TN9ukw4k=";
   };
-  buildInputs = [ findlib jbuilder ocaml configurator cppo lablgtk ];
-  buildPhase = "jbuilder build -p camlimages";
-  inherit (jbuilder) installPhase;
-  
-  meta = with stdenv.lib; {
+
+  # stdio v0.17 compatibility
+  patches = [ ./camlimages.patch ];
+
+  nativeBuildInputs = [ cppo ];
+  buildInputs = [
+    dune-configurator
+    findlib
+    graphics
+    stdio
+  ];
+
+  meta = {
     branch = "5.0";
-    homepage = https://bitbucket.org/camlspotter/camlimages;
+    homepage = "https://gitlab.com/camlspotter/camlimages";
     description = "OCaml image processing library";
-    license = licenses.gpl2;
-    maintainers = [ maintainers.vbgl maintainers.mt-caret ];
+    license = lib.licenses.lgpl2;
+    maintainers = [
+      lib.maintainers.mt-caret
+    ];
   };
-}
+})

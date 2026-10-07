@@ -1,33 +1,44 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub
-, click, pytest, glibcLocales
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  click,
+  pytest,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "cligj";
-  version = "0.4.0";
-  name = "${pname}-${version}";
+  version = "0.7.2";
+  pyproject = true;
+
+  __structuredAttrs = true;
 
   src = fetchFromGitHub {
     owner = "mapbox";
     repo = "cligj";
-    rev = version;
-    sha256 = "0fclxagxv23v75yiypb29a8sja23dakhvmx3blmxyhg2sci92sx8";
+    tag = finalAttrs.version;
+    hash = "sha256-0f9+I6ozX93Vn0l7+WR0mpddDZymJQ3+Krovt6co22Y=";
   };
 
-  propagatedBuildInputs = [
-    click
+  build-system = [ setuptools ];
+
+  dependencies = [ click ];
+
+  nativeCheckInputs = [
+    pytest
   ];
 
-  checkInputs = [ pytest glibcLocales ];
-
   checkPhase = ''
-    LC_ALL=en_US.utf-8 pytest tests
+    pytest tests
   '';
 
-  meta = with stdenv.lib; {
-    description = "Click params for commmand line interfaces to GeoJSON";
-    homepage = https://github.com/mapbox/cligj;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ knedlsepp ];
+  pythonImportsCheck = [ "cligj" ];
+
+  meta = {
+    description = "Click params for command line interfaces to GeoJSON";
+    homepage = "https://github.com/mapbox/cligj";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
-}
+})

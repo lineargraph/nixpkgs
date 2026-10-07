@@ -1,40 +1,56 @@
-{ stdenv
-, fetchPypi
-, python
-, wrapPython
-, unzip
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  distutils,
+  fetchFromGitHub,
+  python,
 }:
 
-# Should use buildPythonPackage here somehow
-stdenv.mkDerivation rec {
+buildPythonPackage (finalAttrs: {
   pname = "setuptools";
-  version = "39.0.1";
-  name = "${python.libPrefix}-${pname}-${version}";
+  version = "83.0.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    extension = "zip";
-    sha256 = "bec7badf0f60e7fc8153fac47836edc41b74e5d541d7692e614e635720d6a7c7";
+  src = fetchFromGitHub {
+    owner = "pypa";
+    repo = "setuptools";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-Gn2gH2LnsgeX1MvDRBbnFnI6WjkjBFItU4SelowkjBc=";
   };
 
-  nativeBuildInputs = [ unzip wrapPython ];
-  buildInputs = [ python ];
-  doCheck = false;  # requires pytest
-  installPhase = ''
-      dst=$out/${python.sitePackages}
-      mkdir -p $dst
-      export PYTHONPATH="$dst:$PYTHONPATH"
-      ${python.interpreter} setup.py install --prefix=$out
-      wrapPythonPrograms
+  patches = [
+    ./reproducible-wheel.patch
+  ];
+
+  # Drop dependency on coherent.license, which in turn requires coherent.build
+  postPatch = ''
+    sed -i "/coherent.licensed/d" pyproject.toml
+
+    # Substitute version for reproducible builds
+    substituteInPlace setuptools/version.py \
+      --replace-fail '@version@' '${finalAttrs.version}'
   '';
 
-  pythonPath = [];
+  preBuild = lib.optionalString (!stdenv.hostPlatform.isWindows) ''
+    export SETUPTOOLS_INSTALL_WINDOWS_SPECIFIC_FILES=0
+  '';
 
-  meta = with stdenv.lib; {
-    description = "Utilities to facilitate the installation of Python packages";
-    homepage = https://pypi.python.org/pypi/setuptools;
-    license = with licenses; [ psfl zpl20 ];
-    platforms = platforms.all;
-    priority = 10;
+  # Requires pytest, causing infinite recursion.
+  doCheck = false;
+
+  passthru.tests = {
+    inherit distutils;
   };
-}
+
+  meta = {
+    description = "Utilities to facilitate the installation of Python packages";
+    homepage = "https://github.com/pypa/setuptools";
+    changelog = "https://setuptools.pypa.io/en/stable/history.html#v${
+      lib.replaceString "." "-" finalAttrs.version
+    }";
+    license = lib.licenses.mit;
+    platforms = python.meta.platforms;
+    teams = [ lib.teams.python ];
+  };
+})

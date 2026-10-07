@@ -1,58 +1,121 @@
-{ stdenv, fetchurl, python, buildPythonPackage
-, cython, bzip2, lzo, numpy, numexpr, hdf5, six, c-blosc }:
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  stdenv,
 
-buildPythonPackage rec {
-  version = "3.4.3";
+  # build-system
+  cython,
+  setuptools,
+  sphinx,
+
+  # build-inputs
+  blosc2,
+  bzip2,
+  c-blosc,
+  hdf5,
+  lzo,
+  pkg-config,
+
+  # dependencies
+  numexpr,
+  numpy,
+  packaging, # uses packaging.version at runtime
+  py-cpuinfo,
+  typing-extensions,
+
+  # Test inputs
+  python,
+  writableTmpDirAsHomeHook,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "tables";
-  name = "${pname}-${version}";
+  version = "3.11.1";
+  pyproject = true;
+  __structuredAttrs = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/t/tables/${name}.tar.gz";
-    sha256 = "b6aafe47154e2140c0a91bb38ebdb6ba67a24dd86263f1c294af8c11cb7deed4";
+  src = fetchFromGitHub {
+    owner = "PyTables";
+    repo = "PyTables";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-ImzfUc+B5odozROkwhnDUY2a9XDXn8Il2wKuLzOvKAg=";
+    fetchSubmodules = true;
   };
 
-  buildInputs = [ hdf5 cython bzip2 lzo c-blosc ];
-  propagatedBuildInputs = [ numpy numexpr six ];
+  build-system = [
+    cython
+    setuptools
+    sphinx
+  ];
 
-  # The setup script complains about missing run-paths, but they are
-  # actually set.
-  setupPyBuildFlags =
-    [ "--hdf5=${hdf5}"
-      "--lzo=${lzo}"
-      "--bzip2=${bzip2.dev}"
-      "--blosc=${c-blosc}"
-    ];
+  nativeBuildInputs = [
+    pkg-config
+  ];
 
-  # Run the test suite.
-  # It requires the build path to be in the python search path.
-  # These tests take quite some time.
-  # If the hdf5 library is built with zlib then there is only one
-  # test-failure. That is the same failure as described in the following
-  # github issue:
-  #     https://github.com/PyTables/PyTables/issues/269
-  checkPhase = ''
-    ${python}/bin/${python.executable} <<EOF
-    import sysconfig
-    import sys
-    import os
-    f = "lib.{platform}-{version[0]}.{version[1]}"
-    lib = f.format(platform=sysconfig.get_platform(),
-                   version=sys.version_info)
-    build = os.path.join(os.getcwd(), 'build', lib)
-    sys.path.insert(0, build)
-    import tables
-    r = tables.test()
-    if not r.wasSuccessful():
-        sys.exit(1)
-    EOF
+  buildInputs = [
+    blosc2
+    bzip2
+    c-blosc
+    blosc2.c-blosc2
+    hdf5
+    lzo
+  ];
+
+  dependencies = [
+    blosc2
+    c-blosc
+    blosc2.c-blosc2
+    py-cpuinfo
+    numpy
+    numexpr
+    packaging # uses packaging.version at runtime
+    typing-extensions
+  ];
+
+  postPatch = ''
+    # Force test suite to error when unittest runner fails
+    substituteInPlace tables/tests/test_suite.py \
+      --replace-fail "return 0" "assert result.wasSuccessful(); return 0" \
+      --replace-fail "return 1" "assert result.wasSuccessful(); return 1"
+    # Hard-code the blosc2 path to avoid issues with blosc2.c-blosc2
+    substituteInPlace tables/__init__.py \
+      --replace-fail "ctypes.CDLL(str(lib_path))" \
+      "ctypes.CDLL('"${lib.getLib c-blosc}/lib/libblosc${stdenv.hostPlatform.extensions.sharedLibrary}"')"
   '';
 
-  # Disable tests until the failure described above is fixed.
-  doCheck = false;
+  env = {
+    HDF5_DIR = lib.getDev hdf5;
+    LZO_DIR = lib.getDev lzo;
+    BZIP2_DIR = lib.getDev bzip2;
+    BLOSC_DIR = lib.getDev c-blosc;
+    BLOSC2_DIR = lib.getDev blosc2.c-blosc2;
+  };
+
+  nativeCheckInputs = [
+    python
+    writableTmpDirAsHomeHook
+  ];
+
+  preCheck = ''
+    cd tables/tests
+  '';
+
+  # Runs the light (yet comprehensive) subset of the test suite.
+  # Pass `--heavy` for the whole "heavy" test suite (hour+ runtime).
+  checkPhase = ''
+    runHook preCheck
+    ${python.interpreter} -m tables.tests.test_all
+    runHook postCheck
+  '';
+
+  pythonImportsCheck = [ "tables" ];
 
   meta = {
     description = "Hierarchical datasets for Python";
-    homepage = http://www.pytables.org/;
-    license = stdenv.lib.licenses.bsd2;
+    homepage = "https://www.pytables.org/";
+    changelog = "https://github.com/PyTables/PyTables/releases/tag/${finalAttrs.src.tag}";
+    license = lib.licenses.bsd2;
+    maintainers = with lib.maintainers; [ sarahec ];
   };
-}
+})

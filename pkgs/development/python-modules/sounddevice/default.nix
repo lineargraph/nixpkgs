@@ -1,34 +1,54 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, cffi
-, numpy
-, portaudio
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  setuptools-scm,
+  cffi,
+  numpy,
+  portaudio,
+  replaceVars,
 }:
 
 buildPythonPackage rec {
   pname = "sounddevice";
-  name = "${pname}-${version}";
-  version = "0.3.9";
+  version = "0.5.5";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1c9e833f8c8ccc67c0291c3448b29e9acc548fe56d15ee6f7fdd7037e00319f8";
+    hash = "sha256-Ikh7ZRmMtb8iCHVRBbUk94rRc+Wra0Rb2rHJifZpjfM=";
   };
 
-  propagatedBuildInputs = [ cffi numpy portaudio ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
+
+  dependencies = [
+    cffi
+    numpy
+    portaudio
+  ];
+
+  nativeBuildInputs = [ cffi ];
 
   # No tests included nor upstream available.
   doCheck = false;
 
-  prePatch = ''
-    substituteInPlace src/sounddevice.py --replace "'portaudio'" "'${portaudio}/lib/libportaudio.so.2'"
-  '';
+  pythonImportsCheck = [ "sounddevice" ];
+
+  patches = [
+    (replaceVars ./fix-portaudio-library-path.patch {
+      portaudio = "${portaudio}/lib/libportaudio${stdenv.hostPlatform.extensions.sharedLibrary}";
+    })
+  ];
 
   meta = {
     description = "Play and Record Sound with Python";
-    homepage = http://python-sounddevice.rtfd.org/;
-    license = with lib.licenses; [ mit ];
-    maintainers = with lib.maintainers; [ fridh ];
+    homepage = "https://python-sounddevice.readthedocs.io/";
+    changelog = "https://github.com/spatialaudio/python-sounddevice/releases/tag/${version}";
+    license = lib.licenses.mit;
   };
 }

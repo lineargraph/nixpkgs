@@ -1,23 +1,33 @@
-{ buildPythonPackage, fetchPypi, python, stdenv, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "colorlover";
-  version = "0.2.1";
-  name = "${pname}-${version}";
+  version = "0.3.0";
+  pyproject = true;
+
+  __structuredAttrs = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "1clwvssrj007r07prfvkqnpjy3f77dlp584lj879x8mwl8f0japi";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-uPtyRqtG4fXmcVZJRTwXYuJFpRXeX/LStKq3puZ/pOI=";
   };
+
+  build-system = [ setuptools ];
 
   # no tests included in distributed archive
   doCheck = false;
 
+  pythonImportsCheck = [ "colorlover" ];
+
   meta = {
-    homepage = https://github.com/jackparmer/colorlover;
+    homepage = "https://github.com/plotly/colorlover";
     description = "Color scales in Python for humans";
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ globin ];
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
-}
+})

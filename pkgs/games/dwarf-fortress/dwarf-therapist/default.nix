@@ -1,29 +1,68 @@
-{ stdenv, fetchFromGitHub, coreutils, qtbase, qtdeclarative, cmake, texlive, ninja }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  qtbase,
+  qtdeclarative,
+  cmake,
+  ninja,
+  dfVersions,
+
+  # see: https://github.com/Dwarf-Therapist/Dwarf-Therapist/releases
+  version ? dfVersions.therapist.version,
+  maxDfVersion ? dfVersions.therapist.maxDfVersion,
+  hash ? dfVersions.therapist.git.outputHash,
+}:
 
 stdenv.mkDerivation rec {
-  name = "dwarf-therapist-original-${version}";
-  version = "40.0.0";
+  pname = "dwarf-therapist";
+
+  inherit version;
 
   src = fetchFromGitHub {
     owner = "Dwarf-Therapist";
     repo = "Dwarf-Therapist";
-    rev = "v${version}";
-    sha256 = "0b5y7800nzydn0jcc0vglgi9mzkj8f3qhw16wd872cf5396xnag9";
+    tag = "v${version}";
+    inherit hash;
   };
 
-  buildInputs = [ qtbase qtdeclarative ];
-  nativeBuildInputs = [ texlive cmake ninja ];
+  nativeBuildInputs = [
+    cmake
+    ninja
+  ];
+  buildInputs = [
+    qtbase
+    qtdeclarative
+  ];
 
-  installPhase = if stdenv.isDarwin then ''
-    mkdir -p $out/Applications
-    cp -r DwarfTherapist.app $out/Applications
-  '' else null;
+  enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    description = "Tool to manage dwarves in in a running game of Dwarf Fortress";
-    maintainers = with maintainers; [ the-kenny abbradar bendlas ];
-    license = licenses.mit;
-    platforms = platforms.unix;
-    homepage = https://github.com/Dwarf-Therapist/Dwarf-Therapist;
+  cmakeFlags = [ "-GNinja" ];
+
+  installPhase =
+    if stdenv.hostPlatform.isDarwin then
+      ''
+        mkdir -p $out/Applications
+        cp -r DwarfTherapist.app $out/Applications
+      ''
+    else
+      null;
+
+  dontWrapQtApps = true;
+
+  passthru = {
+    inherit maxDfVersion;
+  };
+
+  meta = {
+    mainProgram = "dwarftherapist";
+    description = "Tool to manage dwarves in a running game of Dwarf Fortress";
+    maintainers = with lib.maintainers; [
+      bendlas
+      numinit
+    ];
+    license = lib.licenses.mit;
+    platforms = lib.platforms.x86;
+    homepage = "https://github.com/Dwarf-Therapist/Dwarf-Therapist";
   };
 }

@@ -1,19 +1,30 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pretend";
   version = "1.0.9";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "c90eb810cde8ebb06dafcb8796f9a95228ce796531bc806e794c2f4649aa1b10";
+  src = fetchFromGitHub {
+    owner = "alex";
+    repo = "pretend";
+    rev = "v${version}";
+    hash = "sha256-OqMfeIMFNBBLq6ejR3uOCIHZ9aA4zew7iefVlAsy1JQ=";
   };
 
-  # No tests in archive
-  doCheck = false;
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/alex/pretend;
-    license = licenses.bsd3;
+  pythonImportsCheck = [ "pretend" ];
+
+  meta = {
+    description = "Module for stubbing";
+    homepage = "https://github.com/alex/pretend";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

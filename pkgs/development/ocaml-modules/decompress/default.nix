@@ -1,30 +1,49 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, ocamlbuild, topkg
+{
+  lib,
+  ocaml,
+  fetchurl,
+  buildDunePackage,
+  checkseum,
+  optint,
+  cmdliner,
+  alcotest,
+  camlzip,
+  base64,
+  fmt,
+  crowbar,
+  bstr,
 }:
 
-if !stdenv.lib.versionAtLeast ocaml.version "4.03"
-then throw "decompress is not available for OCaml ${ocaml.version}"
-else
+buildDunePackage (finalAttrs: {
+  pname = "decompress";
+  version = "1.6.1";
 
-stdenv.mkDerivation rec {
-	version = "0.6";
-	name = "ocaml${ocaml.version}-decompress-${version}";
+  src = fetchurl {
+    url = "https://github.com/mirage/decompress/releases/download/v${finalAttrs.version}/decompress-${finalAttrs.version}.tbz";
+    hash = "sha256-yYmMvJhTXV3R1NdUkuwnwRBbj2zOX3naXTQFP9pAxYU=";
+  };
 
-	src = fetchFromGitHub {
-		owner = "mirage";
-		repo = "decompress";
-		rev = "v${version}";
-		sha256 = "0hfs5zrvimzvjwdg57vrxx9bb7irvlm07dk2yv3s5qhj30zimd08";
-	};
+  buildInputs = [ cmdliner ];
+  propagatedBuildInputs = [
+    optint
+    checkseum
+  ];
+  checkInputs = [
+    alcotest
+    fmt
+    camlzip
+    base64
+    crowbar
+    bstr
+  ];
+  # bstr is not available for OCaml < 4.13
+  doCheck = lib.versionAtLeast ocaml.version "4.13";
 
-	buildInputs = [ ocaml findlib ocamlbuild topkg ];
-
-	inherit (topkg) buildPhase installPhase;
-
-	meta = {
-		description = "Pure OCaml implementation of Zlib";
-		license = stdenv.lib.licenses.mit;
-		maintainers = [ stdenv.lib.maintainers.vbgl ];
-		inherit (src.meta) homepage;
-		inherit (ocaml.meta) platforms;
-	};
-}
+  meta = {
+    description = "Pure OCaml implementation of Zlib";
+    homepage = "https://github.com/mirage/decompress";
+    license = lib.licenses.mit;
+    maintainers = [ lib.maintainers.vbgl ];
+    mainProgram = "decompress.pipe";
+  };
+})

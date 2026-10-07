@@ -1,28 +1,48 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, jbuilder, ocurl, cryptokit, ocaml_extlib, yojson, ocamlnet, xmlm }:
+{
+  lib,
+  fetchFromGitHub,
+  buildDunePackage,
+  camlp-streams,
+  cppo,
+  cryptokit,
+  ocurl,
+  yojson,
+  ounit2,
+}:
 
-if !stdenv.lib.versionAtLeast ocaml.version "4.02"
-then throw "gapi-ocaml is not available for OCaml ${ocaml.version}"
-else
+buildDunePackage (finalAttrs: {
+  pname = "gapi-ocaml";
+  version = if lib.versionAtLeast cryptokit.version "1.21" then "0.4.9" else "0.4.7";
 
-stdenv.mkDerivation rec {
-  name = "gapi-ocaml-${version}";
-  version = "0.3.6";
   src = fetchFromGitHub {
     owner = "astrada";
     repo = "gapi-ocaml";
-    rev = "v${version}";
-    sha256 = "0qgsy51bhkpfgl5rdnjw4bqs5fbh2w4vwrfbl8y3lh1wrqmnwci4";
+    tag = "v${finalAttrs.version}";
+    hash =
+      {
+        "0.4.7" = "sha256-uQJfrgF0oafURlamHslt9hX9MP4vFeVqDhuX7T/kjiY=";
+        "0.4.9" = "sha256-UWoWWpCAKCNEwEFO4UBXrTO49QyxLXrulDHX6dGr0z4=";
+      }
+      ."${finalAttrs.version}";
   };
-  buildInputs = [ ocaml jbuilder findlib ];
-  propagatedBuildInputs = [ ocurl cryptokit ocaml_extlib yojson ocamlnet xmlm ];
 
-  inherit (jbuilder) installPhase;
+  nativeBuildInputs = [ cppo ];
+
+  propagatedBuildInputs = [
+    camlp-streams
+    cryptokit
+    ocurl
+    yojson
+  ];
+
+  doCheck = true;
+  checkInputs = [ ounit2 ];
 
   meta = {
     description = "OCaml client for google services";
-    homepage = http://gapi-ocaml.forge.ocamlcore.org;
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ bennofs ];
-    platforms = ocaml.meta.platforms or [];
+    homepage = "https://github.com/astrada/gapi-ocaml";
+    license = lib.licenses.mit;
+    platforms = lib.platforms.linux;
+    maintainers = with lib.maintainers; [ bennofs ];
   };
-}
+})

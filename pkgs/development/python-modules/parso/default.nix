@@ -1,25 +1,31 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  pytestCheckHook,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "parso";
-  version = "0.2.1";
-  name = "${pname}-${version}";
+  version = "0.8.7";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "f0604a40b96e062b0fd99cf134cc2d5cdf66939d0902f8267d938b0d5b26707f";
+  src = fetchFromGitHub {
+    owner = "davidhalter";
+    repo = "parso";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-vpWoxLIvNt4QQh/r57iAvX3Zebet3mihb5efOWLhYI8=";
   };
 
-  checkInputs = [ pytest ];
+  build-system = [ setuptools ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   meta = {
-    description = "A Python Parser";
-    homepage = https://github.com/davidhalter/parso;
+    description = "Python Parser";
+    homepage = "https://parso.readthedocs.io/en/latest/";
+    changelog = "https://github.com/davidhalter/parso/blob/${finalAttrs.src.tag}/CHANGELOG.rst";
     license = lib.licenses.mit;
   };
-
-}
+})

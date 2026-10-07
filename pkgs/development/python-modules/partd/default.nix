@@ -1,35 +1,62 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
-, locket
-, numpy
-, pandas
-, pyzmq
-, toolz
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  setuptools,
+  versioneer,
+
+  # dependencies
+  locket,
+  toolz,
+
+  # optional-dependencies
+  blosc2,
+  numpy,
+  pandas,
+  pyzmq,
+
+  # tests
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "partd";
-  version = "0.3.8";
+  version = "1.4.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "67291f1c4827cde3e0148b3be5d69af64b6d6169feb9ba88f0a6cfe77089400f";
+  src = fetchFromGitHub {
+    owner = "dask";
+    repo = "partd";
+    tag = version;
+    hash = "sha256-GtIo6n87TmM5aRgtRyxhhXXAINpPCFbjZ/sQz/vkcoA=";
   };
 
-  checkInputs = [ pytest ];
+  nativeBuildInputs = [
+    setuptools
+    versioneer
+  ];
 
-  propagatedBuildInputs = [ locket numpy pandas pyzmq toolz ];
+  propagatedBuildInputs = [
+    locket
+    toolz
+  ];
 
-  checkPhase = ''
-    rm partd/tests/test_zmq.py # requires network & fails
-    py.test
-  '';
+  optional-dependencies = {
+    complete = [
+      blosc2
+      numpy
+      pandas
+      pyzmq
+    ];
+  };
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   meta = {
     description = "Appendable key-value storage";
-    license = with lib.licenses; [ bsd3 ];
-    homepage = https://github.com/dask/partd/;
+    license = lib.licenses.bsd3;
+    homepage = "https://github.com/dask/partd/";
   };
 }

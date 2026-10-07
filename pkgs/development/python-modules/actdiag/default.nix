@@ -1,29 +1,49 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pep8, nose, unittest2, docutils, blockdiag  }:
+{
+  lib,
+  blockdiag,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "actdiag";
-  version = "0.5.4";
-  name = "${pname}-${version}";
+  version = "3.0.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "983071777d9941093aaef3be1f67c198a8ac8d2bba264cdd1f337ca415ab46af";
+  src = fetchFromGitHub {
+    owner = "blockdiag";
+    repo = "actdiag";
+    tag = version;
+    hash = "sha256-WmprkHOgvlsOIg8H77P7fzEqxGnj6xaL7Df7urRkg3o=";
   };
 
-  buildInputs = [ pep8 nose unittest2 docutils ];
+  patches = [ ./fix_test_generate.patch ];
+
+  build-system = [ setuptools ];
 
   propagatedBuildInputs = [ blockdiag ];
 
-  # One test fails:
-  #   UnicodeEncodeError: 'ascii' codec can't encode character u'\u3042' in position 0: ordinal not in range(128)
-  doCheck = false;
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
+  enabledTestPaths = [ "src/actdiag/tests/" ];
+
+  disabledTests = [
+    # AttributeError: 'TestRstDirectives' object has no attribute 'assertRegexpMatches'
+    "svg"
+    "noviewbox"
+  ];
+
+  pythonImportsCheck = [ "actdiag" ];
+
+  meta = {
     description = "Generate activity-diagram image from spec-text file (similar to Graphviz)";
-    homepage = http://blockdiag.com/;
-    license = licenses.asl20;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ bjornfor ];
+    homepage = "http://blockdiag.com/";
+    changelog = "https://github.com/blockdiag/actdiag/blob/${version}/CHANGES.rst";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ bjornfor ];
+    mainProgram = "actdiag";
+    platforms = lib.platforms.unix;
   };
 }

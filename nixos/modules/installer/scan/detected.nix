@@ -1,11 +1,8 @@
 # List all devices which are detected by nixos-generate-config.
 # Common devices are enabled by default.
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{ lib, ... }:
 {
-  config = mkDefault {
+  config = lib.mkDefault {
     # Common firmware, i.e. for wifi cards
     hardware.enableRedistributableFirmware = true;
   };

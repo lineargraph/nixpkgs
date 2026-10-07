@@ -1,99 +1,94 @@
-{ stdenv, writeText, elixir, erlang, hexRegistrySnapshot, hex, lib }:
+{
+  elixir,
+  erlang,
+  hex,
+  beamCopySourceHook,
+  beamModuleInstallHook,
+  mixBuildDirHook,
+  mixCompileHook,
+  mixAppConfigPatchHook,
 
-{ name
-, version
-, src
-, setupHook ? null
-, buildInputs ? []
-, beamDeps ? []
-, postPatch ? ""
-, compilePorts ? false
-, installPhase ? null
-, buildPhase ? null
-, configurePhase ? null
-, meta ? {}
-, enableDebugInfo ? false
-, ... }@attrs:
+  lib,
+  stdenv,
+  writeText,
+}:
 
-with stdenv.lib;
+lib.extendMkDerivation {
+  constructDrv = stdenv.mkDerivation;
+  excludeDrvArgNames = [
+    "mixEnv"
+  ];
+  extendDrvArgs =
+    finalAttrs:
+    {
+      beamDeps ? [ ],
+      mixEnv ? "prod",
+      mixTarget ? "host",
 
-let
+      # Allow passing compile time config instead of an empty config
+      appConfigPath ? null,
 
-  debugInfoFlag = lib.optionalString (enableDebugInfo || elixir.debugInfo) "--debug-info";
+      enableDebugInfo ? false,
+      erlangCompilerOptions ? [ ],
+      # Deterministic Erlang builds remove full system paths from debug information
+      # among other things to keep builds more reproducible. See their docs for more:
+      # https://www.erlang.org/doc/man/compile
+      erlangDeterministicBuilds ? true,
+      ...
+    }@args:
+    {
+      name = "erlang${erlang.version}-${args.name}-${finalAttrs.version}";
 
-  shell = drv: stdenv.mkDerivation {
-          name = "interactive-shell-${drv.name}";
-          buildInputs = [ drv ];
+      env = {
+        ERL_COMPILER_OPTIONS =
+          let
+            options = erlangCompilerOptions ++ lib.optionals erlangDeterministicBuilds [ "deterministic" ];
+          in
+          "[${lib.concatStringsSep "," options}]";
+
+        MIX_ENV = mixEnv;
+        MIX_TARGET = mixTarget;
+        MIX_BUILD_PREFIX = (if mixTarget == "host" then "" else "${mixTarget}_") + "${mixEnv}";
+        MIX_DEBUG = if enableDebugInfo then 1 else 0;
+        HEX_OFFLINE = 1;
+
+        LANG = if stdenv.hostPlatform.isLinux then "C.UTF-8" else "C";
+        LC_CTYPE = if stdenv.hostPlatform.isLinux then "C.UTF-8" else "UTF-8";
+
+        # some hooks need name-version, but we've overridden name above for the nix package
+        beamModuleName = args.name;
+      }
+      // (args.env or { });
+
+      __structuredAttrs = true;
+      strictDeps = true;
+
+      __darwinAllowLocalNetworking = true;
+
+      # add to ERL_LIBS so other modules can find at runtime.
+      # http://erlang.org/doc/man/code.html#code-path
+      # Mix also searches the code path when compiling with the --no-deps-check flag
+      # This is used by package builders such as mixRelease
+      setupHook = writeText "setupHook.sh" ''
+        addToSearchPath ERL_LIBS "$1/lib/erlang/lib"
+      '';
+
+      nativeBuildInputs = (args.nativeBuildInputs or [ ]) ++ [
+        erlang
+        elixir
+        hex
+
+        beamCopySourceHook
+        beamModuleInstallHook
+        mixBuildDirHook
+        mixCompileHook
+        mixAppConfigPatchHook
+      ];
+
+      propagatedBuildInputs = (args.propagatedBuildInputs or [ ]) ++ beamDeps;
+
+      passthru = (args.passthru or { }) // {
+        inherit beamDeps;
+      };
     };
-
-  bootstrapper = ./mix-bootstrap;
-
-  pkg = self: stdenv.mkDerivation ( attrs // {
-    name = "${name}-${version}";
-    inherit version;
-
-    dontStrip = true;
-
-    inherit src;
-
-    setupHook = if setupHook == null
-    then writeText "setupHook.sh" ''
-       addToSearchPath ERL_LIBS "$1/lib/erlang/lib"
-    ''
-    else setupHook;
-
-    inherit buildInputs;
-    propagatedBuildInputs = [ hexRegistrySnapshot hex elixir ] ++ beamDeps;
-
-    configurePhase = if configurePhase == null
-    then ''
-      runHook preConfigure
-      ${erlang}/bin/escript ${bootstrapper}
-      runHook postConfigure
-    ''
-    else configurePhase ;
-
-
-    buildPhase = if buildPhase == null
-    then ''
-        runHook preBuild
-
-        export HEX_OFFLINE=1
-        export HEX_HOME=`pwd`
-        export MIX_ENV=prod
-
-        MIX_ENV=prod mix compile ${debugInfoFlag} --no-deps-check
-
-        runHook postBuild
-    ''
-    else buildPhase;
-
-    installPhase = if installPhase == null
-    then ''
-        runHook preInstall
-
-        MIXENV=prod
-
-        if [ -d "_build/shared" ]; then
-          MIXENV=shared
-        fi
-
-        mkdir -p "$out/lib/erlang/lib/${name}-${version}"
-        for reldir in src ebin priv include; do
-          fd="_build/$MIXENV/lib/${name}/$reldir"
-          [ -d "$fd" ] || continue
-          cp -Hrt "$out/lib/erlang/lib/${name}-${version}" "$fd"
-          success=1
-        done
-
-        runHook postInstall
-    ''
-    else installPhase;
-
-    passthru = {
-      packageName = name;
-      env = shell self;
-      inherit beamDeps;
-    };
-});
-in fix pkg
+}

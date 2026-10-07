@@ -1,34 +1,65 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytest, glibcLocales, tox, pytestcov, parso }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
 
-buildPythonPackage rec {
+  # build-system
+  setuptools,
+
+  # dependencies
+  parso,
+
+  # tests
+  attrs,
+  pytestCheckHook,
+}:
+
+buildPythonPackage (finalAttrs: {
   pname = "jedi";
-  version = "0.12.0";
-  name = "${pname}-${version}";
+  version = "0.20.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1bcr7csx4xil1iwmk03d79jis0bkmgi9k0kir3xa4rmwqsagcwhr";
+  src = fetchFromGitHub {
+    owner = "davidhalter";
+    repo = "jedi";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-D0Zy8HJYq5l8Wp1M+J7p8Z+EBY/R5tYFa2uMYiqLIT8=";
+    fetchSubmodules = true;
   };
 
-  postPatch = ''
-    substituteInPlace requirements.txt --replace "parso==0.1.0" "parso"
+  build-system = [ setuptools ];
+
+  dependencies = [ parso ];
+
+  nativeCheckInputs = [
+    attrs
+    pytestCheckHook
+  ];
+
+  preCheck = ''
+    export HOME=$TMPDIR
   '';
 
-  checkInputs = [ pytest glibcLocales tox pytestcov ];
+  disabledTests =
+    lib.optionals stdenv.hostPlatform.isDarwin [
+      # sensitive to platform, causes false negatives on darwin
+      "test_import"
+    ]
+    ++ lib.optionals stdenv.targetPlatform.useLLVM [
+      # InvalidPythonEnvironment: The python binary is potentially unsafe.
+      "test_create_environment_executable"
+      # AssertionError: assert ['', '.1000000000000001'] == ['', '.1']
+      "test_dict_keys_completions"
+      # AssertionError: assert ['', '.1000000000000001'] == ['', '.1']
+      "test_dict_completion"
+    ];
 
-  propagatedBuildInputs = [ parso ];
-
-  checkPhase = ''
-    LC_ALL="en_US.UTF-8" py.test test
-  '';
-
-  # tox required for tests: https://github.com/davidhalter/jedi/issues/808
-  doCheck = false;
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/davidhalter/jedi;
-    description = "An autocompletion tool for Python that can be used for text editors";
-    license = licenses.lgpl3Plus;
-    maintainers = with maintainers; [ garbas ];
+  meta = {
+    changelog = "https://github.com/davidhalter/jedi/blob/${finalAttrs.src.tag}/CHANGELOG.rst";
+    description = "Autocompletion tool for Python that can be used for text editors";
+    homepage = "https://github.com/davidhalter/jedi";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
-}
+})

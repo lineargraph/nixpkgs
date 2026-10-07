@@ -1,26 +1,42 @@
-{ stdenv, fetchPypi, buildPythonPackage, pycodestyle }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  glibcLocales,
+  pycodestyle,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "autopep8";
-  version = "1.3.5";
-  name = "${pname}-${version}";
+  version = "2.3.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "192bvhzi4d0claqxgzymvv7k3qnj627742bc8sgxpzjj42pd9112";
+  src = fetchFromGitHub {
+    owner = "hhatto";
+    repo = "autopep8";
+    tag = "v${version}";
+    hash = "sha256-9OJ5XbzpHMHsFjf5oVyHjn5zqmAxRuSItWP4sQx8jD4=";
   };
+
+  build-system = [ setuptools ];
 
   propagatedBuildInputs = [ pycodestyle ];
 
-  # One test fails:
-  # FAIL: test_recursive_should_not_crash_on_unicode_filename (test.test_autopep8.CommandLineTests)
-  doCheck = false;
+  nativeCheckInputs = [
+    glibcLocales
+    pytestCheckHook
+  ];
 
-  meta = with stdenv.lib; {
-    description = "A tool that automatically formats Python code to conform to the PEP 8 style guide";
-    homepage = https://pypi.python.org/pypi/autopep8/;
-    license = licenses.mit;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ bjornfor ];
+  env.LC_ALL = "en_US.UTF-8";
+
+  meta = {
+    changelog = "https://github.com/hhatto/autopep8/releases/tag/v${version}";
+    description = "Tool that automatically formats Python code to conform to the PEP 8 style guide";
+    homepage = "https://github.com/hhatto/autopep8";
+    license = lib.licenses.mit;
+    mainProgram = "autopep8";
+    maintainers = with lib.maintainers; [ bjornfor ];
   };
 }

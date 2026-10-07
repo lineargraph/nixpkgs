@@ -1,31 +1,82 @@
-{ buildPythonPackage
-, fetchPypi
-, lib
-, recursivePthLoader
+{
+  lib,
+  buildPythonPackage,
+  isPyPy,
+  distlib,
+  fetchFromGitHub,
+  filelock,
+  flaky,
+  hatch-vcs,
+  hatchling,
+  platformdirs,
+  pytest-freezer,
+  pytest-mock,
+  pytestCheckHook,
+  python-discovery,
+  time-machine,
 }:
 
 buildPythonPackage rec {
   pname = "virtualenv";
-  version = "15.2.0";
-  name = "${pname}-${version}";
+  version = "21.6.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1d7e241b431e7afce47e77f8843a276f652699d1fa4f93b9d8ce0076fd7b0b54";
+  src = fetchFromGitHub {
+    owner = "pypa";
+    repo = "virtualenv";
+    tag = version;
+    hash = "sha256-8LOmA1Mhfqbl3hsGZa8tQutjfjEVeDlpOKyVut5rDVI=";
   };
 
-  # Doubt this is needed - FRidh 2017-07-07
-  pythonPath = [ recursivePthLoader ];
+  build-system = [
+    hatch-vcs
+    hatchling
+  ];
 
-  patches = [ ./virtualenv-change-prefix.patch ];
+  dependencies = [
+    distlib
+    filelock
+    platformdirs
+    python-discovery
+  ];
 
-  # Tarball doesn't contain tests
-  doCheck = false;
+  nativeCheckInputs = [
+    flaky
+    pytest-mock
+    pytestCheckHook
+  ]
+  ++ lib.optionals isPyPy [ pytest-freezer ]
+  ++ lib.optionals (!isPyPy) [ time-machine ];
+
+  disabledTestPaths = [
+    # Ignore tests which require network access
+    "tests/unit/create/test_creator.py"
+    "tests/unit/create/via_global_ref/test_build_c_ext.py"
+  ];
+
+  disabledTests = [
+    # Network access
+    "test_seed_link_via_app_data"
+  ]
+  ++ lib.optionals isPyPy [
+    # encoding problems
+    "test_bash"
+    # permission error
+    "test_can_build_c_extensions"
+    # fails to detect pypy version
+    "test_discover_ok"
+    # type error
+    "test_fallback_existent_system_executable"
+  ];
+
+  pythonImportsCheck = [ "virtualenv" ];
 
   meta = {
-    description = "A tool to create isolated Python environments";
-    homepage = http://www.virtualenv.org;
+    description = "Tool to create isolated Python environments";
+    mainProgram = "virtualenv";
+    homepage = "http://www.virtualenv.org";
+    changelog = "https://github.com/pypa/virtualenv/blob/${version}/docs/changelog.rst";
     license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ goibhniu ];
+    maintainers = [ ];
   };
 }

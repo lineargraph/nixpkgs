@@ -1,24 +1,35 @@
-{ stdenv, fetchFromGitHub, buildPythonPackage, pytest }:
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  setuptools,
+  pytestCheckHook,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "simanneal";
-  version = "0.4.1";
-  name = "${pname}-${version}";
+  version = "0.5.0";
+  pyproject = true;
+
+  __structuredAttrs = true;
 
   src = fetchFromGitHub {
     owner = "perrygeo";
     repo = "simanneal";
-    rev = version;
-    sha256 = "12499wvf7ii7cy8z2f1d472p7q9napg1lj0h9xx8l1mbr1hjlp3q";
+    tag = finalAttrs.version;
+    hash = "sha256-yKZHkrf6fM0WsHczIEK5Kxusz5dSBgydK3fLu1nDyvk=";
   };
 
-  checkInputs = [ pytest ];
-  checkPhase = "pytest tests";
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "A python implementation of the simulated annealing optimization technique";
-    homepage = https://github.com/perrygeo/simanneal;
-    license = licenses.isc;
-    maintainers = with maintainers; [ veprbl ];
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "simanneal" ];
+
+  meta = {
+    description = "Python implementation of the simulated annealing optimization technique";
+    homepage = "https://github.com/perrygeo/simanneal";
+    license = lib.licenses.isc;
+    maintainers = with lib.maintainers; [ veprbl ];
   };
-}
+})

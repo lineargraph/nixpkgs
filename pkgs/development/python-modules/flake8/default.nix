@@ -1,27 +1,49 @@
-{ stdenv, buildPythonPackage, fetchPypi, pythonOlder
-, mock, pytest, pytestrunner
-, configparser, enum34, mccabe, pycodestyle, pyflakes
+{
+  lib,
+  buildPythonPackage,
+  isPyPy,
+  fetchFromGitHub,
+  setuptools,
+  mccabe,
+  pycodestyle,
+  pyflakes,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "flake8";
-  version = "3.5.0";
+  version = "7.3.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "7253265f7abd8b313e3892944044a365e3f4ac3fcdcfb4298f55ee9ddf188ba0";
+  src = fetchFromGitHub {
+    owner = "PyCQA";
+    repo = "flake8";
+    tag = version;
+    hash = "sha256-dZFIGyjqkd+MRz9NoOEcMuR9ZshFb/h+zO2OJZsQajc=";
   };
 
-  buildInputs = [ pytest mock pytestrunner ];
-  propagatedBuildInputs = [ pyflakes pycodestyle mccabe ]
-    ++ stdenv.lib.optionals (pythonOlder "3.4") [ enum34 ]
-    ++ stdenv.lib.optionals (pythonOlder "3.2") [ configparser ];
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "Code checking using pep8 and pyflakes";
-    homepage = https://pypi.python.org/pypi/flake8;
-    license = licenses.mit;
-    maintainers = with maintainers; [ garbas ];
+  dependencies = [
+    mccabe
+    pycodestyle
+    pyflakes
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTests = lib.optionals isPyPy [
+    # tests fail due to slightly different error position
+    "test_tokenization_error_is_a_syntax_error"
+    "test_tokenization_error_but_not_syntax_error"
+  ];
+
+  meta = {
+    changelog = "https://github.com/PyCQA/flake8/blob/${src.tag}/docs/source/release-notes/${version}.rst";
+    description = "Modular source code checker: pep8, pyflakes and co";
+    homepage = "https://github.com/PyCQA/flake8";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ dotlambda ];
+    mainProgram = "flake8";
   };
 }

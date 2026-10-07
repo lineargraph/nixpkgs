@@ -1,49 +1,75 @@
-{ stdenv
-, fetchPypi
-, buildPythonPackage
-, python
-, llvm
-, pythonOlder
-, isPyPy
-, enum34
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  isPyPy,
+
+  # build-system
+  cmake,
+  ninja,
+  setuptools,
+
+  # buildInputs
+  libxml2,
+  llvm_22,
+
+  # tests
+  pytestCheckHook,
+
+  withStaticLLVM ? true,
 }:
 
-buildPythonPackage rec {
+let
+  llvm = llvm_22;
+in
+
+buildPythonPackage (finalAttrs: {
   pname = "llvmlite";
-  version = "0.22.0";
+  version = "0.49.0";
+  pyproject = true;
+  __structuredAttrs = true;
 
   disabled = isPyPy;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "a0a875f3d502f41f4a24444aa98fbf076a6bf36e2a0b3b4481b22e1c4a3acdc2";
+  src = fetchFromGitHub {
+    owner = "numba";
+    repo = "llvmlite";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-AUte9llrcPl2z4ipkZ3PGeryDveZ9vj5oaBQtzGaT+w=";
   };
 
-  propagatedBuildInputs = [ llvm ] ++ stdenv.lib.optional (pythonOlder "3.4") enum34;
+  build-system = [
+    cmake
+    ninja
+    setuptools
+  ];
+  dontUseCmakeConfigure = true;
 
-  # Disable static linking
-  # https://github.com/numba/llvmlite/issues/93
-  postPatch = ''
-    substituteInPlace ffi/Makefile.linux --replace "-static-libstdc++" ""
+  buildInputs = [
+    llvm
+  ]
+  ++ lib.optionals withStaticLLVM [ libxml2.dev ];
 
-    substituteInPlace llvmlite/tests/test_binding.py --replace "test_linux" "nope"
+  env.LLVMLITE_SHARED = !withStaticLLVM;
+
+  pythonImportsCheck = [ "llvmlite" ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ];
+
+  # https://github.com/NixOS/nixpkgs/issues/255262
+  preCheck = ''
+    cd $out
   '';
-  # Set directory containing llvm-config binary
-  preConfigure = ''
-    export LLVM_CONFIG=${llvm}/bin/llvm-config
-  '';
-  checkPhase = ''
-    ${python.executable} runtests.py
-  '';
 
-  __impureHostDeps = stdenv.lib.optionals stdenv.isDarwin [ "/usr/lib/libm.dylib" ];
-
-  passthru.llvm = llvm;
+  passthru = lib.optionalAttrs (!withStaticLLVM) { inherit llvm; };
 
   meta = {
-    description = "A lightweight LLVM python binding for writing JIT compilers";
-    homepage = http://llvmlite.pydata.org/;
-    license = stdenv.lib.licenses.bsd2;
-    maintainers = with stdenv.lib.maintainers; [ fridh ];
+    description = "Lightweight LLVM python binding for writing JIT compilers";
+    homepage = "https://llvmlite.pydata.org/";
+    downloadPage = "https://github.com/numba/llvmlite";
+    changelog = "https://github.com/numba/llvmlite/blob/${finalAttrs.src.tag}/CHANGE_LOG";
+    license = lib.licenses.bsd2;
   };
-}
+})

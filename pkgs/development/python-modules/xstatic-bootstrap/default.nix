@@ -1,25 +1,34 @@
-{ buildPythonPackage
-, lib
-, fetchPypi
+{
+  buildPythonPackage,
+  lib,
+  fetchPypi,
+  setuptools_80,
 }:
 
-buildPythonPackage rec {
-  pname = "XStatic-Bootstrap";
-  version = "3.3.5.1";
+buildPythonPackage (finalAttrs: {
+  pname = "xstatic-bootstrap";
+  version = "5.3.8.0";
+  pyproject = true;
+
+  __structuredAttrs = true;
 
   src = fetchPypi {
-    inherit version pname;
-    sha256 = "0jzjq3d4vp2shd2n20f9y53jnnk1cvphkj1v0awgrf18qsy2bmin";
+    pname = "xstatic_bootstrap";
+    inherit (finalAttrs) version;
+    hash = "sha256-BPXMlbvlQ40ehR0GxMoa1/hL02oJtN5aH1S1JOhQaFk=";
   };
+
+  build-system = [ setuptools_80 ];
 
   # no tests implemented
   doCheck = false;
 
-  meta = with lib;{
-    homepage = http://getbootstrap.com;
-    description = "Bootstrap packaged static files for python";
-    license = licenses.mit;
-    maintainers = with maintainers; [ makefu ];
-  };
+  pythonImportsCheck = [ "xstatic.pkg.bootstrap" ];
 
-}
+  meta = {
+    homepage = "https://getbootstrap.com";
+    description = "Bootstrap packaged static files for python";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ makefu ];
+  };
+})

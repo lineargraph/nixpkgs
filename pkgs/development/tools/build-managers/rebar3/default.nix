@@ -1,126 +1,204 @@
-{ stdenv, writeText, callPackage, fetchurl,
-  fetchHex, erlang, hermeticRebar3 ? true,
-  tree, fetchFromGitHub, hexRegistrySnapshot }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  fetchgit,
+  fetchHex,
+  erlang,
+  makeWrapper,
+  writableTmpDirAsHomeHook,
+  writeScript,
+  common-updater-scripts,
+  coreutils,
+  git,
+  gnused,
+  nix,
+  rebar3-nix,
+}:
 
 let
-  version = "3.4.3";
+  deps = import ./rebar-deps.nix { inherit fetchFromGitHub fetchgit fetchHex; };
+  rebar3 = stdenv.mkDerivation (finalAttrs: {
+    pname = "rebar3";
+    version = "3.27.1";
 
-  bootstrapper = ./rebar3-nix-bootstrap;
+    __structuredAttrs = true;
+    strictDeps = true;
 
-  erlware_commons = fetchHex {
-    pkg = "erlware_commons";
-    version = "1.0.0";
-    sha256 = "0wkphbrjk19lxdwndy92v058qwcaz13bcgdzp33h21aa7vminzx7";
-  };
-  ssl_verify_fun = fetchHex {
-    pkg = "ssl_verify_fun";
-    version = "1.1.2";
-    sha256 = "0qdyx70v09fydv4wzz1djnkixqj62ny40yjjhv2q6mh47lns2arj";
-  };
-  certifi = fetchHex {
-    pkg = "certifi";
-    version = "2.0.0";
-    sha256 = "075v7cvny52jbhnskchd3fp68fxgp7qfvdls0haamcycxrn0dipx";
-  };
-  providers = fetchHex {
-    pkg = "providers";
-    version = "1.6.0";
-    sha256 = "0byfa1h57n46jilz4q132j0vk3iqc0v1vip89li38gb1k997cs0g";
-  };
-  getopt = fetchHex {
-    pkg = "getopt";
-    version = "0.8.2";
-    sha256 = "1xw30h59zbw957cyjd8n50hf9y09jnv9dyry6x3avfwzcyrnsvkk";
-  };
-  bbmustache = fetchHex {
-    pkg = "bbmustache";
-    version = "1.3.0";
-    sha256 = "042pfgss8kscq6ssg8gix8ccmdsrx0anjczsbrn2a6c36ljrx2p6";
-  };
-  relx = fetchHex {
-    pkg = "relx";
-    version = "3.23.1";
-    sha256 = "13j7wds2d7b8v3r9pwy3zhwhzywgwhn6l9gm3slqzyrs1jld0a9d";
-  };
-  cf = fetchHex {
-    pkg = "cf";
-    version = "0.2.2";
-    sha256 = "08cvy7skn5d2k4manlx5k3anqgjdvajjhc5jwxbaszxw34q3na28";
-  };
-  cth_readable = fetchHex {
-    pkg = "cth_readable";
-    version = "1.3.0";
-    sha256 = "1s7bqj6f2zpbyjmbfq2mm6vcz1jrxjr2nd0531wshsx6fnshqhvs";
-  };
-  eunit_formatters = fetchHex {
-    pkg = "eunit_formatters";
-    version = "0.3.1";
-    sha256 = "0cg9dasv60v09q3q4wja76pld0546mhmlpb0khagyylv890hg934";
-  };
-  rebar3_hex = fetchHex {
-    pkg = "rebar3_hex";
-    version = "4.0.0";
-    sha256 = "0k0ykx1lz62r03dpbi2zxsvrxgnr5hj67yky0hjrls09ynk4682v";
-  };
+    # How to obtain `sha256`:
+    # nix-prefetch-url --unpack https://github.com/erlang/rebar3/archive/${version}.tar.gz
+    src = fetchFromGitHub {
+      owner = "erlang";
+      repo = "rebar3";
+      tag = finalAttrs.version;
+      sha256 = "sQf8kI2+vYHU9AWqnpSvmA8z2XHZz0aEJdeX/m+nvf8=";
+    };
 
-in
-stdenv.mkDerivation {
-  name = "rebar3-${version}";
-  inherit version;
+    nativeBuildInputs = [
+      erlang
+      writableTmpDirAsHomeHook
+    ];
 
-  src = fetchurl {
-    url = "https://github.com/rebar/rebar3/archive/${version}.tar.gz";
-    sha256 = "1a05gpxxc3mx5v33kzpb5xnq5vglmjl0q8hrcvpinjlazcwbg531";
-  };
+    buildInputs = [ erlang ];
 
-  inherit bootstrapper;
+    postPatch = ''
+      mkdir -p _checkouts _build/default/lib/
 
-  patches = if hermeticRebar3 == true
-  then  [ ./hermetic-rebar3.patch ]
-  else [];
+      ${toString (
+        lib.mapAttrsToList (k: v: ''
+          cp -R --no-preserve=mode ${v} _checkouts/${k}
+        '') deps
+      )}
 
-  buildInputs = [ erlang tree  ];
-  propagatedBuildInputs = [ hexRegistrySnapshot ];
+      # Bootstrap script expects the dependencies in _build/default/lib
+      # TODO: Make it accept checkouts?
+      for i in _checkouts/* ; do
+          ln -s $(pwd)/$i $(pwd)/_build/default/lib/
+      done
+    ''
+    # OTP 29 tests fail on warnings, fixed in https://github.com/erlang/rebar3/pull/2996
+    + lib.optionalString ((lib.versions.major erlang.version) == "29") ''
+      substituteInPlace rebar.config --replace-fail 'nowarn_deprecated_catch' 'nowarn_deprecated_catch,nowarn_export_var_subexpr'
 
-  postPatch = ''
-    ${erlang}/bin/escript ${bootstrapper} registry-only
-    mkdir -p _build/default/lib/
-    mkdir -p _build/default/plugins
-    cp --no-preserve=mode -R ${erlware_commons} _build/default/lib/erlware_commons
-    cp --no-preserve=mode -R ${providers} _build/default/lib/providers
-    cp --no-preserve=mode -R ${getopt} _build/default/lib/getopt
-    cp --no-preserve=mode -R ${bbmustache} _build/default/lib/bbmustache
-    cp --no-preserve=mode -R ${certifi} _build/default/lib/certifi
-    cp --no-preserve=mode -R ${cf} _build/default/lib/cf
-    cp --no-preserve=mode -R ${cth_readable} _build/default/lib/cth_readable
-    cp --no-preserve=mode -R ${eunit_formatters} _build/default/lib/eunit_formatters
-    cp --no-preserve=mode -R ${relx} _build/default/lib/relx
-    cp --no-preserve=mode -R ${ssl_verify_fun} _build/default/lib/ssl_verify_fun
-    cp --no-preserve=mode -R ${rebar3_hex} _build/default/plugins/rebar3_hex
-  '';
+      substituteInPlace apps/rebar/test/rebar_xref_SUITE.erl \
+        --replace-fail 'xref_test, xref_ignore_test,' 'xref_test,'
+    '';
 
-  buildPhase = ''
-    HOME=. escript bootstrap
-  '';
-  installPhase = ''
-    mkdir -p $out/bin
-    cp rebar3 $out/bin/rebar3
-  '';
+    buildPhase = ''
+      runHook preBuild
 
-  meta = {
-    homepage = https://github.com/rebar/rebar3;
-    description = "rebar 3.0 is an Erlang build tool that makes it easy to compile and test Erlang applications, port drivers and releases";
+      escript bootstrap
 
-    longDescription = ''
-      rebar is a self-contained Erlang script, so it's easy to distribute or
-      even embed directly in a project. Where possible, rebar uses standard
-      Erlang/OTP conventions for project structures, thus minimizing the amount
-      of build configuration work. rebar also provides dependency management,
-      enabling application writers to easily re-use common libraries from a
-      variety of locations (hex.pm, git, hg, and so on).
+      runHook postBuild
+    '';
+
+    checkPhase = ''
+      runHook preCheck
+
+      escript ./rebar3 ct
+
+      runHook postCheck
+    '';
+
+    doCheck = true;
+
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p $out/bin
+      cp rebar3 $out/bin/rebar3
+
+      runHook postInstall
+    '';
+
+    meta = {
+      homepage = "https://github.com/rebar/rebar3";
+      changelog = "https://github.com/erlang/rebar3/releases/tag/${finalAttrs.version}";
+      description = "Erlang build tool that makes it easy to compile and test Erlang applications, port drivers and releases";
+      mainProgram = "rebar3";
+
+      longDescription = ''
+        rebar is a self-contained Erlang script, so it's easy to distribute or
+        even embed directly in a project. Where possible, rebar uses standard
+        Erlang/OTP conventions for project structures, thus minimizing the amount
+        of build configuration work. rebar also provides dependency management,
+        enabling application writers to easily re-use common libraries from a
+        variety of locations (hex.pm, git, hg, and so on).
       '';
 
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.gleber ];
-  };
+      platforms = lib.platforms.unix;
+      teams = [ lib.teams.beam ];
+      license = lib.licenses.asl20;
+    };
+
+    passthru.updateScript = writeScript "update.sh" ''
+      #!${stdenv.shell}
+      set -ox errexit
+      PATH=${
+        lib.makeBinPath [
+          common-updater-scripts
+          coreutils
+          git
+          gnused
+          nix
+          (rebar3WithPlugins { globalPlugins = [ rebar3-nix ]; })
+        ]
+      }
+      latest=$(list-git-tags | sed -n '/[\d\.]\+/p' | sort -V | tail -1)
+      if [ "$latest" != "${finalAttrs.version}" ]; then
+        nixpkgs="$(git rev-parse --show-toplevel)"
+        nix_path="$nixpkgs/pkgs/development/tools/build-managers/rebar3"
+        update-source-version rebar3 "$latest" --version-key=version --print-changes --file="$nix_path/default.nix"
+        tmpdir=$(mktemp -d)
+        cp -R $(nix-build $nixpkgs --no-out-link -A rebar3.src)/* "$tmpdir"
+        (cd "$tmpdir" && rebar3 as test nix lock -o "$nix_path/rebar-deps.nix")
+        nix run -f $nixpkgs/ci fmt.pkg "$nix_path/rebar-deps.nix"
+      else
+        echo "rebar3 is already up-to-date"
+      fi
+    '';
+  });
+
+  # Alias rebar3 so we can use it as default parameter below
+  _rebar3 = rebar3;
+
+  rebar3WithPlugins =
+    {
+      plugins ? [ ],
+      globalPlugins ? [ ],
+      rebar3 ? _rebar3,
+    }:
+    let
+      pluginLibDirs = map (p: "${p}/lib/erlang/lib") (lib.unique (plugins ++ globalPlugins));
+      globalPluginNames = lib.unique (map (p: p.pname) globalPlugins);
+      rebar3Patched = (
+        rebar3.overrideAttrs (old: {
+
+          # skip-plugins.patch is necessary because otherwise rebar3 will always
+          # try to fetch plugins if they are not already present in _build.
+          #
+          # global-deps.patch makes it possible to use REBAR_GLOBAL_PLUGINS to
+          # instruct rebar3 to always load a certain plugin. It is necessary since
+          # REBAR_GLOBAL_CONFIG_DIR doesn't seem to work for this.
+          patches = [
+            ./skip-plugins.patch
+            ./global-plugins.patch
+          ];
+
+          # our patches cause the tests to fail
+          doCheck = false;
+        })
+      );
+    in
+    stdenv.mkDerivation {
+      pname = "rebar3-with-plugins";
+      inherit (rebar3) version;
+      nativeBuildInputs = [
+        erlang
+        makeWrapper
+      ];
+      unpackPhase = "true";
+
+      # Here we extract the rebar3 escript (like `rebar3_prv_local_install.erl`) and
+      # add plugins to the code path.
+
+      installPhase = ''
+        erl -noshell -eval '
+          {ok, Escript} = escript:extract("${rebar3Patched}/bin/rebar3", []),
+          {archive, Archive} = lists:keyfind(archive, 1, Escript),
+          {ok, _} = zip:extract(Archive, [{cwd, "'$out/lib'"}]),
+          init:stop(0)
+        '
+        cp ${./rebar_ignore_deps.erl} rebar_ignore_deps.erl
+        erlc -o $out/lib/rebar/ebin rebar_ignore_deps.erl
+        mkdir -p $out/bin
+        makeWrapper ${erlang}/bin/erl $out/bin/rebar3 \
+          --set REBAR_GLOBAL_PLUGINS "${toString globalPluginNames} rebar_ignore_deps" \
+          --suffix-each ERL_LIBS ":" "$out/lib ${toString pluginLibDirs}" \
+          --add-flags "+sbtu +A1 -noshell -boot start_clean -s rebar3 main -extra"
+      '';
+    };
+in
+{
+  inherit rebar3 rebar3WithPlugins;
 }

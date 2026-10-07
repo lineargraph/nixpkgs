@@ -1,16 +1,14 @@
-{ curl
-, build-idris-package
-, fetchFromGitHub
-, prelude
-, contrib
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  contrib,
+  lib,
 }:
 build-idris-package {
-  name = "rationals";
+  pname = "rationals";
   version = "2017-04-29";
 
-  idrisDeps = [ prelude contrib ];
+  idrisDeps = [ contrib ];
 
   src = fetchFromGitHub {
     owner = "mcgordonite";
@@ -20,9 +18,8 @@ build-idris-package {
   };
 
   meta = {
-    description = "An idris rational number type built from paths in the Stern Brocot tree";
-    homepage = https://github.com/mcgordonite/idris-binary-rationals;
-    inherit (idris.meta) platforms;
+    description = "Idris rational number type built from paths in the Stern Brocot tree";
+    homepage = "https://github.com/mcgordonite/idris-binary-rationals";
     maintainers = [ lib.maintainers.brainrape ];
   };
 }

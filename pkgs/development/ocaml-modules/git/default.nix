@@ -1,35 +1,102 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, jbuilder, opam
-, astring, decompress, fmt, hex, logs, mstruct, ocaml_lwt, ocamlgraph, uri
-, alcotest, mtime, nocrypto
+{
+  stdenv,
+  lib,
+  fetchurl,
+  buildDunePackage,
+  alcotest,
+  mirage-crypto-rng,
+  git-binary,
+  angstrom,
+  astring,
+  decompress,
+  digestif,
+  encore,
+  fmt,
+  checkseum,
+  ke,
+  logs,
+  lwt,
+  ocamlgraph,
+  uri,
+  rresult,
+  base64,
+  hxd,
+  bigstringaf,
+  optint,
+  mirage-flow,
+  domain-name,
+  emile,
+  mimic,
+  carton,
+  carton-lwt,
+  carton-git,
+  ipaddr,
+  psq,
+  crowbar,
+  alcotest-lwt,
+  cmdliner,
 }:
 
-stdenv.mkDerivation rec {
-	version = "1.11.5";
-	name = "ocaml${ocaml.version}-git-${version}";
+buildDunePackage (finalAttrs: {
+  pname = "git";
+  version = "3.18.0";
 
-	src = fetchFromGitHub {
-		owner = "mirage";
-		repo = "ocaml-git";
-		rev = version;
-		sha256 = "0r1bxpxjjnl9hh8xbabsxl7svzvd19hfy73a2y1m4kljmw64dpfh";
-	};
+  minimalOCamlVersion = "4.08";
 
-	buildInputs = [ ocaml findlib jbuilder alcotest mtime nocrypto ];
+  src = fetchurl {
+    url = "https://github.com/mirage/ocaml-git/releases/download/${finalAttrs.version}/git-${finalAttrs.version}.tbz";
+    hash = "sha256-kleVYn5tquC0vRaqUGh53xHLIB5l/v446BN48Y1RfUs=";
+  };
 
-	propagatedBuildInputs = [ astring decompress fmt hex logs mstruct ocaml_lwt ocamlgraph uri ];
+  buildInputs = [
+    base64
+  ];
+  propagatedBuildInputs = [
+    angstrom
+    astring
+    checkseum
+    decompress
+    digestif
+    encore
+    fmt
+    ke
+    logs
+    lwt
+    ocamlgraph
+    uri
+    rresult
+    bigstringaf
+    optint
+    mirage-flow
+    domain-name
+    emile
+    mimic
+    carton
+    carton-lwt
+    carton-git
+    ipaddr
+    psq
+    hxd
+  ];
+  nativeCheckInputs = [
+    git-binary
+  ];
+  checkInputs = [
+    alcotest
+    alcotest-lwt
+    mirage-crypto-rng
+    crowbar
+    cmdliner
+  ];
+  doCheck = !stdenv.hostPlatform.isAarch64;
 
-	buildPhase = "jbuilder build -p git";
-
-	inherit (jbuilder) installPhase;
-
-	doCheck = true;
-	checkPhase = "jbuilder runtest -p git";
-
-	meta = {
-		description = "Git format and protocol in pure OCaml";
-		license = stdenv.lib.licenses.isc;
-		maintainers = [ stdenv.lib.maintainers.vbgl ];
-		inherit (src.meta) homepage;
-		inherit (ocaml.meta) platforms;
-	};
-}
+  meta = {
+    description = "Git format and protocol in pure OCaml";
+    license = lib.licenses.isc;
+    maintainers = with lib.maintainers; [
+      sternenseemann
+      vbgl
+    ];
+    homepage = "https://github.com/mirage/ocaml-git";
+  };
+})

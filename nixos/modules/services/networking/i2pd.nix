@@ -1,482 +1,581 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
+  inherit (lib) types;
 
-  cfg = config.services.i2pd;
+  coerceMap =
+    mapping: finalType:
+    types.coercedTo (types.enum (lib.attrNames mapping)) (x: mapping.${x}) finalType;
 
-  homeDir = "/var/lib/i2pd";
-
-  mkEndpointOpt = name: addr: port: {
-    enable = mkEnableOption name;
-    name = mkOption {
-      type = types.str;
-      default = name;
-      description = "The endpoint name.";
-    };
-    address = mkOption {
-      type = types.str;
-      default = addr;
-      description = "Bind address for ${name} endpoint. Default: " + addr;
-    };
-    port = mkOption {
-      type = types.int;
-      default = port;
-      description = "Bind port for ${name} endoint. Default: " + toString port;
+  /*
+    Credential handling pipeline:
+    - Buildtime
+      - User sets { _secret = ...; } for every value expected to be substituted at runtime
+      - credential.finalize recursively traverses configuration inserting placeholder values like "<id>"
+    - Runtime
+      - Systemd ensures that given path exists (`RequiresMountsFor`)
+      - Systemd reads value of each credential to `$CREDENTIALS_DIRECTORY/<id>`
+      - loadCredentialsScript copies config files from /nix/store to /tmp and finally substitutes credentials
+  */
+  credAttrType = "_secret";
+  credPlaceholderAttrType = "_secretPlaceholder";
+  credType = types.addCheck types.attrs (attrs: attrs ? ${credAttrType}) // {
+    merge = loc: defs: {
+      ${credAttrType} =
+        let
+          def = lib.mergeEqualOption loc defs;
+          val = def.${credAttrType};
+          path =
+            if types.path.check val then
+              val
+            else
+              throw "Provided `{ ${credAttrType} = ...; }` is not of type `lib.types.path`";
+          id = builtins.hashString "sha256" path;
+          placeholder = if def ? ${credPlaceholderAttrType} then def.${credPlaceholderAttrType} else id;
+        in
+        {
+          inherit path id placeholder;
+        };
     };
   };
-
-  mkKeyedEndpointOpt = name: addr: port: keyFile:
-    (mkEndpointOpt name addr port) // {
-      keys = mkOption {
-        type = types.str;
-        default = "";
-        description = ''
-          File to persist ${lib.toUpper name} keys.
-        '';
-      };
-    };
-
-  commonTunOpts = let
-    i2cpOpts = {
-      length = mkOption {
-        type = types.int;
-        description = "Guaranteed minimum hops.";
-        default = 3;
-      };
-      quantity = mkOption {
-        type = types.int;
-        description = "Number of simultaneous tunnels.";
-        default = 5;
-      };
-    };
-  in name: {
-    outbound = i2cpOpts;
-    inbound = i2cpOpts;
-    crypto.tagsToSend = mkOption {
-      type = types.int;
-      description = "Number of ElGamal/AES tags to send.";
-      default = 40;
-    };
-    destination = mkOption {
-      type = types.str;
-      description = "Remote endpoint, I2P hostname or b32.i2p address.";
-    };
-    keys = mkOption {
-      type = types.str;
-      default = name + "-keys.dat";
-      description = "Keyset used for tunnel identity.";
-    };
-  } // mkEndpointOpt name "127.0.0.1" 0;
-
-  i2pdConf = pkgs.writeText "i2pd.conf" ''
-    # DO NOT EDIT -- this file has been generated automatically.
-    loglevel = ${cfg.logLevel}
-
-    ipv4 = ${boolToString cfg.enableIPv4}
-    ipv6 = ${boolToString cfg.enableIPv6}
-    notransit = ${boolToString cfg.notransit}
-    floodfill = ${boolToString cfg.floodfill}
-    netid = ${toString cfg.netid}
-    ${if isNull cfg.bandwidth then "" else "bandwidth = ${toString cfg.bandwidth}" }
-    ${if isNull cfg.port then "" else "port = ${toString cfg.port}"}
-
-    [limits]
-    transittunnels = ${toString cfg.limits.transittunnels}
-
-    [upnp]
-    enabled = ${boolToString cfg.upnp.enable}
-    name = ${cfg.upnp.name}
-
-    [precomputation]
-    elgamal = ${boolToString cfg.precomputation.elgamal}
-
-    [reseed]
-    verify = ${boolToString cfg.reseed.verify}
-    file = ${cfg.reseed.file}
-    urls = ${builtins.concatStringsSep "," cfg.reseed.urls}
-
-    [addressbook]
-    defaulturl = ${cfg.addressbook.defaulturl}
-    subscriptions = ${builtins.concatStringsSep "," cfg.addressbook.subscriptions}
-
-    ${flip concatMapStrings
-      (collect (proto: proto ? port && proto ? address && proto ? name) cfg.proto)
-      (proto: let portStr = toString proto.port; in ''
-        [${proto.name}]
-        enabled = ${boolToString proto.enable}
-        address = ${proto.address}
-        port = ${toString proto.port}
-        ${if proto ? keys then "keys = ${proto.keys}" else ""}
-        ${if proto ? auth then "auth = ${boolToString proto.auth}" else ""}
-        ${if proto ? user then "user = ${proto.user}" else ""}
-        ${if proto ? pass then "pass = ${proto.pass}" else ""}
-        ${if proto ? outproxy then "outproxy = ${proto.outproxy}" else ""}
-        ${if proto ? outproxyPort then "outproxyport = ${toString proto.outproxyPort}" else ""}
-      '')
-    }
-  '';
-
-  i2pdTunnelConf = pkgs.writeText "i2pd-tunnels.conf" ''
-    # DO NOT EDIT -- this file has been generated automatically.
-    ${flip concatMapStrings
-      (collect (tun: tun ? port && tun ? destination) cfg.outTunnels)
-      (tun: let portStr = toString tun.port; in ''
-        [${tun.name}]
-        type = client
-        destination = ${tun.destination}
-        destinationport = ${toString tun.destinationPort}
-        keys = ${tun.keys}
-        address = ${tun.address}
-        port = ${toString tun.port}
-        inbound.length = ${toString tun.inbound.length}
-        outbound.length = ${toString tun.outbound.length}
-        inbound.quantity = ${toString tun.inbound.quantity}
-        outbound.quantity = ${toString tun.outbound.quantity}
-        crypto.tagsToSend = ${toString tun.crypto.tagsToSend}
-      '')
-    }
-    ${flip concatMapStrings
-      (collect (tun: tun ? port && tun ? address) cfg.inTunnels)
-      (tun: ''
-        [${tun.name}]
-        type = server
-        destination = ${tun.destination}
-        keys = ${tun.keys}
-        host = ${tun.address}
-        port = ${toString tun.port}
-        inport = ${toString tun.inPort}
-        accesslist = ${builtins.concatStringsSep "," tun.accessList}
-      '')
-    }
-  '';
-
-  i2pdSh = pkgs.writeScriptBin "i2pd" ''
-    #!/bin/sh
-    exec ${pkgs.i2pd}/bin/i2pd \
-      ${if isNull cfg.address then "" else "--host="+cfg.address} \
-      --conf=${i2pdConf} \
-      --tunconf=${i2pdTunnelConf}
-  '';
-
+  credSubstituteRec =
+    attr: x:
+    if credType.check x then
+      x.${credAttrType}.${attr}
+    else if lib.isList x then
+      map (credSubstituteRec attr) x
+    else if lib.isAttrs x then
+      lib.mapAttrs (_: v: credSubstituteRec attr v) x
+    else
+      x;
+  credCollectRec =
+    x:
+    if credType.check x then
+      [ x.${credAttrType} ]
+    else if lib.isList x then
+      lib.flatten (lib.map credCollectRec x)
+    else if lib.isAttrs x then
+      lib.flatten (lib.mapAttrsToList (_: v: credCollectRec v) x)
+    else
+      [ ];
 in
-
 {
+  ###### Interface #####
 
-  ###### interface
-
-  options = {
-
-    services.i2pd = {
-
-      enable = mkOption {
-        type = types.bool;
-        default = false;
-        description = ''
-          Enables I2Pd as a running service upon activation.
-          Please read http://i2pd.readthedocs.io/en/latest/ for further
-          configuration help.
-        '';
-      };
-
-      logLevel = mkOption {
-        type = types.enum ["debug" "info" "warn" "error"];
-        default = "error";
-        description = ''
-          The log level. <command>i2pd</command> defaults to "info"
-          but that generates copious amounts of log messages.
-
-          We default to "error" which is similar to the default log
-          level of <command>tor</command>.
-        '';
-      };
-
-      address = mkOption {
-        type = with types; nullOr str;
-        default = null;
-        description = ''
-          Your external IP or hostname.
-        '';
-      };
-
-      notransit = mkOption {
-        type = types.bool;
-        default = false;
-        description = ''
-          Tells the router to not accept transit tunnels during startup.
-        '';
-      };
-
-      floodfill = mkOption {
-        type = types.bool;
-        default = false;
-        description = ''
-          If the router is declared to be unreachable and needs introduction nodes.
-        '';
-      };
-
-      netid = mkOption {
-        type = types.int;
-        default = 2;
-        description = ''
-          I2P overlay netid.
-        '';
-      };
-
-      bandwidth = mkOption {
-        type = with types; nullOr int;
-        default = null;
-        description = ''
-           Set a router bandwidth limit integer in KBps.
-           If not set, <command>i2pd</command> defaults to 32KBps.
-        '';
-      };
-
-      port = mkOption {
-        type = with types; nullOr int;
-        default = null;
-        description = ''
-          I2P listen port. If no one is given the router will pick between 9111 and 30777.
-        '';
-      };
-
-      enableIPv4 = mkOption {
-        type = types.bool;
-        default = true;
-        description = ''
-          Enables IPv4 connectivity. Enabled by default.
-        '';
-      };
-
-      enableIPv6 = mkOption {
-        type = types.bool;
-        default = false;
-        description = ''
-          Enables IPv6 connectivity. Disabled by default.
-        '';
-      };
-
-      nat = mkOption {
-        type = types.bool;
-        default = true;
-        description = ''
-          Assume router is NATed. Enabled by default.
-        '';
-      };
-
-      upnp = {
-        enable = mkOption {
-          type = types.bool;
-          default = false;
-          description = ''
-            Enables UPnP.
-          '';
-        };
-
-        name = mkOption {
-          type = types.str;
-          default = "I2Pd";
-          description = ''
-            Name i2pd appears in UPnP forwardings list.
-          '';
-        };
-      };
-
-      precomputation.elgamal = mkOption {
-        type = types.bool;
-        default = true;
-        description = ''
-          Whenever to use precomputated tables for ElGamal.
-          <command>i2pd</command> defaults to <literal>false</literal>
-          to save 64M of memory (and looses some performance).
-
-          We default to <literal>true</literal> as that is what most
-          users want anyway.
-        '';
-      };
-
-      reseed = {
-        verify = mkOption {
-          type = types.bool;
-          default = false;
-          description = ''
-            Request SU3 signature verification
-          '';
-        };
-
-        file = mkOption {
-          type = types.str;
-          default = "";
-          description = ''
-            Full path to SU3 file to reseed from
-          '';
-        };
-
-        urls = mkOption {
-          type = with types; listOf str;
-          default = [
-            "https://reseed.i2p-project.de/"
-            "https://i2p.mooo.com/netDb/"
-            "https://netdb.i2p2.no/"
-            "https://us.reseed.i2p2.no:444/"
-            "https://uk.reseed.i2p2.no:444/"
-            "https://i2p.manas.ca:8443/"
+  options.services.i2pd =
+    let
+      freeformType =
+        with types;
+        let
+          base = [
+            bool
+            int
+            str
+            credType
           ];
-          description = ''
-            Reseed URLs
-          '';
+        in
+        attrsOf (
+          nullOr (
+            oneOf (
+              base
+              ++ [
+                (listOf (oneOf base))
+                freeformType
+              ]
+            )
+          )
+        )
+        // {
+          description = "nested (bool, int, string or list of bool, int or string)";
         };
-      };
 
-      addressbook = {
-       defaulturl = mkOption {
-          type = types.str;
-          default = "http://joajgazyztfssty4w2on5oaqksz6tqoxbduy553y34mf4byv6gpq.b32.i2p/export/alive-hosts.txt";
-          description = ''
-            AddressBook subscription URL for initial setup
-          '';
+      intOrCoerceMap =
+        mapping: description:
+        lib.mkOption {
+          type = with types; nullOr (coerceMap mapping int);
+          default = null;
+          inherit description;
         };
-       subscriptions = mkOption {
-          type = with types; listOf str;
-          default = [
-            "http://inr.i2p/export/alive-hosts.txt"
-            "http://i2p-projekt.i2p/hosts.txt"
-            "http://stats.i2p/cgi-bin/newhosts.txt"
-          ];
-          description = ''
-            AddressBook subscription URLs
-          '';
-        };
-      };
 
-      limits.transittunnels = mkOption {
-        type = types.int;
-        default = 2500;
+      # Hopefully helpful enum mappings
+      templates = {
+        # https://i2pd.readthedocs.io/en/latest/user-guide/tunnels/#i2cp-parameters
+        i2cp = {
+          leaseSetType = intOrCoerceMap {
+            "standard" = 3;
+            "encrypted" = 5;
+          } "Type of LeaseSet to be sent";
+          leaseSetEncType = intOrCoerceMap {
+            "ELGAMAL" = 0;
+            "ECIES_P256_SHA256_AES256CBC" = 1;
+            "ECIES_X25519_AEAD" = 4;
+            "ECIES_MLKEM512_X25519_AEAD" = 5;
+            "ECIES_MLKEM768_X25519_AEAD" = 6;
+            "ECIES_MLKEM1024_X25519_AEAD" = 7;
+          } "List of LeaseSet encryption types";
+          leaseSetAuthType = intOrCoerceMap {
+            "none" = 0;
+            "DH" = 1;
+            "PSK" = 2;
+          } "Authentication type for encrypted LeaseSet";
+        };
+        i2p.streaming.profile = intOrCoerceMap {
+          "bulk" = 1;
+          "interactive" = 2;
+        } "Bandwidth usage profile";
+        # This option is part of both client and server tunnels, but not documented as i2cp parameter
+        signaturetype =
+          intOrCoerceMap
+            {
+              "ECDSA-P256" = 1;
+              "ECDSA-P384" = 2;
+              "ECDSA-P521" = 3;
+              "ED25519-SHA512" = 7;
+              "GOSTR3410-A-GOSTR3411-256" = 9;
+              "GOSTR3410-TC26-A-GOSTR3411-512" = 10;
+              "RED25519-SHA512" = 11;
+              "ML-DSA-44" = 12;
+            }
+            ''
+              Signature type for new keys.
+              `ED25519-SHA512` is default.
+              `RED25519-SHA512` is recommended for encrypted leaseset.
+            '';
+      };
+    in
+    {
+      enable = lib.mkEnableOption "`i2pd` (I2P network router)";
+      package = lib.mkPackageOption pkgs "i2pd" { };
+      gracefulShutdown = lib.mkEnableOption "" // {
         description = ''
-          Maximum number of active transit sessions
+          If true, i2pd will wait for transit connections to close.
+          Enabling this option **may delay system shutdown/reboot/rebuild-switch up to 10 minutes!**
         '';
       };
-
-      proto.http = (mkEndpointOpt "http" "127.0.0.1" 7070) // {
-        auth = mkOption {
-          type = types.bool;
-          default = false;
-          description = ''
-            Enable authentication for webconsole.
-          '';
-        };
-        user = mkOption {
-          type = types.str;
-          default = "i2pd";
-          description = ''
-            Username for webconsole access
-          '';
-        };
-        pass = mkOption {
-          type = types.str;
-          default = "i2pd";
-          description = ''
-            Password for webconsole access.
-          '';
-        };
+      autoRestart = lib.mkEnableOption "" // {
+        default = true;
+        description = "If true, i2pd will be restarted on failure (does not affect clean exit)";
       };
+      settings = lib.mkOption {
+        description = ''
+          Free-form main i2pd configuration. Options are passed to `i2pd.conf`.
+          See <https://i2pd.readthedocs.io/en/latest/user-guide/configuration/>
 
-      proto.httpProxy = mkKeyedEndpointOpt "httpproxy" "127.0.0.1" 4444 "";
-      proto.socksProxy = (mkKeyedEndpointOpt "socksproxy" "127.0.0.1" 4447 "")
-      // {
-        outproxy = mkOption {
-          type = types.str;
-          default = "127.0.0.1";
-          description = "Upstream outproxy bind address.";
+          Any free-formed option value can be substituted with contents of a
+          provided file by setting it to `{ ${credAttrType} = <path>; }`. The
+          file is read **at runtime** before i2pd service starts, file
+          permissions are ignored.
+        '';
+        type = types.submodule {
+          inherit freeformType;
+          options = {
+            loglevel = lib.mkOption {
+              type = types.enum [
+                "debug"
+                "info"
+                "warn"
+                "error"
+                "critical"
+                "none"
+              ];
+              default = "error";
+              description = "The log level";
+            };
+            bandwidth = lib.mkOption {
+              type =
+                with types;
+                nullOr (
+                  coerceMap
+                    {
+                      "32KBps" = "L";
+                      "256KBps" = "O";
+                      "2048KBps" = "P";
+                      "UNLIMITED" = "X";
+                    }
+                    (oneOf [
+                      ints.positive
+                      (enum [
+                        "L"
+                        "O"
+                        "P"
+                        "X"
+                      ])
+                    ])
+                );
+              default = null;
+              description = ''
+                Set a router bandwidth limit: integer in KBps or alias.
+                Note that integer bandwidth will be rounded.
+                If not set, i2pd defaults to `32KBps`.
+              '';
+            };
+          };
+          config = {
+            http.enabled = lib.mkDefault true;
+            httpproxy.enabled = lib.mkDefault true;
+            socksproxy.enabled = lib.mkDefault true;
+            sam.enabled = lib.mkDefault false;
+            bob.enabled = lib.mkDefault false;
+            i2cp.enabled = lib.mkDefault false;
+            i2pcontrol.enabled = lib.mkDefault false;
+
+            precomputation.elgamal = lib.mkDefault true;
+
+            # Overridden as CLI args
+            conf = null;
+            tunconf = null;
+            datadir = null;
+            # May not work as expected with DynamicUser=true
+            pidfile = null;
+            log = null;
+            logfile = null;
+            # May interfere with the systemd service
+            daemon = null;
+            service = null;
+          };
         };
-        outproxyPort = mkOption {
-          type = types.int;
-          default = 4444;
-          description = "Upstream outproxy bind port.";
-        };
-      };
+        default = { };
+        example = lib.literalExpression ''
+          {
+            meshnets.yggdrasil = true; # Enable yggdrasil network support
 
-      proto.sam = mkEndpointOpt "sam" "127.0.0.1" 7656;
-      proto.bob = mkEndpointOpt "bob" "127.0.0.1" 2827;
-      proto.i2cp = mkEndpointOpt "i2cp" "127.0.0.1" 7654;
-      proto.i2pControl = mkEndpointOpt "i2pcontrol" "127.0.0.1" 7650;
-
-      outTunnels = mkOption {
-        default = {};
-        type = with types; loaOf (submodule (
-          { name, config, ... }: {
-            options = {
-              destinationPort = mkOption {
-                type = types.int;
-                default = 0;
-                description = "Connect to particular port at destination.";
-              };
-            } // commonTunOpts name;
-            config = {
-              name = mkDefault name;
+            port = {
+              ${credAttrType} = "/run/secrets/i2pd-port";
+              ${credPlaceholderAttrType} = 0; # An optional placeholder value used when checking configuration
             };
           }
-        ));
-        description = ''
-          Connect to someone as a client and establish a local accept endpoint
         '';
       };
 
-      inTunnels = mkOption {
-        default = {};
-        type = with types; loaOf (submodule (
-          { name, config, ... }: {
+      # Server/generic tunnels
+      serverTunnels = lib.mkOption {
+        description = ''
+          Free-form "server" tunnels. Options are passed to `tunnels.conf`.
+          Mnemonic: we serving some service to others.
+          See <https://i2pd.readthedocs.io/en/latest/user-guide/tunnels/#servergeneric-tunnels>
+        '';
+        type = types.attrsOf (
+          types.submodule {
+            inherit freeformType;
             options = {
-              inPort = mkOption {
-                type = types.int;
-                default = 0;
-                description = "Service port. Default to the tunnel's listen port.";
+              type = lib.mkOption {
+                type = types.str;
+                default = "server";
+                description = ''
+                  Type of server tunnel.
+                  See <https://docs.i2pd.website/en/latest/user-guide/tunnels/#tunnel-types>.
+                '';
               };
-              accessList = mkOption {
-                type = with types; listOf str;
-                default = [];
-                description = "I2P nodes that are allowed to connect to this service.";
+              host = lib.mkOption {
+                type = types.either types.str credType;
+                description = "IP address of server (on this address i2pd will send data from I2P)";
               };
-            } // commonTunOpts name;
-            config = {
-              name = mkDefault name;
+              port = lib.mkOption {
+                type = types.port;
+                description = "Port of server tunnel (on this port i2pd will send data from I2P)";
+              };
+              inherit (templates) signaturetype i2cp i2p;
             };
           }
-        ));
+        );
+        default = { };
+      };
+
+      # Client tunnels
+      clientTunnels = lib.mkOption {
         description = ''
-          Serve something on I2P network at port and delegate requests to address inPort.
+          Free-form "client" tunnels. Options are passed to `tunnels.conf`.
+          Mnemonic: we connect to someone as a client.
+          See <https://i2pd.readthedocs.io/en/latest/user-guide/tunnels/#client-tunnels>
+        '';
+        type = types.attrsOf (
+          types.submodule {
+            inherit freeformType;
+            options = {
+              type = lib.mkOption {
+                type = types.str;
+                default = "client";
+                description = ''
+                  Type of client tunnel.
+                  See <https://docs.i2pd.website/en/latest/user-guide/tunnels/#tunnel-types>.
+                '';
+              };
+              port = lib.mkOption {
+                type = types.port;
+                description = "Port of client tunnel (on this port i2pd will receive data)";
+              };
+              destination = lib.mkOption {
+                type = types.either types.str credType;
+                description = "Remote endpoint, I2P hostname or b32.i2p address";
+              };
+              inherit (templates) signaturetype i2cp i2p;
+            };
+          }
+        );
+        default = { };
+        # Taken from i2pd's contrib/tunnels.conf
+        # LiteralExpression prevents unpacking of `i2p.streaming.profile`
+        example = lib.literalExpression ''
+          {
+            "irc-ilita" = {
+              address = "127.0.0.1";
+              port = 6668;
+              destination = "irc.ilita.i2p";
+              destinationport = 6667;
+              keys = "irc-keys.dat";
+              i2p.streaming.profile = "interactive";
+            };
+          }
         '';
       };
-    };
-  };
 
-
-  ###### implementation
-
-  config = mkIf cfg.enable {
-
-    users.extraUsers.i2pd = {
-      group = "i2pd";
-      description = "I2Pd User";
-      home = homeDir;
-      createHome = true;
-      uid = config.ids.uids.i2pd;
-    };
-
-    users.extraGroups.i2pd.gid = config.ids.gids.i2pd;
-
-    systemd.services.i2pd = {
-      description = "Minimal I2P router";
-      after = [ "network.target" ];
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig =
-      {
-        User = "i2pd";
-        WorkingDirectory = homeDir;
-        Restart = "on-abort";
-        ExecStart = "${i2pdSh}/bin/i2pd";
+      # TODO: Remove in NixOS 27.11
+      mkSecret = lib.mkOption {
+        type = types.anything;
+        readOnly = true;
+        default =
+          path:
+          lib.warn "`mkSecret` function is deprecated. Replace it with `{ ${credAttrType} = <path>; }`" {
+            ${credAttrType} = path;
+          };
+        description = "Deprecated. Use `{ ${credAttrType} = <path>; }` directly";
       };
     };
+
+  imports =
+    let
+      option = option: lib.splitString "." "services.i2pd.${option}";
+      rename = from: to: lib.mkRenamedOptionModule (option from) (option to);
+    in
+    [
+      (rename "inTunnels" "serverTunnels")
+      (rename "outTunnels" "clientTunnels")
+    ];
+
+  ###### Implementation ######
+
+  config =
+    let
+      cfg = config.services.i2pd;
+
+      /*
+        Configuration generator. Similar to `pkgs.formats.ini`, but with few distinctions:
+        - Out-of-section options are allowed and printed on top of a file.
+        - Nested sub-values (`a.b.c = ...`) coerced to (`"a.b.c" = ...`).
+      */
+      unwrapPrefixes =
+        attrset:
+        let
+          unwrap = (
+            prefix: attrset:
+            lib.concatLists (
+              lib.mapAttrsToList (
+                k: v:
+                if lib.isAttrs v then
+                  unwrap (prefix + k + ".") v
+                else
+                  [
+                    {
+                      name = prefix + k;
+                      value = v;
+                    }
+                  ]
+              ) attrset
+            )
+          );
+        in
+        lib.listToAttrs (unwrap "" attrset);
+
+      removeNulls = lib.filterAttrsRecursive (_: v: !isNull v);
+
+      # I2pd-style ini allows lists, dented by comma separated values, and spaces between key and value
+      ini = pkgs.formats.iniWithGlobalSection {
+        listToValue = lib.concatMapStringsSep "," (lib.generators.mkValueStringDefault { });
+        mkKeyValue = lib.generators.mkKeyValueDefault { } " = ";
+      };
+
+      genConfig =
+        name: attrs:
+        ini.generate name {
+          globalSection = removeNulls (lib.filterAttrs (_: v: !lib.isAttrs v) attrs);
+          sections = removeNulls (
+            lib.mapAttrs (_: v: unwrapPrefixes v) (lib.filterAttrs (_: v: lib.isAttrs v) attrs)
+          );
+        };
+
+      genTunnels =
+        name: attrs:
+        ini.generate name {
+          sections = (lib.mapAttrs (_: unwrapPrefixes) (removeNulls attrs));
+        };
+
+      gen = attr: settings: {
+        conf = genConfig "i2pd.conf" (credSubstituteRec attr settings);
+        tunconf = genTunnels "i2pd-tunnels.conf" (
+          lib.mapAttrs' (k: v: lib.nameValuePair "client-${k}" v) (credSubstituteRec attr cfg.clientTunnels)
+          // lib.mapAttrs' (k: v: lib.nameValuePair "server-${k}" v) (
+            credSubstituteRec attr cfg.serverTunnels
+          )
+        );
+      };
+
+      i2pdConfig = gen "id" cfg.settings;
+      # i2pd has no parse-only mode and requires a transport during startup.
+      i2pdCheckedConfig = gen "placeholder" (
+        lib.recursiveUpdate cfg.settings (
+          {
+            # Disable connectivity, in case build sandbox is disabled
+            ipv4 = false;
+            ipv6 = false;
+          }
+          // lib.optionalAttrs (cfg.settings.meshnets.yggdrasil or false) {
+            # Yggdrasil is unavailable in the check environment, so provide a usable transport.
+            ntcp2.enabled = true;
+          }
+        )
+      );
+
+      # List of all passed credentials: `[ { id = ...; path = ...; } ... ]`
+      credentials = credCollectRec [
+        cfg.settings
+        cfg.clientTunnels
+        cfg.serverTunnels
+      ];
+
+      loadCredentialsScript =
+        pkgs.writeShellScript "i2pd-load-credentials"
+          # sh
+          ''
+            set -euo pipefail
+
+            # If no credential declared, `CREDENTIALS_DIRECTORY` is unset
+            ids=(''${CREDENTIALS_DIRECTORY:+$(ls "$CREDENTIALS_DIRECTORY")})
+
+            # For every cli argument
+            for arg in "$@"; do
+              # Split argument at "=", assign first part to `out` and second part to `in`
+              arg=(''${arg//=/ })
+              out="''${arg[0]}"
+              in="''${arg[1]}"
+
+              # Copy file, set permissions
+              cp "$in" "$out"
+              chmod u=rw,g=,o= "$out"
+
+              # Try substitute all known credentials
+              for id in "''${ids[@]}"; do
+                ${lib.getExe pkgs.replace-secret} "$id" "$CREDENTIALS_DIRECTORY/$id" "$out"
+              done
+            done
+          '';
+    in
+    lib.mkIf cfg.enable {
+      system.checks = lib.optional (with pkgs.stdenv; buildPlatform.system == hostPlatform.system) (
+        pkgs.runCommand "services.i2pd.check-i2pd.conf" { }
+          # sh
+          ''
+            set -euo pipefail
+            i2pd="${lib.getExe cfg.package}"
+            conf="${i2pdCheckedConfig.conf}"
+            tunconf="${i2pdCheckedConfig.tunconf}"
+
+            opts="$("$i2pd" --help | grep -Eo "^  --\S*port(udp)? arg" | sed "s/ arg\$/=0/g")"
+
+            echo Checking "$conf"
+            ok=
+            while read line; do
+              case "$line" in
+                *none*i2pd*starting...*)
+                  [[ -z "$ok" ]] && ok=1
+                  kill -s INT $(cat pidfile)
+                  ;;
+                *critical*)
+                  ok=0
+                  ;;
+              esac
+            done < <(
+              "$i2pd" \
+                --pidfile=pidfile --loglevel=critical --datadir=datadir \
+                --conf="$conf" --tunconf="$tunconf" \
+                $opts 2>&1 \
+                | tee /dev/stderr
+            )
+            [[ "$ok" != "1" ]] && exit 1
+
+            touch $out
+          ''
+      );
+
+      systemd.services.i2pd = {
+        description = "Minimal I2P router";
+        after = [ "network.target" ];
+        wantedBy = [ "multi-user.target" ];
+        unitConfig = {
+          RequiresMountsFor = map (cred: cred.path) credentials;
+        };
+
+        serviceConfig = {
+          User = "i2pd";
+          Group = "i2pd";
+          DynamicUser = true;
+          StateDirectory = [ "i2pd" ];
+
+          # Load credentials
+          LoadCredential = lib.forEach credentials (cred: "${cred.id}:${cred.path}");
+          ExecStartPre = lib.escapeShellArgs [
+            loadCredentialsScript
+            "%T/conf=${i2pdConfig.conf}" # "%T" is temporary directory, usually `/tmp`
+            "%T/tunconf=${i2pdConfig.tunconf}"
+          ];
+
+          ExecStart = lib.escapeShellArgs [
+            "${lib.getExe cfg.package}"
+            "--datadir=%S/i2pd" # "%S" is systemd state directory, usually `/var/lib`
+            "--conf=%T/conf"
+            "--tunconf=%T/tunconf"
+          ];
+          Restart = if cfg.autoRestart then "on-failure" else "no";
+          KillSignal = if cfg.gracefulShutdown then "SIGINT" else "SIGTERM";
+          TimeoutStopSec = if cfg.gracefulShutdown then "10m" else "30s";
+          SendSIGKILL = true;
+          # Hardening
+          # Taken from https://gitlab.archlinux.org/archlinux/packaging/packages/i2pd/-/blob/8b18a2084e3955fa14a1853fc7fcaa58cc05e21a/030-i2pd-systemd-service-hardening.patch
+          PrivateTmp = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateDevices = true;
+          ProtectKernelTunables = true;
+          ProtectControlGroups = true;
+          NoNewPrivileges = true;
+          MemoryDenyWriteExecute = true;
+          LockPersonality = true;
+          SystemCallFilter = "@system-service";
+          RestrictAddressFamilies = "AF_UNIX AF_INET AF_INET6 AF_NETLINK";
+          ProtectHostname = true;
+          ProtectClock = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectProc = "invisible";
+          ProcSubset = "pid";
+          PrivateMounts = true;
+          PrivateUsers = true;
+          RemoveIPC = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          SystemCallArchitectures = "native";
+        };
+      };
+    };
+
+  meta = {
+    maintainers = with lib.maintainers; [
+      N4CH723HR3R
+      one-d-wide
+    ];
   };
 }

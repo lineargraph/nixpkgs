@@ -1,27 +1,71 @@
-{ lib, buildPythonPackage, fetchPypi
-, six, twisted, werkzeug, incremental
-, mock }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  attrs,
+  hyperlink,
+  incremental,
+  tubes,
+  twisted,
+  werkzeug,
+  zope-interface,
+
+  # tests
+  idna,
+  python,
+  treq,
+}:
 
 buildPythonPackage rec {
   pname = "klein";
-  version = "17.10.0";
+  version = "24.8.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "30aaf0d78a987d5dbfe0968a07367ad0c73e02823cc8eef4c54f80ab848370d0";
+  src = fetchFromGitHub {
+    owner = "twisted";
+    repo = "klein";
+    tag = version;
+    hash = "sha256-2/zl4fS9ZP73quPmGnz2+brEt84ODgVS89Om/cUsj0M=";
   };
 
-  propagatedBuildInputs = [ six twisted werkzeug incremental ];
+  build-system = [
+    incremental
+    setuptools
+  ];
 
-  checkInputs = [ mock ];
+  dependencies = [
+    attrs
+    hyperlink
+    incremental
+    twisted
+    tubes
+    werkzeug
+    zope-interface
+  ];
+
+  nativeCheckInputs = [
+    idna
+    treq
+  ];
 
   checkPhase = ''
-    trial klein
+    runHook preCheck
+    ${python.interpreter} -m twisted.trial klein
+    runHook postCheck
   '';
 
-  meta = with lib; {
+  pythonImportsCheck = [ "klein" ];
+
+  meta = {
+    changelog = "https://github.com/twisted/klein/releases/tag/${version}";
     description = "Klein Web Micro-Framework";
-    homepage    = "https://github.com/twisted/klein";
-    license     = licenses.mit;
+    homepage = "https://github.com/twisted/klein";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ exarkun ];
   };
 }

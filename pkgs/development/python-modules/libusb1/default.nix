@@ -1,26 +1,47 @@
-{ stdenv, lib, buildPythonPackage, fetchPypi, libusb1 }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  replaceVars,
+  setuptools,
+  libusb1,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "libusb1";
-  version = "1.6.4";
+  version = "3.4.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "03b7xrz8vqg8w0za5r503jhcmbd1ls5610jcja1rqz833nf0v4wc";
+  src = fetchFromGitHub {
+    owner = "vpelletier";
+    repo = "python-libusb1";
+    tag = version;
+    hash = "sha256-w+Q00GWNobqQlvqryZlJl7SZPEMYgMtbuKpUSLneqNw=";
   };
 
-  postPatch = lib.optionalString stdenv.isLinux ''
-    substituteInPlace usb1/libusb1.py --replace \
-      "ctypes.util.find_library(base_name)" \
-      "'${libusb1}/lib/libusb-1.0${stdenv.hostPlatform.extensions.sharedLibrary}'"
-  '';
+  patches = [
+    (replaceVars ./ctypes.patch {
+      libusb = "${lib.getLib libusb1}/lib/libusb-1.0${stdenv.hostPlatform.extensions.sharedLibrary}";
+    })
+  ];
+
+  build-system = [ setuptools ];
 
   buildInputs = [ libusb1 ];
 
-  meta = with stdenv.lib; {
-    homepage    = https://github.com/vpelletier/python-libusb1;
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  enabledTestPaths = [ "usb1/testUSB1.py" ];
+
+  meta = {
+    homepage = "https://github.com/vpelletier/python-libusb1";
     description = "Python ctype-based wrapper around libusb1";
-    license     = licenses.lgpl2Plus;
-    maintainers = with maintainers; [ rnhmjoj ];
+    license = lib.licenses.lgpl2Plus;
+    maintainers = with lib.maintainers; [
+      prusnak
+      rnhmjoj
+    ];
   };
 }

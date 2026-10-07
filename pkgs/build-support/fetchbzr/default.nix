@@ -1,15 +1,28 @@
-{ stdenvNoCC, bazaar }:
-{ url, rev, sha256 }:
+{
+  lib,
+  stdenvNoCC,
+  breezy,
+}:
+lib.fetchers.withNormalizedHash { } (
+  {
+    url,
+    rev,
+    outputHash,
+    outputHashAlgo,
+  }:
 
-stdenvNoCC.mkDerivation {
-  name = "bzr-export";
+  stdenvNoCC.mkDerivation {
+    name = "bzr-export";
 
-  builder = ./builder.sh;
-  nativeBuildInputs = [ bazaar ];
+    builder = ./builder.sh;
+    nativeBuildInputs = [ breezy ];
 
-  outputHashAlgo = "sha256";
-  outputHashMode = "recursive";
-  outputHash = sha256;
-  
-  inherit url rev;
-}
+    strictDeps = true;
+    __structuredAttrs = true;
+
+    inherit outputHash outputHashAlgo;
+    outputHashMode = "recursive";
+
+    inherit url rev;
+  }
+)

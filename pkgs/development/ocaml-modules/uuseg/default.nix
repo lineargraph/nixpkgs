@@ -1,32 +1,64 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg, uchar, uucp, uutf, cmdliner }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  ocaml,
+  findlib,
+  ocamlbuild,
+  topkg,
+  uucp,
+  uutf,
+  cmdliner,
+  version ? if lib.versionAtLeast ocaml.version "4.14" then "18.0.0" else "15.0.0",
+  cmdlinerSupport ? lib.versionAtLeast cmdliner.version "1.1",
+}:
 
-let
+stdenv.mkDerivation (finalAttrs: {
+  name = "ocaml${ocaml.version}-${finalAttrs.pname}-${finalAttrs.version}";
   pname = "uuseg";
-  webpage = "http://erratique.ch/software/${pname}";
-in
-
-stdenv.mkDerivation rec {
-
-  name = "ocaml${ocaml.version}-${pname}-${version}";
-  version = "10.0.0";
+  inherit version;
 
   src = fetchurl {
-    url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "01q8ljjgi7d73x7ms489b5my83xds4jax1vbjhwwjdai01friscc";
+    url = "https://erratique.ch/software/uuseg/releases/uuseg-${finalAttrs.version}.tbz";
+    hash =
+      {
+        "18.0.0" = "sha256-bXzGAF6U+HH6B0TEzvPuB25fC+TlMcSu7wy4budLvRA=";
+        "15.0.0" = "sha256-q8x3bia1QaKpzrWFxUmLWIraKqby7TuPNGvbSjkY4eM=";
+      }
+      ."${finalAttrs.version}";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild cmdliner topkg uutf ];
-  propagatedBuildInputs = [ uucp uchar ];
+  nativeBuildInputs = [
+    ocaml
+    findlib
+    ocamlbuild
+    topkg
+  ];
+  buildInputs = [
+    topkg
+    uutf
+  ]
+  ++ lib.optional cmdlinerSupport cmdliner;
+  propagatedBuildInputs = [ uucp ];
 
-  unpackCmd = "tar xjf $src";
+  strictDeps = true;
 
-  inherit (topkg) buildPhase installPhase;
+  buildPhase = ''
+    runHook preBuild
+    ${topkg.run} build \
+      --with-uutf true \
+      --with-cmdliner ${lib.boolToString cmdlinerSupport}
+    runHook postBuild
+  '';
 
-  meta = with stdenv.lib; {
-    description = "An OCaml library for segmenting Unicode text";
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
-    license = licenses.bsd3;
-    maintainers = [ maintainers.vbgl ];
+  inherit (topkg) installPhase;
+
+  meta = {
+    description = "OCaml library for segmenting Unicode text";
+    homepage = "https://erratique.ch/software/uuseg";
+    license = lib.licenses.bsd3;
+    maintainers = [ lib.maintainers.vbgl ];
+    mainProgram = "usegtrip";
+    inherit (ocaml.meta) platforms;
   };
-}
+})

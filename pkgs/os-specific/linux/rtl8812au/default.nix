@@ -1,37 +1,65 @@
-{ stdenv, fetchFromGitHub, fetchpatch, kernel, bc }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  kernel,
+  bc,
+  nukeReferences,
+}:
 
-stdenv.mkDerivation rec {
-  name = "rtl8812au-${kernel.version}-${version}";
-  version = "5.2.20_25672.20171213";
+stdenv.mkDerivation {
+  pname = "rtl8812au";
+  version = "${kernel.version}-unstable-2024-06-13";
 
   src = fetchFromGitHub {
-    owner = "zebulon2";
-    repo = "rtl8812au-driver-5.2.20";
-    rev = "aca1e0677bfe56c6c4914358df007c97486e7095";
-    sha256 = "19av8fkh3mvs2f57iibrg0cfyhjnnx4cbnfzv5aj7v5gb0j3dp0p";
+    owner = "morrownr";
+    repo = "8812au-20210820";
+    rev = "c0efee9cd121d9f0c815d9771475f76339a8f7d3";
+    hash = "sha256-ZS0iUb77XnXR5BUMeQ1EDuly7hStRt430ECueFW4v4w=";
   };
 
-  nativeBuildInputs = [ bc ];
-  buildInputs = kernel.moduleBuildDependencies;
-
-  hardeningDisable = [ "pic" "format" ];
+  nativeBuildInputs = [
+    bc
+    nukeReferences
+  ]
+  ++ kernel.moduleBuildDependencies;
+  hardeningDisable = [
+    "pic"
+    "format"
+  ];
 
   prePatch = ''
-    substituteInPlace ./Makefile --replace /lib/modules/ "${kernel.dev}/lib/modules/"
-    substituteInPlace ./Makefile --replace '$(shell uname -r)' "${kernel.modDirVersion}"
-    substituteInPlace ./Makefile --replace /sbin/depmod \#
-    substituteInPlace ./Makefile --replace '$(MODDESTDIR)' "$out/lib/modules/${kernel.modDirVersion}/kernel/net/wireless/"
+    substituteInPlace ./Makefile \
+      --replace /lib/modules/ "${kernel.dev}/lib/modules/" \
+      --replace /sbin/depmod \# \
+      --replace '$(MODDESTDIR)' "$out/lib/modules/${kernel.modDirVersion}/kernel/net/wireless/"
   '';
+
+  makeFlags = [
+    "ARCH=${stdenv.hostPlatform.linuxArch}"
+    ("CONFIG_PLATFORM_I386_PC=" + (if stdenv.hostPlatform.isx86 then "y" else "n"))
+    ("CONFIG_PLATFORM_ARM_RPI=" + (if stdenv.hostPlatform.isAarch then "y" else "n"))
+  ]
+  ++ lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
+    "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
+  ];
 
   preInstall = ''
     mkdir -p "$out/lib/modules/${kernel.modDirVersion}/kernel/net/wireless/"
   '';
 
-  meta = with stdenv.lib; {
+  postInstall = ''
+    nuke-refs $out/lib/modules/*/kernel/net/wireless/*.ko
+  '';
+
+  enableParallelBuilding = true;
+
+  meta = {
     description = "Driver for Realtek 802.11ac, rtl8812au, provides the 8812au mod";
-    homepage = https://github.com/zebulon2/rtl8812au-driver-5.2.20;
-    license = licenses.gpl2;
-    platforms = [ "x86_64-linux" "i686-linux" ];
-    maintainers = with maintainers; [ danielfullmer ];
+    homepage = "https://github.com/morrownr/8812au-20210820";
+    license = lib.licenses.gpl2Only;
+    platforms = lib.platforms.linux;
+    maintainers = with lib.maintainers; [ moni ];
+    broken = kernel.kernelOlder "5.10" || kernel.kernelAtLeast "6.15";
   };
 }

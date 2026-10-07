@@ -1,41 +1,46 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, fetchpatch
-, pytest
-, pretend
-, freezegun
-, simplejson
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  hatch-fancy-pypi-readme,
+  hatch-vcs,
+  hatchling,
+  pytest-asyncio,
+  pytestCheckHook,
+  time-machine,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "structlog";
-  version = "17.2.0";
+  version = "26.1.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "6980001045abd235fa12582222627c19b89109e58b85eb77d5a5abc778df6e20";
+  src = fetchFromGitHub {
+    owner = "hynek";
+    repo = "structlog";
+    tag = finalAttrs.version;
+    hash = "sha256-Q31eqeRYAbwn6Cj3hkXfy3udeBHHglEk5/qTjKbBbL8=";
   };
 
-  patches = [
-    # Fix tests for pytest 3.3
-    (fetchpatch {
-      url = "https://github.com/hynek/structlog/commit/22f0ae50607a0cb024361599f84610ce290deb99.patch";
-      sha256 = "03622i13ammkpyrdk48kimbz94gbkpcmdpy0kj2z09m1kp6q2ljv";
-    })
+  build-system = [
+    hatch-fancy-pypi-readme
+    hatch-vcs
+    hatchling
   ];
 
-  checkInputs = [ pytest pretend freezegun ];
-  propagatedBuildInputs = [ simplejson ];
+  nativeCheckInputs = [
+    pytest-asyncio
+    pytestCheckHook
+    time-machine
+  ];
 
-  checkPhase = ''
-    rm tests/test_twisted.py*
-    py.test
-  '';
+  pythonImportsCheck = [ "structlog" ];
 
   meta = {
     description = "Painless structural logging";
-    homepage = http://www.structlog.org/;
+    homepage = "https://github.com/hynek/structlog";
+    changelog = "https://github.com/hynek/structlog/blob/${finalAttrs.src.tag}/CHANGELOG.md";
     license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
-}
+})

@@ -1,96 +1,95 @@
-{ fetchPypi
-, lib
-, buildPythonPackage
-, python
-, isPy3k
-, appdirs
-, cached-property
-, defusedxml
-, isodate
-, lxml
-, pytz
-, requests_toolbelt
-, six
-# test dependencies
-, freezegun
-, mock
-, nose
-, pretend
-, pytest
-, pytestcov
-, requests-mock
-, testtools
-, tornado
+{
+  lib,
+  aiohttp,
+  aioresponses,
+  attrs,
+  buildPythonPackage,
+  defusedxml,
+  fetchFromGitHub,
+  freezegun,
+  httpx,
+  isodate,
+  lxml,
+  mock,
+  packaging,
+  platformdirs,
+  pretend,
+  pytest-asyncio,
+  pytest-httpx,
+  pytestCheckHook,
+  pytz,
+  requests,
+  requests-toolbelt,
+  requests-file,
+  requests-mock,
+  setuptools,
+  xmlsec,
 }:
 
-let
+buildPythonPackage rec {
   pname = "zeep";
-  version = "2.5.0";
-in buildPythonPackage {
-  name = "${pname}-${version}";
+  version = "4.3.3";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "4f9db52c7d269813fc6251da4cb050869158858aeea75a055b4550f19e52ac84";
+  src = fetchFromGitHub {
+    owner = "mvantellingen";
+    repo = "python-zeep";
+    tag = version;
+    hash = "sha256-0Mzvb86f1r07PCJqTy9CGUq9Zk2PtAsFfd3SmFlOayk=";
   };
 
-  propagatedBuildInputs = [
-    appdirs
-    cached-property
+  build-system = [ setuptools ];
+
+  dependencies = [
+    attrs
     defusedxml
     isodate
     lxml
+    packaging
+    platformdirs
     pytz
-    requests_toolbelt
-    six
+    requests
+    requests-file
+    requests-toolbelt
   ];
 
-  # testtools dependency not supported for py3k
-  doCheck = !isPy3k;
+  optional-dependencies = {
+    async = [ httpx ];
+    xmlsec = [ xmlsec ];
+  };
 
-  checkInputs = [
-    tornado
-  ];
+  pythonImportsCheck = [ "zeep" ];
 
-  buildInputs = if isPy3k then [] else [
+  nativeCheckInputs = [
+    aiohttp
+    aioresponses
     freezegun
     mock
-    nose
     pretend
-    pytest
-    pytestcov
+    pytest-asyncio
+    pytest-httpx
+    pytestCheckHook
     requests-mock
+  ]
+  ++ lib.concatAttrValues optional-dependencies;
+
+  disabledTests = [
+    # Failed: External connections not allowed during tests.
+    "test_has_expired"
+    "test_has_not_expired"
+    "test_memory_cache_timeout"
+    "test_bytes_like_password_digest"
+    "test_password_digest"
   ];
 
-  patchPhase = ''
-    # remove overly strict bounds and lint requirements
-    sed -e "s/freezegun==.*'/freezegun'/" \
-        -e "s/pytest-cov==.*'/pytest-cov'/" \
-        -e "s/'isort.*//" \
-        -e "s/'flake8.*//" \
-        -i setup.py
-
-    # locale.preferredencoding() != 'utf-8'
-    sed -e "s/xsd', 'r')/xsd', 'r', encoding='utf-8')/" -i tests/*.py
-
-    # cache defaults to home directory, which doesn't exist
-    sed -e "s|SqliteCache()|SqliteCache(path='./zeeptest.db')|" \
-        -i tests/test_transports.py
-
-    # requires xmlsec python module
-    rm tests/test_wsse_signature.py
+  preCheck = ''
+    export HOME=$TMPDIR
   '';
 
-  checkPhase = ''
-    runHook preCheck
-    ${python.interpreter} -m pytest tests
-    runHook postCheck
-  '';
-
-  meta = with lib; {
-    homepage = http://docs.python-zeep.org;
-    license = licenses.mit;
-    description = "A modern/fast Python SOAP client based on lxml / requests";
-    maintainers = with maintainers; [ rvl ];
+  meta = {
+    changelog = "https://github.com/mvantellingen/python-zeep/releases/tag/${src.tag}";
+    description = "Python SOAP client";
+    homepage = "http://docs.python-zeep.org";
+    license = lib.licenses.mit;
   };
 }

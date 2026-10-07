@@ -1,132 +1,406 @@
-{ buildPackages
-, ncurses
-, callPackage
-, perl
-, bison ? null
-, flex ? null
-, stdenv
+{
+  buildPackages,
+  pkgsBuildBuild,
+  callPackage,
+  writeText,
+  perl,
+  bison ? null,
+  flex ? null,
+  gmp ? null,
+  libmpc ? null,
+  mpfr ? null,
+  pahole,
+  lib,
+  stdenv,
+  rustc-unwrapped,
+  rustPlatform,
+  rust-bindgen-unwrapped,
+  # testing
+  emptyFile,
+  nixos,
+  nixosTests,
+}@args':
 
-, # The kernel source tarball.
-  src
+lib.makeOverridable (
+  # The kernel source tarball.
+  {
+    pname ? "linux",
 
-, # The kernel version.
-  version
+    src,
 
-, # Allows overriding the default defconfig
-  defconfig ? null
+    # The kernel version.
+    version,
 
-, # Overrides to the kernel config.
-  extraConfig ? ""
+    # Allows overriding the default defconfig
+    # TODO: Reconsider some of these defaults?
+    defconfig ?
+      if stdenv.hostPlatform.isAarch32 && stdenv.hostPlatform.parsed.cpu.version or null == "5" then
+        "multi_v5_defconfig"
+      else if stdenv.hostPlatform.isAarch32 && stdenv.hostPlatform.parsed.cpu.version or null == "6" then
+        "bcm2835_defconfig"
+      else if stdenv.hostPlatform.isPower64 then
+        if stdenv.hostPlatform.isLittleEndian then "powernv_defconfig" else "ppc64_defconfig"
+      else
+        "defconfig",
 
-, # The version number used for the module directory
-  modDirVersion ? version
+    # Legacy overrides to the intermediate kernel config, as string
+    extraConfig ? "",
 
-, # An attribute set whose attributes express the availability of
-  # certain features in this kernel.  E.g. `{iwlwifi = true;}'
-  # indicates a kernel that provides Intel wireless support.  Used in
-  # NixOS to implement kernel-specific behaviour.
-  features ? {}
+    # Additional make flags passed to kbuild
+    extraMakeFlags ? [ ],
 
-, # A list of patches to apply to the kernel.  Each element of this list
-  # should be an attribute set {name, patch} where `name' is a
-  # symbolic name and `patch' is the actual patch.  The patch may
-  # optionally be compressed with gzip or bzip2.
-  kernelPatches ? []
-, ignoreConfigErrors ? hostPlatform.platform.name != "pc" ||
-                       hostPlatform != stdenv.buildPlatform
-, extraMeta ? {}
-, hostPlatform
+    # enables the options in ./common-config.nix and lib/systems/platform.nix;
+    # if `false` then only `structuredExtraConfig` is used
+    enableCommonConfig ? true
 
-# easy overrides to hostPlatform.platform members
-, autoModules ? hostPlatform.platform.kernelAutoModules
-, preferBuiltin ? hostPlatform.platform.kernelPreferBuiltin or false
-, kernelArch ? hostPlatform.platform.kernelArch
+    , # kernel intermediate config overrides, as a set
+    structuredExtraConfig ? { },
 
-, ...
-} @ args:
+    # The version number used for the module directory
+    # If unspecified, this is determined automatically from the version.
+    modDirVersion ? null,
 
-assert stdenv.isLinux;
+    # An attribute set whose attributes express the availability of
+    # certain features in this kernel.  E.g. `{ia32Emulation = true;}'
+    # indicates a kernel that provides Intel wireless support.  Used in
+    # NixOS to implement kernel-specific behaviour.
+    features ? { },
 
-let
+    # Custom seed used for CONFIG_GCC_PLUGIN_RANDSTRUCT if enabled. This is
+    # automatically extended with extra per-version and per-config values.
+    randstructSeed ? "",
 
-  lib = stdenv.lib;
+    # A list of patches to apply to the kernel.  Each element of this list
+    # should be an attribute set {name, patch} where `name' is a
+    # symbolic name and `patch' is the actual patch.  The patch may
+    # optionally be compressed with gzip or bzip2.
+    kernelPatches ? [ ],
+    ignoreConfigErrors ? !(stdenv.hostPlatform.isx86 || stdenv.hostPlatform.isAarch64),
+    extraMeta ? { },
+    extraPassthru ? { },
 
-  # Combine the `features' attribute sets of all the kernel patches.
-  kernelFeatures = lib.fold (x: y: (x.features or {}) // y) ({
-    iwlwifi = true;
-    efiBootStub = true;
-    needsCifsUtils = true;
-    netfilterRPFilter = true;
-  } // features) kernelPatches;
+    target ? null,
+    buildDTBs ? null,
 
-  config = import ./common-config.nix {
-    inherit stdenv version ;
-    # append extraConfig for backwards compatibility but also means the user can't override the kernelExtraConfig part
-    extraConfig = extraConfig + lib.optionalString (hostPlatform.platform ? kernelExtraConfig) hostPlatform.platform.kernelExtraConfig;
+    isLTS ? false,
+    isZen ? false,
 
-    features = kernelFeatures; # Ensure we know of all extra patches, etc.
-  };
+    autoModules ? true,
+    # TODO: Remove this default?
+    preferBuiltin ?
+      stdenv.hostPlatform.isAarch || stdenv.hostPlatform.isRiscV || stdenv.hostPlatform.isLoongArch64,
+    kernelArch ? stdenv.hostPlatform.linuxArch,
+    kernelTests ? { },
 
-  kernelConfigFun = baseConfig:
-    let
-      configFromPatches =
-        map ({extraConfig ? "", ...}: extraConfig) kernelPatches;
-    in lib.concatStringsSep "\n" ([baseConfig] ++ configFromPatches);
+    stdenv ? args'.stdenv,
+    buildPackages ? args'.buildPackages,
+    pkgsBuildBuild ? args'.pkgsBuildBuild,
 
-  configfile = stdenv.mkDerivation {
-    inherit ignoreConfigErrors autoModules preferBuiltin kernelArch;
-    name = "linux-config-${version}";
+    ...
+  }@args:
 
-    generateConfig = ./generate-config.pl;
+  # Note: this package is used for bootstrapping fetchurl, and thus
+  # cannot use fetchpatch! All mutable patches (generated by GitHub or
+  # cgit) that are needed here should be included directly in Nixpkgs as
+  # files.
 
-    kernelConfig = kernelConfigFun config;
-    passAsFile = [ "kernelConfig" ];
+  let
+    # Combine the `features' attribute sets of all the kernel patches.
+    kernelFeatures = lib.foldr (x: y: (x.features or { }) // y) (
+      {
+        efiBootStub = true;
+        netfilterRPFilter = true;
+        ia32Emulation = true;
+      }
+      // features
+    ) kernelPatches;
 
-    depsBuildBuild = [ buildPackages.stdenv.cc ];
-    nativeBuildInputs = [ perl ]
-      ++ lib.optionals (stdenv.lib.versionAtLeast version "4.16") [ bison flex ];
+    commonStructuredConfig = import ./common-config.nix {
+      inherit lib stdenv version;
+      rustAvailable = lib.meta.availableOn stdenv.hostPlatform rustc-unwrapped;
 
-    platformName = hostPlatform.platform.name;
-    # e.g. "defconfig"
-    kernelBaseConfig = if defconfig != null then defconfig else hostPlatform.platform.kernelBaseConfig;
-    # e.g. "bzImage"
-    kernelTarget = hostPlatform.platform.kernelTarget;
+      features = kernelFeatures; # Ensure we know of all extra patches, etc.
+    };
 
-    prePatch = kernel.prePatch + ''
-      # Patch kconfig to print "###" after every question so that
-      # generate-config.pl from the generic builder can answer them.
-      sed -e '/fflush(stdout);/i\printf("###");' -i scripts/kconfig/conf.c
-    '';
+    intermediateNixConfig =
+      configfile.moduleStructuredConfig.intermediateNixConfig
+      # extra config in legacy string format
+      + extraConfig;
 
-    inherit (kernel) src patches preUnpack;
+    structuredConfigFromPatches = map (
+      {
+        structuredExtraConfig ? { },
+        ...
+      }@args:
+      if args ? extraStructuredConfig then
+        throw ''
+          Passing `extraStructuredConfig` to the Linux kernel (e.g.
+          via `boot.kernelPatches` in NixOS) is not supported anymore. Use
+          `structuredExtraConfig` instead.
+        ''
+      else
+        {
+          settings = structuredExtraConfig;
+        }
+    ) kernelPatches;
 
-    buildPhase = ''
-      export buildRoot="''${buildRoot:-build}"
+    # appends kernel patches extraConfig
+    kernelConfigFun =
+      baseConfigStr:
+      let
+        configFromPatches = map (
+          {
+            extraConfig ? "",
+            ...
+          }:
+          extraConfig
+        ) kernelPatches;
+      in
+      lib.concatStringsSep "\n" ([ baseConfigStr ] ++ configFromPatches);
 
-      # Get a basic config file for later refinement with $generateConfig.
-      make HOSTCC=${buildPackages.stdenv.cc.targetPrefix}gcc -C . O="$buildRoot" $kernelBaseConfig ARCH=$kernelArch
+    withRust = ((configfile.moduleStructuredConfig.settings.RUST or { }).tristate or null) == "y";
 
-      # Create the config file.
-      echo "generating kernel configuration..."
-      ln -s "$kernelConfigPath" "$buildRoot/kernel-config"
-      DEBUG=1 ARCH=$kernelArch KERNEL_CONFIG="$buildRoot/kernel-config" AUTO_MODULES=$autoModules \
-           PREFER_BUILTIN=$preferBuiltin BUILD_ROOT="$buildRoot" SRC=. perl -w $generateConfig
-    '';
+    configfile = stdenv.mkDerivation {
+      inherit
+        ignoreConfigErrors
+        autoModules
+        preferBuiltin
+        kernelArch
+        extraMakeFlags
+        ;
+      pname = "linux-config";
+      inherit version;
 
-    installPhase = "mv $buildRoot/.config $out";
+      generateConfig = ./generate-config.pl;
 
-    enableParallelBuilding = true;
-  };
+      depsBuildBuild = [ buildPackages.stdenv.cc ];
+      nativeBuildInputs = [
+        perl
+        gmp
+        libmpc
+        mpfr
+        bison
+        flex
+      ]
+      ++ lib.optional (lib.versionAtLeast version "5.2") pahole
+      ++ lib.optionals withRust [
+        rust-bindgen-unwrapped
+        rustc-unwrapped
+      ];
 
-  kernel = (callPackage ./manual-config.nix {}) {
-    inherit version modDirVersion src kernelPatches stdenv extraMeta configfile hostPlatform;
+      env.RUST_LIB_SRC = lib.optionalString withRust rustPlatform.rustLibSrc;
 
-    config = { CONFIG_MODULES = "y"; CONFIG_FW_LOADER = "m"; };
-  };
+      makeFlags = import ./common-flags.nix {
+        inherit
+          lib
+          stdenv
+          buildPackages
+          extraMakeFlags
+          ;
+      };
 
-  passthru = {
-    features = kernelFeatures;
-    passthru = kernel.passthru // (removeAttrs passthru [ "passthru" ]);
-  };
+      postPatch = kernel.postPatch + ''
+        # Patch kconfig to print "###" after every question so that
+        # generate-config.pl from the generic builder can answer them.
+        sed -e '/fflush(stdout);/i\printf("###");' -i scripts/kconfig/conf.c
+      '';
 
-in lib.extendDerivation true passthru kernel
+      preUnpack = kernel.preUnpack or "";
+
+      inherit (kernel) src patches;
+
+      buildPhase =
+        let
+          # e.g. "defconfig"
+          kernelBaseConfig = defconfig;
+          kernelIntermediateConfig = writeText "kernel-intermediate-config" (
+            kernelConfigFun intermediateNixConfig
+          );
+        in
+        ''
+          export buildRoot="''${buildRoot:-build}"
+
+          # Get a basic config file for later refinement with $generateConfig.
+          make $makeFlags \
+              -C . O="$buildRoot" ${kernelBaseConfig} \
+              ARCH=$kernelArch CROSS_COMPILE=${stdenv.cc.targetPrefix} \
+              $makeFlags
+
+          # Create the config file.
+          echo "generating kernel configuration..."
+          ln -s "${kernelIntermediateConfig}" "$buildRoot/kernel-config"
+          DEBUG=1 ARCH=$kernelArch CROSS_COMPILE=${stdenv.cc.targetPrefix} \
+            KERNEL_CONFIG="$buildRoot/kernel-config" AUTO_MODULES=$autoModules \
+            PREFER_BUILTIN=$preferBuiltin BUILD_ROOT="$buildRoot" SRC=. MAKE_FLAGS="$makeFlags" \
+            perl -w $generateConfig
+        ''
+        + lib.optionalString stdenv.cc.isClang ''
+          if ! grep -Fq CONFIG_CC_IS_CLANG=y $buildRoot/.config; then
+            echo "Kernel config didn't recognize the clang compiler?"
+            exit 1
+          fi
+        ''
+        + lib.optionalString stdenv.cc.bintools.isLLVM ''
+          if ! grep -Fq CONFIG_LD_IS_LLD=y $buildRoot/.config; then
+            echo "Kernel config didn't recognize the LLVM linker?"
+            exit 1
+          fi
+        ''
+        + lib.optionalString withRust ''
+          if ! grep -Fq CONFIG_RUST_IS_AVAILABLE=y $buildRoot/.config; then
+            echo "Kernel config didn't find Rust toolchain?"
+            exit 1
+          fi
+        '';
+
+      installPhase = "mv $buildRoot/.config $out";
+
+      enableParallelBuilding = true;
+
+      passthru = rec {
+        module = import ../../../../nixos/modules/system/boot/kernel_config.nix;
+        # used also in apache
+        # { modules = [ { options = res.options; config = svc.config or svc; } ];
+        #   check = false;
+        # The result is a set of two attributes
+        moduleStructuredConfig =
+          (lib.evalModules {
+            modules = [
+              module
+            ]
+            ++ lib.optionals enableCommonConfig [
+              {
+                settings = commonStructuredConfig;
+                _file = "pkgs/os-specific/linux/kernel/common-config.nix";
+              }
+            ]
+            ++ [
+              {
+                settings = structuredExtraConfig;
+                _file = "structuredExtraConfig";
+              }
+            ]
+            ++ structuredConfigFromPatches;
+          }).config;
+
+        structuredConfig = moduleStructuredConfig.settings;
+      };
+    }; # end of configfile derivation
+
+    kernel = (callPackage ./build.nix { inherit lib stdenv buildPackages; }) (
+      {
+        inherit
+          pname
+          version
+          src
+          kernelPatches
+          randstructSeed
+          extraMakeFlags
+          extraMeta
+          configfile
+          modDirVersion
+          ;
+        pos = builtins.unsafeGetAttrPos "version" args;
+
+        config = {
+          CONFIG_MODULES = "y";
+          CONFIG_FW_LOADER = "y";
+          CONFIG_RUST = if withRust then "y" else "n";
+        };
+      }
+      // lib.optionalAttrs (target != null) {
+        inherit target;
+      }
+      // lib.optionalAttrs (buildDTBs != null) {
+        inherit buildDTBs;
+      }
+    );
+
+  in
+  kernel.overrideAttrs (
+    finalAttrs: previousAttrs: {
+
+      passthru =
+        previousAttrs.passthru or { }
+        // extraPassthru
+        // {
+          features = kernelFeatures;
+          inherit
+            commonStructuredConfig
+            structuredExtraConfig
+            extraMakeFlags
+            isLTS
+            isZen
+            ;
+
+          # Adds dependencies needed to edit the config:
+          # nix-shell '<nixpkgs>' -A linux.configEnv --command 'make nconfig'
+          configEnv = finalAttrs.finalPackage.overrideAttrs (previousAttrs: {
+            depsBuildBuild =
+              previousAttrs.depsBuildBuild or [ ]
+              ++ (with pkgsBuildBuild; [
+                pkg-config
+                ncurses
+              ]);
+          });
+
+          tests =
+            let
+              overridableKernel = finalAttrs.finalPackage // {
+                override =
+                  args:
+                  lib.warn (
+                    "override is stubbed for NixOS kernel tests, not applying changes these arguments: "
+                    + toString (lib.attrNames (lib.toFunction args { }))
+                  ) overridableKernel;
+              };
+              /*
+                Certain arguments must be evaluated lazily; so that only the output(s) depend on them.
+                Original reproducer / simplified use case:
+              */
+              versionDoesNotDependOnPatchesEtcNixOS =
+                builtins.seq
+                  (nixos (
+                    { config, pkgs, ... }:
+                    {
+                      boot.kernelPatches = [
+                        (builtins.seq config.boot.kernelPackages.kernel.version { patch = pkgs.emptyFile; })
+                      ];
+                    }
+                  )).config.boot.kernelPackages.kernel.outPath
+                  emptyFile;
+              versionDoesNotDependOnPatchesEtc =
+                builtins.seq
+                  (import ./generic.nix args' (
+                    args
+                    // (
+                      let
+                        explain = attrName: ''
+                          The ${attrName} attribute must be able to access the kernel.version attribute without an infinite recursion.
+                          That means that the kernel attrset (attrNames) and the kernel.version attribute must not depend on the ${attrName} argument.
+                          The fact that this exception is raised shows that such a dependency does exist.
+                          This is a problem for the configurability of ${attrName} in version-aware logic such as that in NixOS.
+                          Strictness can creep in through optional attributes, or assertions and warnings that run as part of code that shouldn't access what is checked.
+                        '';
+                      in
+                      {
+                        kernelPatches = throw (explain "kernelPatches");
+                        structuredExtraConfig = throw (explain "structuredExtraConfig");
+                        modDirVersion = throw (explain "modDirVersion");
+                      }
+                    )
+                  )).version
+                  emptyFile;
+            in
+            {
+              inherit versionDoesNotDependOnPatchesEtc;
+              testsForKernel = nixosTests.kernel-generic.passthru.testsForKernel overridableKernel;
+              # Disabled by default, because the infinite recursion is hard to understand. The other test's error is better and produces a shorter trace.
+              # inherit versionDoesNotDependOnPatchesEtcNixOS;
+            }
+            // kernelTests;
+        };
+
+    }
+  )
+)

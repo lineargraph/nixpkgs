@@ -5,7 +5,7 @@ declare -A hardeningEnableMap=()
 # Intentionally word-split in case 'NIX_HARDENING_ENABLE' is defined in Nix. The
 # array expansion also prevents undefined variables from causing trouble with
 # `set -u`.
-for flag in ${NIX_@infixSalt@_HARDENING_ENABLE-}; do
+for flag in ${NIX_HARDENING_ENABLE_@suffixSalt@-}; do
   hardeningEnableMap["$flag"]=1
 done
 
@@ -15,7 +15,7 @@ for flag in @hardening_unsupported_flags@; do
 done
 
 if (( "${NIX_DEBUG:-0}" >= 1 )); then
-  declare -a allHardeningFlags=(pie relro bindnow)
+  declare -a allHardeningFlags=(relro bindnow)
   declare -A hardeningDisableMap=()
 
   # Determine which flags were effectively disabled so we can report below.
@@ -36,12 +36,6 @@ fi
 
 for flag in "${!hardeningEnableMap[@]}"; do
   case $flag in
-    pie)
-      if [[ ! ("$*" =~ " -shared " || "$*" =~ " -static ") ]]; then
-        if (( "${NIX_DEBUG:-0}" >= 1 )); then echo HARDENING: enabling LDFlags -pie >&2; fi
-        hardeningLDFlags+=('-pie')
-      fi
-      ;;
     relro)
       if (( "${NIX_DEBUG:-0}" >= 1 )); then echo HARDENING: enabling relro >&2; fi
       hardeningLDFlags+=('-z' 'relro')

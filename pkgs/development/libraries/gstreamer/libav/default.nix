@@ -1,36 +1,80 @@
-{ stdenv, fetchurl, meson, ninja, pkgconfig
-, python, yasm, gst-plugins-base, orc, bzip2
-, gettext, withSystemLibav ? true, libav ? null
+{
+  stdenv,
+  lib,
+  fetchurl,
+  meson,
+  ninja,
+  pkg-config,
+  python3,
+  gstreamer,
+  gst-plugins-base,
+  gettext,
+  ffmpeg-headless,
+  # Checks meson.is_cross_build(), so even canExecute isn't enough.
+  enableDocumentation ? stdenv.hostPlatform == stdenv.buildPlatform,
+  hotdoc,
+  directoryListingUpdater,
+  apple-sdk_gstreamer,
 }:
 
-# Note that since gst-libav-1.6, libav is actually ffmpeg. See
-# https://gstreamer.freedesktop.org/releases/1.6/ for more info.
-
-assert withSystemLibav -> libav != null;
-
-stdenv.mkDerivation rec {
-  name = "gst-libav-1.14.0";
-
-  meta = {
-    homepage = https://gstreamer.freedesktop.org;
-    license = stdenv.lib.licenses.lgpl2Plus;
-    platforms = stdenv.lib.platforms.unix;
-  };
+stdenv.mkDerivation (finalAttrs: {
+  pname = "gst-libav";
+  version = "1.28.7";
 
   src = fetchurl {
-    url = "${meta.homepage}/src/gst-libav/${name}.tar.xz";
-    sha256 = "12gglx6rarnxbaj0h1wivlgkv467n1bz2bwjigplciq57r6ln4zv";
+    url = "https://gstreamer.freedesktop.org/src/gst-libav/gst-libav-${finalAttrs.version}.tar.xz";
+    hash = "sha256-WNpR3Tns8c9vqt40zGQSABvi4uFFvKiuD0Uzb2CjarI=";
   };
 
-  outputs = [ "out" "dev" ];
+  separateDebugInfo = true;
 
-  nativeBuildInputs = with stdenv.lib;
-    [ meson ninja gettext pkgconfig python ]
-    ++ optional (!withSystemLibav) yasm
-    ;
+  __structuredAttrs = true;
+  strictDeps = true;
 
-  buildInputs = with stdenv.lib;
-    [ gst-plugins-base orc bzip2 ]
-    ++ optional withSystemLibav libav
-    ;
-}
+  nativeBuildInputs = [
+    meson
+    ninja
+    gettext
+    pkg-config
+    python3
+  ]
+  ++ lib.optionals enableDocumentation [
+    hotdoc
+  ];
+
+  buildInputs = [
+    gstreamer
+    gst-plugins-base
+    ffmpeg-headless
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    apple-sdk_gstreamer
+  ];
+
+  mesonFlags = lib.mapAttrsToList lib.mesonEnable {
+    doc = enableDocumentation;
+    tests = finalAttrs.finalPackage.doCheck;
+  };
+
+  postPatch = ''
+    patchShebangs \
+      scripts/extract-release-date-from-doap-file.py
+  '';
+
+  preFixup = ''
+    moveToOutput "lib/gstreamer-1.0/pkgconfig" "$dev"
+  '';
+
+  passthru = {
+    updateScript = directoryListingUpdater { odd-unstable = true; };
+  };
+
+  meta = {
+    description = "FFmpeg plugin for GStreamer";
+    homepage = "https://gstreamer.freedesktop.org";
+    license = lib.licenses.lgpl2Plus;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ tmarkus ];
+    identifiers.cpeParts = gstreamer.passthru.gstreamerCpeParts finalAttrs.version;
+  };
+})

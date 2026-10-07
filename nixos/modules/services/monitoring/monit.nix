@@ -1,33 +1,32 @@
-# Monit system watcher
-# http://mmonit.org/monit/
-
-{config, pkgs, lib, ...}:
-
-let inherit (lib) mkOption mkIf;
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
+let
+  cfg = config.services.monit;
 in
 
 {
-  options = {
-    services.monit = {
-      enable = mkOption {
-        default = false;
-        description = ''
-          Whether to run Monit system watcher.
-        '';
-      };
-      config = mkOption {
-        default = "";
-        description = "monitrc content";
-      };
+  options.services.monit = {
+
+    enable = lib.mkEnableOption "Monit";
+
+    config = lib.mkOption {
+      type = lib.types.lines;
+      default = "";
+      description = "monitrc content";
     };
+
   };
 
-  config = mkIf config.services.monit.enable {
+  config = lib.mkIf cfg.enable {
 
     environment.systemPackages = [ pkgs.monit ];
 
-    environment.etc."monitrc" = {
-      text = config.services.monit.config;
+    environment.etc.monitrc = {
+      text = cfg.config;
       mode = "0400";
     };
 
@@ -42,8 +41,10 @@ in
         KillMode = "process";
         Restart = "always";
       };
-      restartTriggers = [ config.environment.etc."monitrc".source ];
+      restartTriggers = [ config.environment.etc.monitrc.source ];
     };
 
   };
+
+  meta.maintainers = with lib.maintainers; [ ryantm ];
 }

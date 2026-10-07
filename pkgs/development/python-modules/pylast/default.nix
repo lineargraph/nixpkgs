@@ -1,24 +1,52 @@
-{ stdenv, buildPythonPackage, fetchPypi, certifi, six }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  flaky,
+  hatch-vcs,
+  hatchling,
+  httpx,
+  pytest-random-order,
+  pytest-recording,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pylast";
-  version = "2.1.0";
-  name = "${pname}-${version}";
+  version = "7.0.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "b9b51dc40a7d3ac3eee17ab5b462b8efb7f2c2ff195261ea846ae4e1168e1c5b";
+  src = fetchFromGitHub {
+    owner = "pylast";
+    repo = "pylast";
+    tag = version;
+    hash = "sha256-NA49V9s4k0l0icoiKVjxTAdhC+MuNgbbeImAjzGB8Xo=";
   };
 
-  propagatedBuildInputs = [ certifi six ];
+  build-system = [
+    hatch-vcs
+    hatchling
+  ];
 
-  # tests require last.fm credentials
-  doCheck = false;
+  dependencies = [ httpx ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/pylast/pylast;
-    description = "A python interface to last.fm (and compatibles)";
-    license = licenses.asl20;
-    maintainers = with maintainers; [ rvolosatovs ];
+  nativeCheckInputs = [
+    flaky
+    pytest-random-order
+    pytest-recording
+    pytestCheckHook
+  ];
+
+  pythonImportsCheck = [ "pylast" ];
+
+  meta = {
+    description = "Python interface to last.fm (and compatibles)";
+    homepage = "https://github.com/pylast/pylast";
+    changelog = "https://github.com/pylast/pylast/releases/tag/${src.tag}";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [
+      fab
+      rvolosatovs
+    ];
   };
 }

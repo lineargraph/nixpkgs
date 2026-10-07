@@ -1,27 +1,65 @@
-{ stdenv, fetchPypi, buildPythonPackage, isPy3k,
-  discid, six, parsedatetime, isodate, Babel, pytimeparse,
-  leather, python-slugify }:
+{
+  lib,
+  stdenv,
+  babel,
+  buildPythonPackage,
+  cssselect,
+  fetchFromGitHub,
+  glibcLocales,
+  isodate,
+  leather,
+  lxml,
+  parsedatetime,
+  pyicu,
+  pytestCheckHook,
+  python-slugify,
+  pytimeparse,
+  setuptools,
+}:
 
-buildPythonPackage rec {
-    name = "${pname}-${version}";
-    pname = "agate";
-    version = "1.6.1";
+buildPythonPackage (finalAttrs: {
+  pname = "agate";
+  version = "1.14.1";
+  pyproject = true;
 
-    src = fetchPypi {
-      inherit pname version;
-      sha256 = "c93aaa500b439d71e4a5cf088d0006d2ce2c76f1950960c8843114e5f361dfd3";
-    };
+  src = fetchFromGitHub {
+    owner = "wireservice";
+    repo = "agate";
+    tag = finalAttrs.version;
+    hash = "sha256-REo26vSWFzWsvJzmqlc5A5xEYA2TebQFW6jFRIbH53I=";
+  };
 
-    propagatedBuildInputs = [ discid six parsedatetime
-         isodate Babel pytimeparse leather python-slugify ];
+  build-system = [ setuptools ];
 
-    doCheck = !isPy3k;
-    # (only) on python3 unittest loader (loadTestsFromModule) fails
+  dependencies = [
+    babel
+    isodate
+    leather
+    parsedatetime
+    python-slugify
+    pytimeparse
+  ];
 
-    meta = with stdenv.lib; {
-      description = "A Python data analysis library that is optimized for humans instead of machines";
-      homepage    = https://github.com/wireservice/agate;
-      license     = with licenses; [ mit ];
-      maintainers = with maintainers; [ vrthra ];
-    };
-}
+  nativeCheckInputs = [
+    cssselect
+    glibcLocales
+    lxml
+    pyicu
+    pytestCheckHook
+  ];
+
+  disabledTests = lib.optionals stdenv.hostPlatform.isDarwin [
+    # Output is slightly different on macOS
+    "test_cast_format_locale"
+  ];
+
+  pythonImportsCheck = [ "agate" ];
+
+  meta = {
+    description = "Python data analysis library that is optimized for humans instead of machines";
+    homepage = "https://github.com/wireservice/agate";
+    changelog = "https://github.com/wireservice/agate/blob/${finalAttrs.src.tag}/CHANGELOG.rst";
+    license = lib.licenses.mit;
+    maintainers = [ ];
+  };
+})

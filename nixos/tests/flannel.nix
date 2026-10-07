@@ -1,55 +1,54 @@
-import ./make-test.nix ({ pkgs, ...} : rec {
+{ lib, ... }:
+{
   name = "flannel";
 
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ offline ];
-  };
-
-  nodes = let
-    flannelConfig = {
-      services.flannel = {
-        enable = true;
-        network = "10.1.0.0/16";
-        iface = "eth1";
-        etcd.endpoints = ["http://etcd:2379"];
-      };
-
-      networking.firewall.allowedUDPPorts = [ 8472 ];
-    };
-  in {
-    etcd = { config, pkgs, ... }: {
-      services = {
-        etcd = {
+  nodes =
+    let
+      flannelConfig = {
+        services.flannel = {
           enable = true;
-          listenClientUrls = ["http://etcd:2379"];
-          listenPeerUrls = ["http://etcd:2380"];
-          initialAdvertisePeerUrls = ["http://etcd:2379"];
-          initialCluster = ["etcd=http://etcd:2379"];
+          backend = {
+            Type = "udp";
+            Port = 8285;
+          };
+          network = "10.1.0.0/16";
+          iface = "eth1";
+          etcd.endpoints = [ "http://etcd:2379" ];
         };
+
+        networking.firewall.allowedUDPPorts = [ 8285 ];
+      };
+    in
+    {
+      etcd = {
+        services.etcd = {
+          enable = true;
+          listenClientUrls = [ "http://0.0.0.0:2379" ]; # requires ip-address for binding
+          listenPeerUrls = [ "http://0.0.0.0:2380" ]; # requires ip-address for binding
+          advertiseClientUrls = [ "http://etcd:2379" ];
+          initialAdvertisePeerUrls = [ "http://etcd:2379" ];
+          initialCluster = [ "etcd=http://etcd:2379" ];
+        };
+
+        networking.firewall.allowedTCPPorts = [ 2379 ];
       };
 
-      networking.firewall.allowedTCPPorts = [ 2379 ];
+      node1 = flannelConfig;
+      node2 = flannelConfig;
     };
-
-    node1 = { config, ... }: {
-      require = [flannelConfig];
-    };
-
-    node2 = { config, ... }: {
-      require = [flannelConfig];
-    };
-  };
 
   testScript = ''
-    startAll;
+    start_all()
 
-    $node1->waitForUnit("flannel.service");
-    $node2->waitForUnit("flannel.service");
+    node1.wait_for_unit("flannel.service")
+    node2.wait_for_unit("flannel.service")
 
-    my $ip1 = $node1->succeed("ip -4 addr show flannel.1 | grep -oP '(?<=inet).*(?=/)'");
-    my $ip2 = $node2->succeed("ip -4 addr show flannel.1 | grep -oP '(?<=inet).*(?=/)'");
+    node1.wait_until_succeeds("ip l show dev flannel0")
+    ip1 = node1.succeed("ip -4 addr show flannel0 | grep -oP '(?<=inet).*(?=/)'")
+    node2.wait_until_succeeds("ip l show dev flannel0")
+    ip2 = node2.succeed("ip -4 addr show flannel0 | grep -oP '(?<=inet).*(?=/)'")
 
-    $node1->waitUntilSucceeds("ping -c 1 $ip2");
-    $node2->waitUntilSucceeds("ping -c 1 $ip1");
+    node1.wait_until_succeeds(f"ping -c 1 {ip2}")
+    node2.wait_until_succeeds(f"ping -c 1 {ip1}")
   '';
-})
+}

@@ -1,19 +1,41 @@
-###### Motivation for this change
 
+<!--
+^ Please summarise the changes you have done and explain why they are necessary here ^
 
-###### Things done
+For package updates please link to a changelog or describe changes, this helps your fellow maintainers discover breaking updates.
+For new packages please briefly describe the package or provide a link to its homepage.
+-->
+
+## Things done
 
 <!-- Please check what applies. Note that these are not hard requirements but merely serve as information for reviewers. -->
 
-- [ ] Tested using sandboxing ([nix.useSandbox](http://nixos.org/nixos/manual/options.html#opt-nix.useSandbox) on NixOS, or option `sandbox` in [`nix.conf`](http://nixos.org/nix/manual/#sec-conf-file) on non-NixOS)
-- Built on platform(s)
-   - [ ] NixOS
-   - [ ] macOS
-   - [ ] other Linux distributions
-- [ ] Tested via one or more NixOS test(s) if existing and applicable for the change (look inside [nixos/tests](https://github.com/NixOS/nixpkgs/blob/master/nixos/tests))
-- [ ] Tested compilation of all pkgs that depend on this change using `nix-shell -p nox --run "nox-review wip"`
-- [ ] Tested execution of all binary files (usually in `./result/bin/`)
-- [ ] Fits [CONTRIBUTING.md](https://github.com/NixOS/nixpkgs/blob/master/.github/CONTRIBUTING.md).
+- Built on platform:
+  - [ ] x86_64-linux
+  - [ ] aarch64-linux
+  - [ ] aarch64-darwin
+- Tested, as applicable:
+  - [ ] [NixOS tests] in [nixos/tests].
+  - [ ] [Package tests] at `passthru.tests`.
+  - [ ] Tests in [lib/tests] or [pkgs/test] for functions and "core" functionality.
+- [ ] Ran `nixpkgs-review` on this PR. See [nixpkgs-review usage].
+- [ ] Tested basic functionality of all binary files, usually in `./result/bin/`.
+- Nixpkgs Release Notes
+  - [ ] Package update: when the change is major or breaking.
+- NixOS Release Notes
+  - [ ] Module addition: when adding a new NixOS module.
+  - [ ] Module update: when the change is significant.
+- [ ] Fits [CONTRIBUTING.md], [pkgs/README.md], [maintainers/README.md] and other READMEs.
+- [ ] Follows the [automation/AI policy].
 
----
+[NixOS tests]: https://nixos.org/manual/nixos/unstable/index.html#sec-nixos-tests
+[Package tests]: https://github.com/NixOS/nixpkgs/blob/master/pkgs/README.md#package-tests
+[nixpkgs-review usage]: https://github.com/Mic92/nixpkgs-review#usage
 
+[CONTRIBUTING.md]: https://github.com/NixOS/nixpkgs/blob/master/CONTRIBUTING.md
+[automation/AI policy]: https://github.com/NixOS/nixpkgs/blob/master/CONTRIBUTING.md#automationai-policy
+[lib/tests]: https://github.com/NixOS/nixpkgs/blob/master/lib/tests
+[maintainers/README.md]: https://github.com/NixOS/nixpkgs/blob/master/maintainers/README.md
+[nixos/tests]: https://github.com/NixOS/nixpkgs/blob/master/nixos/tests
+[pkgs/README.md]: https://github.com/NixOS/nixpkgs/blob/master/pkgs/README.md
+[pkgs/test]: https://github.com/NixOS/nixpkgs/blob/master/pkgs/test

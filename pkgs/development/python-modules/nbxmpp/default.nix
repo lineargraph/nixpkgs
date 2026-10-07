@@ -1,30 +1,57 @@
-{ stdenv, buildPythonPackage, fetchzip, pyopenssl }:
+{
+  lib,
+  buildPythonPackage,
+  fetchurl,
+  fetchFromGitLab,
+  gobject-introspection,
+  idna,
+  libsoup_3,
+  packaging,
+  precis-i18n,
+  pygobject3,
+  pyopenssl,
+  pytestCheckHook,
+  setuptools,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "nbxmpp";
-  version = "0.6.6";
-  name = "${pname}-${version}";
+  version = "7.4.0";
+  pyproject = true;
 
-  # Tests aren't included in PyPI tarball.
-  src = fetchzip {
-    name = "${name}.tar.bz2";
-    url = "https://dev.gajim.org/gajim/python-nbxmpp/repository/archive.tar.bz2?"
-        + "ref=${name}";
-    sha256 = "10n7z613p00q15dplsvdrz11s9yq26jy2qack6nd8k7fivfhlcmz";
+  src = fetchFromGitLab {
+    owner = "gajim";
+    repo = "python-nbxmpp";
+    tag = finalAttrs.version;
+    hash = "sha256-Xg2RFEUbvshVDjWftnAx4nbOor1q8naeG2vvukDFwHY=";
   };
 
-  propagatedBuildInputs = [ pyopenssl ];
+  nativeBuildInputs = [
+    # required for pythonImportsCheck otherwise libsoup cannot be found
+    gobject-introspection
+    setuptools
+  ];
 
-  checkPhase = ''
-    # Disable tests requiring networking
-    echo "" > test/unit/test_xmpp_transports_nb2.py
-    python test/runtests.py
-  '';
+  buildInputs = [ precis-i18n ];
 
-  meta = with stdenv.lib; {
-    homepage = "https://dev.gajim.org/gajim/python-nbxmpp";
+  propagatedBuildInputs = [
+    gobject-introspection
+    idna
+    libsoup_3
+    packaging
+    pygobject3
+    pyopenssl
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "nbxmpp" ];
+
+  meta = {
+    homepage = "https://gitlab.com/gajim/python-nbxmpp";
+    changelog = "https://gitlab.com/gajim/python-nbxmpp/-/blob/${finalAttrs.src.tag}/ChangeLog";
     description = "Non-blocking Jabber/XMPP module";
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ abbradar ];
+    license = lib.licenses.gpl3Plus;
+    maintainers = with lib.maintainers; [ haansn08 ];
   };
-}
+})

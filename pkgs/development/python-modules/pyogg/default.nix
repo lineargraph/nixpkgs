@@ -1,38 +1,65 @@
-{ stdenv, lib, fetchPypi, buildPythonPackage, fetchurl, libvorbis, flac, libogg, libopus, opusfile }:
+{
+  stdenv,
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  libvorbis,
+  flac,
+  libogg,
+  libopus,
+  opusfile,
+  replaceVars,
+}:
 
 buildPythonPackage rec {
+  pname = "pyogg";
+  version = "0.6.14a1";
+  format = "setuptools";
+
+  src = fetchPypi {
     pname = "PyOgg";
-    version = "0.6.2a1";
+    inherit version;
+    hash = "sha256-gpSzSqWckCAMRjDCzEpbhEByCRQejl0GnXpb41jpQmI=";
+  };
 
-    src = fetchPypi {
-      inherit pname version;
-      sha256 = "1mjh5zx7mfy246lya1qc42j4q4pz6v5zbd8blnfib9ncswcb1v6l";
-    };
+  buildInputs = [
+    libvorbis
+    flac
+    libogg
+    libopus
+  ];
 
-    buildInputs = [ libvorbis flac libogg libopus ];
-    propagatedBuidInputs = [ libvorbis flac libogg libopus opusfile ];
-    # There are no tests in this package.
-    doCheck = false;
-    postPatch = ''
-      substituteInPlace pyogg/vorbis.py --replace \
-        'libvorbisfile = ExternalLibrary.load("vorbisfile")' "libvorbisfile = ctypes.CDLL('${libvorbis}/lib/libvorbisfile${stdenv.hostPlatform.extensions.sharedLibrary}')"
-      substituteInPlace pyogg/vorbis.py --replace \
-        'libvorbisenc = ExternalLibrary.load("vorbisenc")' "libvorbisenc = ctypes.CDLL('${libvorbis}/lib/libvorbisenc${stdenv.hostPlatform.extensions.sharedLibrary}')"
-      substituteInPlace pyogg/vorbis.py --replace \
-        'libvorbis = ExternalLibrary.load("vorbis")' "libvorbis = ctypes.CDLL('${libvorbis}/lib/libvorbis${stdenv.hostPlatform.extensions.sharedLibrary}')"
-      substituteInPlace pyogg/flac.py --replace \
-        'libflac = ExternalLibrary.load("flac")' "libflac = ctypes.CDLL('${flac.out}/lib/libFLAC${stdenv.hostPlatform.extensions.sharedLibrary}')"
-      substituteInPlace pyogg/ogg.py --replace \
-        'libogg = ExternalLibrary.load("ogg")' "libogg = ctypes.CDLL('${libogg}/lib/libogg${stdenv.hostPlatform.extensions.sharedLibrary}')"
-      substituteInPlace pyogg/opus.py --replace \
-        'libopus = ExternalLibrary.load("opus")' "libopus = ctypes.CDLL('${libopus}/lib/libopus${stdenv.hostPlatform.extensions.sharedLibrary}')"
-      substituteInPlace pyogg/opus.py --replace \
-        'libopusfile = ExternalLibrary.load("opusfile")' "libopusfile = ctypes.CDLL('${opusfile}/lib/libopusfile${stdenv.hostPlatform.extensions.sharedLibrary}')"
-    '';
+  propagatedBuildInputs = [
+    libvorbis
+    flac
+    libogg
+    libopus
+    opusfile
+  ];
+
+  # There are no tests in this package.
+  doCheck = false;
+
+  # patch has dos style eol
+  patchFlags = [
+    "-p1"
+    "--binary"
+  ];
+  patches = [
+    (replaceVars ./pyogg-paths.patch {
+      flacLibPath = "${flac.out}/lib/libFLAC${stdenv.hostPlatform.extensions.sharedLibrary}";
+      oggLibPath = "${libogg}/lib/libogg${stdenv.hostPlatform.extensions.sharedLibrary}";
+      vorbisLibPath = "${libvorbis}/lib/libvorbis${stdenv.hostPlatform.extensions.sharedLibrary}";
+      vorbisFileLibPath = "${libvorbis}/lib/libvorbisfile${stdenv.hostPlatform.extensions.sharedLibrary}";
+      vorbisEncLibPath = "${libvorbis}/lib/libvorbisenc${stdenv.hostPlatform.extensions.sharedLibrary}";
+      opusLibPath = "${libopus}/lib/libopus${stdenv.hostPlatform.extensions.sharedLibrary}";
+      opusFileLibPath = "${opusfile}/lib/libopusfile${stdenv.hostPlatform.extensions.sharedLibrary}";
+    })
+  ];
 
   meta = {
     description = "Xiph.org's Ogg Vorbis, Opus and FLAC for Python";
-    homepage = https://github.com/Zuzu-Typ/PyOgg;
+    homepage = "https://github.com/Zuzu-Typ/PyOgg";
     license = lib.licenses.publicDomain;
     maintainers = with lib.maintainers; [ pmiddend ];
   };

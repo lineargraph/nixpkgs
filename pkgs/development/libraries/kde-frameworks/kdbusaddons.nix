@@ -1,16 +1,21 @@
 {
-  mkDerivation, lib,
+  mkDerivation,
+  cmake,
   extra-cmake-modules,
-  qtbase, qttools, qtx11extras
+  qtbase,
+  qttools,
+  qtx11extras,
 }:
 
 mkDerivation {
-  name = "kdbusaddons";
-  meta = {
-    maintainers = [ lib.maintainers.ttuegel ];
-    broken = builtins.compareVersions qtbase.version "5.7.0" < 0;
-  };
-  nativeBuildInputs = [ extra-cmake-modules ];
-  buildInputs = [ qttools qtx11extras ];
+  pname = "kdbusaddons";
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
+  ];
+  buildInputs = [
+    qttools
+    qtx11extras
+  ];
   propagatedBuildInputs = [ qtbase ];
 }

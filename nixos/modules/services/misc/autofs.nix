@@ -1,7 +1,9 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.autofs;
@@ -18,7 +20,8 @@ in
 
     services.autofs = {
 
-      enable = mkOption {
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = ''
           Mount filesystems on demand. Unmount them automatically.
@@ -26,9 +29,9 @@ in
         '';
       };
 
-      autoMaster = mkOption {
-        type = types.str;
-        example = literalExample ''
+      autoMaster = lib.mkOption {
+        type = lib.types.str;
+        example = lib.literalExpression ''
           let
             mapConf = pkgs.writeText "auto" '''
              kernel    -ro,soft,intr       ftp.kernel.org:/pub/linux
@@ -46,16 +49,18 @@ in
           '''
         '';
         description = ''
-          Contents of <literal>/etc/auto.master</literal> file. See <command>auto.master(5)</command> and <command>autofs(5)</command>.
+          Contents of `/etc/auto.master` file. See {manpage}`auto.master(5)` and {manpage}`autofs(5)`.
         '';
       };
 
-      timeout = mkOption {
+      timeout = lib.mkOption {
+        type = lib.types.int;
         default = 600;
         description = "Set the global minimum timeout, in seconds, until directories are unmounted";
       };
 
-      debug = mkOption {
+      debug = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = ''
           Pass -d and -7 to automount and write log to the system journal.
@@ -66,31 +71,32 @@ in
 
   };
 
-
   ###### implementation
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
 
-    boot.kernelModules = [ "autofs4" ];
+    boot.kernelModules = [ "autofs" ];
 
-    systemd.services.autofs =
-      { description = "Automounts filesystems on demand";
-        after = [ "network.target" "ypbind.service" "sssd.service" "network-online.target" ];
-        wants = [ "network-online.target" ];
-        wantedBy = [ "multi-user.target" ];
+    systemd.services.autofs = {
+      description = "Automounts filesystems on demand";
+      after = [
+        "network.target"
+        "ypbind.service"
+        "sssd.service"
+        "network-online.target"
+      ];
+      wants = [ "network-online.target" ];
+      wantedBy = [ "multi-user.target" ];
 
-        preStart = ''
-          # There should be only one autofs service managed by systemd, so this should be safe.
-          rm -f /tmp/autofs-running
-        '';
-
-        serviceConfig = {
-          Type = "forking";
-          PIDFile = "/run/autofs.pid";
-          ExecStart = "${pkgs.autofs5}/bin/automount ${optionalString cfg.debug "-d"} -p /run/autofs.pid -t ${builtins.toString cfg.timeout} ${autoMaster}";
-          ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
-        };
+      serviceConfig = {
+        Type = "forking";
+        PIDFile = "/run/autofs.pid";
+        # There should be only one autofs service managed by systemd, so this should be safe.
+        ExecStartPre = "${lib.getExe' pkgs.coreutils "rm"} -f /tmp/autofs-running";
+        ExecStart = "${pkgs.autofs5}/bin/automount ${lib.optionalString cfg.debug "-d"} -p /run/autofs.pid -t ${toString cfg.timeout} ${autoMaster}";
+        ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
       };
+    };
 
   };
 

@@ -1,19 +1,22 @@
 # AccountsService daemon.
-
-{ config, lib, pkgs, ... }:
-
-with lib;
-
 {
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+{
+  meta = {
+    teams = [ lib.teams.freedesktop ];
+  };
 
   ###### interface
-
   options = {
 
     services.accounts-daemon = {
 
-      enable = mkOption {
-        type = types.bool;
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = ''
           Whether to enable AccountsService, a DBus service for accessing
@@ -25,24 +28,34 @@ with lib;
 
   };
 
-
   ###### implementation
-
-  config = mkIf config.services.accounts-daemon.enable {
+  config = lib.mkIf config.services.accounts-daemon.enable {
 
     environment.systemPackages = [ pkgs.accountsservice ];
+
+    # Accounts daemon looks for dbus interfaces in $XDG_DATA_DIRS/accountsservice
+    environment.pathsToLink = [ "/share/accountsservice" ];
 
     services.dbus.packages = [ pkgs.accountsservice ];
 
     systemd.packages = [ pkgs.accountsservice ];
 
-    systemd.services.accounts-daemon= {
+    systemd.services.accounts-daemon =
+      lib.recursiveUpdate
+        {
 
-      wantedBy = [ "graphical.target" ];
+          wantedBy = [ "graphical.target" ];
 
-    } // (mkIf (!config.users.mutableUsers) {
-      environment.NIXOS_USERS_PURE = "true";
-    });
+          # Accounts daemon looks for dbus interfaces in $XDG_DATA_DIRS/accountsservice
+          environment.XDG_DATA_DIRS = "${config.system.path}/share";
+          environment.LD_LIBRARY_PATH = config.system.nssModules.path;
+
+        }
+        (
+          lib.optionalAttrs (!config.users.mutableUsers) {
+            environment.NIXOS_USERS_PURE = "true";
+          }
+        );
   };
 
 }

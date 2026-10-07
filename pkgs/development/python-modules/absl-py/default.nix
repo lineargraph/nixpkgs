@@ -1,27 +1,33 @@
-{ buildPythonPackage
-, lib
-, fetchPypi
-, six
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  hatchling,
 }:
-
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "absl-py";
-  version = "0.1.13";
+  version = "2.5.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "d160f7dc39f2f05ddc0bbf3a7bea4cc659fedc45fd9042e87346b24fe1cd00bb";
+  src = fetchFromGitHub {
+    owner = "abseil";
+    repo = "abseil-py";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-BnR9QnZ5AaSlboQuQnX4UKGjAVVpyzMLZ68Do3VZrE0=";
   };
 
-  propagatedBuildInputs = [ six ];
+  build-system = [ hatchling ];
 
   # checks use bazel; should be revisited
   doCheck = false;
 
+  pythonImportsCheck = [ "absl" ];
+
   meta = {
     description = "Abseil Python Common Libraries";
     homepage = "https://github.com/abseil/abseil-py";
+    changelog = "https://github.com/abseil/abseil-py/blob/${finalAttrs.src.tag}/CHANGELOG.md";
     license = lib.licenses.asl20;
-    maintainers = with lib.maintainers; [ danharaj ];
+    maintainers = [ ];
   };
-}
+})

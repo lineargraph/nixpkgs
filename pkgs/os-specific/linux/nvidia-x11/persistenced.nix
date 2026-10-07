@@ -1,30 +1,68 @@
 nvidia_x11: sha256:
 
-{ stdenv, lib, fetchurl, m4 }:
+{
+  stdenv,
+  lib,
+  fetchFromGitHub,
+  buildPackages,
+  m4,
+  pkg-config,
+  addDriverRunpath,
+  libtirpc,
+}:
 
-stdenv.mkDerivation rec {
-  name = "nvidia-persistenced-${nvidia_x11.version}";
-  inherit (nvidia_x11) version;
+stdenv.mkDerivation {
+  pname = "nvidia-persistenced";
+  version = nvidia_x11.persistencedVersion;
 
-  src = fetchurl {
-    url = "https://download.nvidia.com/XFree86/nvidia-persistenced/${name}.tar.bz2";
+  src = fetchFromGitHub {
+    owner = "NVIDIA";
+    repo = "nvidia-persistenced";
+    rev = nvidia_x11.persistencedVersion;
     inherit sha256;
   };
 
-  nativeBuildInputs = [ m4 ];
+  env = lib.optionalAttrs (lib.versionOlder nvidia_x11.persistencedVersion "450.51") {
+    NIX_CFLAGS_COMPILE = toString [ "-I${libtirpc.dev}/include/tirpc" ];
+    NIX_LDFLAGS = toString [ "-ltirpc" ];
+  };
+
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+
+  nativeBuildInputs = [
+    m4
+    pkg-config
+    addDriverRunpath
+  ];
+
+  buildInputs = [
+    libtirpc
+  ];
+
+  makeFlags = [
+    "DATE=true"
+    "DO_STRIP="
+    "HOST_CC=\$(CC_FOR_BUILD)"
+    "HOST_LD=\$(LD_FOR_BUILD)"
+  ];
 
   installFlags = [ "PREFIX=$(out)" ];
 
   postFixup = ''
-    patchelf --set-rpath "$(patchelf --print-rpath $out/bin/nvidia-persistenced):${nvidia_x11}/lib" \
-      $out/bin/nvidia-persistenced
+    # Save a copy of persistenced for mounting in containers
+    mkdir $out/origBin
+    cp $out/{bin,origBin}/nvidia-persistenced
+    patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 $out/origBin/nvidia-persistenced
+
+    addDriverRunpath $out/bin/nvidia-persistenced
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.nvidia.com/object/unix.html;
-    description = "Settings application for NVIDIA graphics cards";
-    license = licenses.unfreeRedistributable;
+  meta = {
+    homepage = "https://github.com/NVIDIA/nvidia-persistenced";
+    description = "NVIDIA driver persistence daemon";
+    license = lib.licenses.mit;
     platforms = nvidia_x11.meta.platforms;
-    maintainers = with maintainers; [ abbradar ];
+    maintainers = [ ];
+    mainProgram = "nvidia-persistenced";
   };
 }

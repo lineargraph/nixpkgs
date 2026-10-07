@@ -1,25 +1,28 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  six,
 }:
 
 buildPythonPackage rec {
   pname = "multipledispatch";
-  version = "0.5.0";
-  name = "${pname}-${version}";
+  version = "1.0.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "9e92d63efad2c9b68562175d9148d8cb32d04bf5557991190e643749bf4ed954";
+    hash = "sha256-XIOZFUZcaCBsPpxHM1eQghbCg4O0JTYeXRRFlL+Fp+A=";
   };
 
   # No tests in archive
   doCheck = false;
 
+  propagatedBuildInputs = [ six ];
+
   meta = {
-    homepage = https://github.com/mrocklin/multipledispatch/;
-    description = "A relatively sane approach to multiple dispatch in Python";
+    homepage = "https://github.com/mrocklin/multipledispatch/";
+    description = "Relatively sane approach to multiple dispatch in Python";
     license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ fridh ];
   };
 }

@@ -1,17 +1,31 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  pytestCheckHook,
+}:
+
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "hyperframe";
-  version = "5.1.0";
+  version = "6.1.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "017vjbb1xjak1pxcvihhilzjnmpfvhapk7k88wp6lvdkkm9l8nd2";
+    hash = "sha256-9jCQigCFSnreq9Y4K0OSOkxM1Lgh/LUn5queFTgqOwg=";
   };
 
-  meta = with stdenv.lib; {
+  build-system = [ setuptools ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "hyperframe" ];
+
+  meta = {
     description = "HTTP/2 framing layer for Python";
-    homepage = "http://hyper.rtfd.org/";
-    license = licenses.mit;
+    homepage = "https://github.com/python-hyper/hyperframe/";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

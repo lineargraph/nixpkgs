@@ -1,27 +1,75 @@
-{ stdenv, buildPythonPackage, fetchPypi, graphviz
-, pkgconfig, doctest-ignore-unicode, mock, nose }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  replaceVars,
+  graphviz,
+  coreutils,
+  pkg-config,
+  setuptools,
+  swig,
+  pytest,
+}:
 
-buildPythonPackage rec {
-  name = "${pname}-${version}";
+buildPythonPackage (finalAttrs: {
   pname = "pygraphviz";
-  version = "1.3.1";
+  version = "2.0.3";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "7c294cbc9d88946be671cc0d8602aac176d8c56695c0a7d871eadea75a958408";
+  src = fetchFromGitHub {
+    owner = "pygraphviz";
+    repo = "pygraphviz";
+    tag = "pygraphviz-${finalAttrs.version}";
+    hash = "sha256-RG3XIV0CF2pXdqJIfSWQzpfYBCl6D5AjMA4Z0zxqtxM=";
   };
 
-  buildInputs = [ doctest-ignore-unicode mock nose ];
-  propagatedBuildInputs = [ graphviz pkgconfig ];
+  patches = [
+    # pygraphviz depends on graphviz executables and wc being in PATH
+    (replaceVars ./path.patch {
+      path = lib.makeBinPath [
+        graphviz
+        coreutils
+      ];
+    })
+  ];
 
-  # the tests are currently failing:
-  # check status of pygraphviz/pygraphviz#129
-  doCheck = false;
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace-fail ', "swig>4.1.0"' ""
+  '';
 
-  meta = with stdenv.lib; {
+  env.GRAPHVIZ_PREFIX = graphviz;
+
+  build-system = [
+    setuptools
+  ];
+
+  nativeBuildInputs = [
+    graphviz # for dot
+    pkg-config
+    swig
+  ];
+
+  buildInputs = [ graphviz ];
+
+  nativeCheckInputs = [ pytest ];
+
+  checkPhase = ''
+    runHook preCheck
+    pytest --pyargs pygraphviz
+    runHook postCheck
+  '';
+
+  pythonImportsCheck = [ "pygraphviz" ];
+
+  meta = {
+    changelog = "https://github.com/pygraphviz/pygraphviz/releases/tag/pygraphviz-${finalAttrs.version}";
     description = "Python interface to Graphviz graph drawing package";
-    homepage = https://github.com/pygraphviz/pygraphviz;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ ];
+    homepage = "https://github.com/pygraphviz/pygraphviz";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [
+      matthiasbeyer
+      dotlambda
+    ];
   };
-}
+})

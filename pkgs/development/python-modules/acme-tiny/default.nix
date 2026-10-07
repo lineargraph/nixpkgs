@@ -1,39 +1,47 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub
-, python, openssl }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  setuptools-scm,
+  fusepy,
+  fuse,
+  openssl,
+}:
 
 buildPythonPackage rec {
   pname = "acme-tiny";
-  version = "2016-03-26";
-  name = "${pname}-${version}";
+  version = "5.0.3";
+  pyproject = true;
 
-  src = fetchFromGitHub {
-    sha256 = "0ngmr3kxcvlqa9mrv3gx0rg4r67xvdjplqfminxliri3ipak853g";
-    rev = "7a5a2558c8d6e5ab2a59b9fec9633d9e63127971";
-    repo = "acme-tiny";
-    owner = "diafygi";
+  src = fetchPypi {
+    pname = "acme_tiny";
+    inherit version;
+    hash = "sha256-LV64B+JZhq69qbBJ2dFG8YW6/q1u+x6MxB1rQrm8pjw=";
   };
 
-  # source doesn't have any python "packaging" as such
-  configurePhase = " ";
-  buildPhase = " ";
-  # the tests are... complex
-  doCheck = false;
-
   patchPhase = ''
-    substituteInPlace acme_tiny.py --replace "openssl" "${openssl.bin}/bin/openssl"
+    substituteInPlace acme_tiny.py --replace-fail '"openssl"' '"${openssl.bin}/bin/openssl"'
+    substituteInPlace tests/test_module.py --replace-fail '"openssl"' '"${openssl.bin}/bin/openssl"'
+    substituteInPlace tests/utils.py --replace-fail /etc/ssl/openssl.cnf ${openssl.out}/etc/ssl/openssl.cnf
   '';
 
-  installPhase = ''
-    mkdir -p $out/${python.sitePackages}/
-    cp acme_tiny.py $out/${python.sitePackages}/
-    mkdir -p $out/bin
-    ln -s $out/${python.sitePackages}/acme_tiny.py $out/bin/acme_tiny
-    chmod +x $out/bin/acme_tiny
-  '';
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
-  meta = with stdenv.lib; {
-    description = "A tiny script to issue and renew TLS certs from Let's Encrypt";
-    homepage = https://github.com/diafygi/acme-tiny;
-    license = licenses.mit;
+  nativeCheckInputs = [
+    fusepy
+    fuse
+  ];
+
+  pythonImportsCheck = [ "acme_tiny" ];
+
+  meta = {
+    description = "Tiny script to issue and renew TLS certs from Let's Encrypt";
+    mainProgram = "acme-tiny";
+    homepage = "https://github.com/diafygi/acme-tiny";
+    license = lib.licenses.mit;
   };
 }

@@ -1,4 +1,10 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  utils,
+  ...
+}:
 
 with lib;
 
@@ -7,92 +13,127 @@ let
   e = pkgs.enlightenment;
   xcfg = config.services.xserver;
   cfg = xcfg.desktopManager.enlightenment;
+
   GST_PLUGIN_PATH = lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" [
     pkgs.gst_all_1.gst-plugins-base
     pkgs.gst_all_1.gst-plugins-good
     pkgs.gst_all_1.gst-plugins-bad
-    pkgs.gst_all_1.gst-libav ];
+    pkgs.gst_all_1.gst-libav
+  ];
 
 in
 
 {
+  meta = {
+    teams = [ teams.enlightenment ];
+  };
+
+  imports = [
+    (mkRenamedOptionModule
+      [ "services" "xserver" "desktopManager" "e19" "enable" ]
+      [ "services" "xserver" "desktopManager" "enlightenment" "enable" ]
+    )
+  ];
+
   options = {
 
     services.xserver.desktopManager.enlightenment.enable = mkOption {
+      type = types.bool;
       default = false;
       description = "Enable the Enlightenment desktop environment.";
     };
 
+    environment.enlightenment.excludePackages = mkOption {
+      default = [ ];
+      example = literalExpression "[ pkgs.enlightenment.ephoto ]";
+      type = types.listOf types.package;
+      description = "Which packages Enlightenment should exclude from the default environment";
+    };
   };
 
-  config = mkIf (xcfg.enable && cfg.enable) {
+  config = mkIf cfg.enable {
 
-    environment.systemPackages = [
-      e.efl e.enlightenment
-      e.terminology e.econnman
-      pkgs.xorg.xauth # used by kdesu
-      pkgs.gtk2 # To get GTK+'s themes.
-      pkgs.tango-icon-theme
-      pkgs.shared-mime-info
-      pkgs.gnome2.gnomeicontheme
-      pkgs.xorg.xcursorthemes
+    environment.systemPackages = utils.removePackagesByName (with pkgs; [
+      enlightenment.econnman
+      enlightenment.efl
+      enlightenment.enlightenment
+      enlightenment.ecrire
+      enlightenment.ephoto
+      enlightenment.rage
+      enlightenment.terminology
+      xcursor-themes
+    ]) config.environment.enlightenment.excludePackages;
+
+    environment.pathsToLink = [
+      "/etc/enlightenment"
+      "/share/enlightenment"
+      "/share/elementary"
+      "/share/locale"
     ];
 
-    environment.pathsToLink = [ "/etc/enlightenment" "/etc/xdg" "/share/enlightenment" "/share/elementary" "/share/applications" "/share/locale" "/share/icons" "/share/themes" "/share/mime" "/share/desktop-directories" ];
+    services.displayManager.sessionPackages = [ pkgs.enlightenment.enlightenment ];
 
-    services.xserver.desktopManager.session = [
-    { name = "Enlightenment";
-      start = ''
-        # Set GTK_DATA_PREFIX so that GTK+ can find the themes
-        export GTK_DATA_PREFIX=${config.system.path}
-        # find theme engines
-        export GTK_PATH=${config.system.path}/lib/gtk-3.0:${config.system.path}/lib/gtk-2.0
-        export XDG_MENU_PREFIX=e-
-
+    services.xserver.displayManager.sessionCommands = ''
+      if test "$XDG_CURRENT_DESKTOP" = "Enlightenment"; then
         export GST_PLUGIN_PATH="${GST_PLUGIN_PATH}"
 
         # make available for D-BUS user services
         #export XDG_DATA_DIRS=$XDG_DATA_DIRS''${XDG_DATA_DIRS:+:}:${config.system.path}/share:${e.efl}/share
 
-        # Update user dirs as described in http://freedesktop.org/wiki/Software/xdg-user-dirs/
+        # Update user dirs as described in https://freedesktop.org/wiki/Software/xdg-user-dirs/
         ${pkgs.xdg-user-dirs}/bin/xdg-user-dirs-update
+      fi
+    '';
 
-        exec ${e.enlightenment}/bin/enlightenment_start
-      '';
-    }];
-
-    security.wrappers = (import (builtins.toPath "${e.enlightenment}/e-wrappers.nix")).security.wrappers;
-
-    environment.etc = singleton
-      { source = xcfg.xkbDir;
-        target = "X11/xkb";
+    # Wrappers for programs installed by enlightenment that should be setuid
+    security.wrappers = {
+      enlightenment_ckpasswd = {
+        setuid = true;
+        owner = "root";
+        group = "root";
+        source = "${pkgs.enlightenment.enlightenment}/lib/enlightenment/utils/enlightenment_ckpasswd";
       };
+      enlightenment_sys = {
+        setuid = true;
+        owner = "root";
+        group = "root";
+        source = "${pkgs.enlightenment.enlightenment}/lib/enlightenment/utils/enlightenment_sys";
+      };
+      enlightenment_system = {
+        setuid = true;
+        owner = "root";
+        group = "root";
+        source = "${pkgs.enlightenment.enlightenment}/lib/enlightenment/utils/enlightenment_system";
+      };
+    };
 
-    fonts.fonts = [ pkgs.dejavu_fonts pkgs.ubuntu_font_family ];
+    environment.etc."X11/xkb".source = xcfg.xkb.dir;
+
+    fonts.packages = [ pkgs.dejavu_fonts ];
 
     services.udisks2.enable = true;
     services.upower.enable = config.powerManagement.enable;
+    services.libinput.enable = mkDefault true;
 
     services.dbus.packages = [ e.efl ];
 
-    systemd.user.services.efreet =
-      { enable = true;
-        description = "org.enlightenment.Efreet";
-        serviceConfig =
-          { ExecStart = "${e.efl}/bin/efreetd";
-            StandardOutput = "null";
-          };
+    systemd.user.services.efreet = {
+      enable = true;
+      description = "org.enlightenment.Efreet";
+      serviceConfig = {
+        ExecStart = "${e.efl}/bin/efreetd";
+        StandardOutput = "null";
       };
+    };
 
-    systemd.user.services.ethumb =
-      { enable = true;
-        description = "org.enlightenment.Ethumb";
-        serviceConfig =
-          { ExecStart = "${e.efl}/bin/ethumbd";
-            StandardOutput = "null";
-          };
+    systemd.user.services.ethumb = {
+      enable = true;
+      description = "org.enlightenment.Ethumb";
+      serviceConfig = {
+        ExecStart = "${e.efl}/bin/ethumbd";
+        StandardOutput = "null";
       };
-
+    };
 
   };
 

@@ -1,35 +1,42 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, jbuilder, alcotest, result }:
+{
+  lib,
+  fetchFromGitHub,
+  buildDunePackage,
+  ocaml,
+  ocaml-syntax-shims,
+  alcotest,
+  bigstringaf,
+  ppx_let,
+  gitUpdater,
+}:
 
-if !stdenv.lib.versionAtLeast ocaml.version "4.03"
-then throw "angstrom is not available for OCaml ${ocaml.version}"
-else
+buildDunePackage (finalAttrs: {
+  pname = "angstrom";
+  version = "0.16.1";
 
-stdenv.mkDerivation rec {
-  version = "0.8.1";
-  name = "ocaml${ocaml.version}-angstrom-${version}";
+  minimalOCamlVersion = "4.04";
 
   src = fetchFromGitHub {
-    owner  = "inhabitedtype";
-    repo   = "angstrom";
-    rev    = "${version}";
-    sha256 = "067r3vy5lac1bfx947gy722amna3dbcak54nlh24vx87pmcq31qc";
+    owner = "inhabitedtype";
+    repo = "angstrom";
+    rev = finalAttrs.version;
+    hash = "sha256-EPqDK+7RU2vHEHvuoTXb8V2FkdXQ6tGu0ghbNPS3gZ4=";
   };
 
-  buildInputs = [ ocaml findlib jbuilder alcotest ];
-  propagatedBuildInputs = [ result ];
+  checkInputs = [
+    alcotest
+    ppx_let
+  ];
+  buildInputs = [ ocaml-syntax-shims ];
+  propagatedBuildInputs = [ bigstringaf ];
+  doCheck = lib.versionAtLeast ocaml.version "4.08";
 
-  buildPhase = "jbuilder build -p angstrom";
-
-  doCheck = true;
-  checkPhase = "jbuilder runtest -p angstrom";
-
-  inherit (jbuilder) installPhase;
+  passthru.updateScript = gitUpdater { };
 
   meta = {
-    homepage = https://github.com/inhabitedtype/angstrom;
+    homepage = "https://github.com/inhabitedtype/angstrom";
     description = "OCaml parser combinators built for speed and memory efficiency";
-    license = stdenv.lib.licenses.bsd3;
-    maintainers = with stdenv.lib.maintainers; [ sternenseemann ];
-    inherit (ocaml.meta) platforms;
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ sternenseemann ];
   };
-}
+})

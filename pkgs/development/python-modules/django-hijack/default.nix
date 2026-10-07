@@ -1,40 +1,59 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, python,
-  django, django_compat, django_nose
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  nix-update-script,
+
+  # build-system
+  flit-gettext,
+  flit-scm,
+
+  # dependencies
+  django,
+
+  # tests
+  pytest-cov-stub,
+  pytest-django,
+  pytestCheckHook,
 }:
+
 buildPythonPackage rec {
   pname = "django-hijack";
-  version = "2.1.5";
-  name = pname + "-" + version;
+  version = "3.7.9";
+  pyproject = true;
 
-  # the pypi packages don't include everything required for the tests
   src = fetchFromGitHub {
-    owner = "arteria";
+    owner = "django-hijack";
     repo = "django-hijack";
-    rev = "v${version}";
-    sha256 = "1paiyxhc034336xcd9yzf3azpsapsv26j7w2baxiby71z2hhg0sj";
+    tag = version;
+    hash = "sha256-TH0Zw2p75Q/zbPHbmWB3JgBGKwbE7dgq2xsLnm2BaR8=";
   };
 
-  checkInputs = [ django_nose ];
-  propagatedBuildInputs = [ django django_compat ];
+  build-system = [
+    flit-gettext
+    flit-scm
+  ];
 
-  checkPhase = ''
-    runHook preCheck
+  dependencies = [ django ];
 
-    # we have to do a little bit of tinkering to convince the tests to run against the installed package, not the
-    # source directory
-    mkdir testbase
-    pushd testbase
-    cp ../runtests.py .
-    ${python.interpreter} runtests.py hijack
-    popd
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-cov-stub
+    pytest-django
+  ];
 
-    runHook postCheck
+  preCheck = ''
+    export DJANGO_SETTINGS_MODULE=tests.test_app.settings
   '';
 
-  meta = with stdenv.lib; {
+  # needed for npmDeps update
+  passthru.updateScript = nix-update-script { };
+
+  meta = {
     description = "Allows superusers to hijack (=login as) and work on behalf of another user";
-    homepage = https://github.com/arteria/django-hijack;
-    license = licenses.mit;
-    maintainers = with maintainers; [ ris ];
+    homepage = "https://github.com/django-hijack/django-hijack";
+    changelog = "https://github.com/django-hijack/django-hijack/releases/tag/${src.tag}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ ris ];
   };
 }

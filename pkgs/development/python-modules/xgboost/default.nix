@@ -1,35 +1,68 @@
-{ stdenv
-, lib
-, pkgs
-, buildPythonPackage
-, nose
-, scipy
-, xgboost
+{
+  buildPythonPackage,
+  cmake,
+  numpy,
+  scipy,
+  hatchling,
+  python,
+  stdenv,
+  xgboost,
 }:
 
-buildPythonPackage rec {
-  name = "xgboost-${version}";
-
+let
+  libExtension = stdenv.hostPlatform.extensions.sharedLibrary;
+  libName = "libxgboost${libExtension}";
+  libPath = "${xgboost}/lib/${libName}";
+in
+buildPythonPackage {
+  pname = "xgboost";
+  pyproject = true;
   inherit (xgboost) version src meta;
 
-  propagatedBuildInputs = [ scipy ];
-  checkInputs = [ nose ];
+  nativeBuildInputs = [
+    cmake
+    hatchling
+  ];
+  buildInputs = [ xgboost ];
+  propagatedBuildInputs = [
+    numpy
+    scipy
+  ];
 
-  postPatch = let
-    libname = if stdenv.isDarwin then "libxgboost.dylib" else "libxgboost.so";
+  pythonRemoveDeps = [
+    "nvidia-nccl-cu12"
+  ];
 
-  in ''
+  # Place libxgboost.so where the build will look for it
+  # to avoid triggering the compilation of the library
+  prePatch = ''
+    mkdir -p lib
+    ln -s ${libPath} lib/
+  '';
+
+  dontUseCmakeConfigure = true;
+
+  postPatch = ''
     cd python-package
-
-    sed "s/CURRENT_DIR = os.path.dirname(__file__)/CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))/g" -i setup.py
-    sed "/^LIB_PATH.*/a LIB_PATH = [os.path.relpath(LIB_PATH[0], CURRENT_DIR)]" -i setup.py
-    cat <<EOF >xgboost/libpath.py
-    def find_lib_path():
-      return ["${xgboost}/lib/${libname}"]
-    EOF
   '';
 
-  postInstall = ''
-    rm -rf $out/xgboost
-  '';
+  # test setup tries to download test data with no option to disable
+  # (removing sklearn from nativeCheckInputs causes all previously enabled tests to be skipped)
+  # and are extremely cpu intensive anyway
+  doCheck = false;
+
+  # During the build libxgboost.so is copied to its current location
+  # Replacing it with a symlink to the original
+  postInstall =
+    let
+      libOutPath = "$out/${python.sitePackages}/xgboost/lib/${libName}";
+    in
+    ''
+      rm "${libOutPath}"
+      ln -s "${libPath}" "${libOutPath}"
+    '';
+
+  pythonImportsCheck = [ "xgboost" ];
+
+  __darwinAllowLocalNetworking = true;
 }

@@ -1,16 +1,37 @@
 {
-  mkDerivation, lib,
+  mkDerivation,
+  cmake,
   extra-cmake-modules,
-  kcompletion, kconfig, kconfigwidgets, ki18n, kiconthemes, kservice,
-  kwindowsystem, qtbase, sonnet,
+  qttools,
+  kcompletion,
+  kconfig,
+  kconfigwidgets,
+  ki18n,
+  kiconthemes,
+  kservice,
+  kwindowsystem,
+  qtbase,
+  sonnet,
 }:
 
 mkDerivation {
-  name = "ktextwidgets";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ extra-cmake-modules ];
-  buildInputs = [
-    kcompletion kconfig kconfigwidgets kiconthemes kservice kwindowsystem
+  pname = "ktextwidgets";
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
   ];
-  propagatedBuildInputs = [ ki18n qtbase sonnet ];
+  buildInputs = [
+    kcompletion
+    kconfig
+    kconfigwidgets
+    kiconthemes
+    kservice
+    kwindowsystem
+  ];
+  propagatedBuildInputs = [
+    ki18n
+    qtbase
+    qttools
+    sonnet
+  ];
 }

@@ -1,29 +1,53 @@
-{ stdenv, fetchurl, perl, icu, zlib, gmp, readline
-, CoreServices, ApplicationServices }:
+{
+  fetchFromGitHub,
+  lib,
+  nqp,
+  perl,
+  stdenv,
+  versionCheckHook,
+}:
 
-stdenv.mkDerivation rec {
-  name = "rakudo-star-${version}";
-  version = "2017.01";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "rakudo";
+  version = "2026.07";
 
-  src = fetchurl {
-    url    = "http://rakudo.org/downloads/star/${name}.tar.gz";
-    sha256 = "07zjqdzxm30pmjqwlnr669d75bsbimy09sk0dvgm0pnn3zr92fjq";
+  # nixpkgs-update: no auto update
+  src = fetchFromGitHub {
+    owner = "rakudo";
+    repo = "rakudo";
+    tag = finalAttrs.version;
+    fetchSubmodules = true;
+    hash = "sha256-kdMxxUvQOmIjoJzaPVcipzIQAHsdL3J6k623FzcLJgY=";
   };
 
-  buildInputs = [ icu zlib gmp readline perl ]
-    ++ stdenv.lib.optionals stdenv.isDarwin [ CoreServices ApplicationServices ];
-  configureScript = "perl ./Configure.pl";
-  configureFlags =
-    [ "--backends=moar"
-      "--gen-moar"
-      "--gen-nqp"
+  postPatch = ''
+    substituteInPlace src/core.c/CompUnit/Repository/Installation.rakumod \
+      --subst-var out
+  '';
+
+  patches = [
+    ./rakudo-plain-wrapper.patch
+  ];
+
+  configureScript = "${lib.getExe perl} ./Configure.pl";
+  configureFlags = [
+    "--backends=moar"
+    "--with-nqp=${lib.getExe nqp}"
+  ];
+
+  doInstallCheck = true;
+  nativeInstallCheckInputs = [ versionCheckHook ];
+
+  meta = {
+    description = "Raku implementation on top of Moar virtual machine";
+    homepage = "https://rakudo.org";
+    license = lib.licenses.artistic2;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [
+      thoughtpolice
+      sgo
+      prince213
     ];
-
-  meta = with stdenv.lib; {
-    description = "A Perl 6 implementation";
-    homepage    = "http://www.rakudo.org";
-    license     = licenses.artistic2;
-    platforms   = platforms.unix;
-    maintainers = with maintainers; [ thoughtpolice vrthra ];
+    mainProgram = "rakudo";
   };
-}
+})

@@ -1,25 +1,76 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, nose
-, decorator
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  fetchpatch,
+
+  # build-system
+  setuptools,
+
+  # optional-dependencies
+  lxml,
+  matplotlib,
+  numpy,
+  pandas,
+  pydot,
+  pygraphviz,
+  scipy,
+  sympy,
+
+  # tests
+  pytest-xdist,
+  pytestCheckHook,
+
+  # reverse dependency
+  sage,
 }:
 
 buildPythonPackage rec {
   pname = "networkx";
-  version = "2.1";
+  # upgrade may break sage, please test the sage build or ping the sage team on upgrade
+  version = "3.6.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    extension = "zip";
-    sha256 = "64272ca418972b70a196cb15d9c85a5a6041f09a2f32e0d30c0255f25d458bb1";
+    hash = "sha256-JrfDV6zMDIzeVYrUhig3KLZbapXYXuHNZrr6tMgWhQk=";
   };
 
-  checkInputs = [ nose ];
-  propagatedBuildInputs = [ decorator ];
+  nativeBuildInputs = [ setuptools ];
+
+  optional-dependencies = {
+    default = [
+      numpy
+      scipy
+      matplotlib
+      pandas
+    ];
+    extra = [
+      lxml
+      pygraphviz
+      pydot
+      sympy
+    ];
+  };
+
+  passthru.tests = {
+    inherit sage;
+  };
+
+  nativeCheckInputs = [
+    pytest-xdist
+    pytestCheckHook
+  ];
+
+  disabledTests = [
+    # No warnings of type (<class 'DeprecationWarning'>, <class 'PendingDeprecationWarning'>, <class 'FutureWarning'>) were emitted.
+    "test_connected_raise"
+  ];
 
   meta = {
+    changelog = "https://github.com/networkx/networkx/blob/networkx-${version}/doc/release/release_${version}.rst";
     homepage = "https://networkx.github.io/";
+    downloadPage = "https://github.com/networkx/networkx";
     description = "Library for the creation, manipulation, and study of the structure, dynamics, and functions of complex networks";
     license = lib.licenses.bsd3;
   };

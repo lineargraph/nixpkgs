@@ -1,34 +1,40 @@
-# This test start mongodb, runs a query using mongo shell
-
-import ./make-test.nix ({ pkgs, ...} : let
+# This test starts mongodb and runs a query using mongo shell
+{
+  testName,
+  config,
+  lib,
+  ...
+}:
+let
+  # required for test execution on darwin
+  pkgs = config.node.pkgs;
   testQuery = pkgs.writeScript "nixtest.js" ''
-    db.greetings.insert({ "greeting": "hello" });
+    db.greetings.insertOne({ "greeting": "hello" });
     print(db.greetings.findOne().greeting);
   '';
-in {
-  name = "mongodb";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ bluescreen303 offline wkennington cstrahan rvl ];
+  mongoshExe = lib.getExe pkgs.mongosh;
+in
+{
+  name = testName;
+  meta.maintainers = with pkgs.lib.maintainers; [
+    phile314
+    niklaskorz
+  ];
+
+  nodes.mongodb = {
+    services.mongodb.enable = true;
   };
 
-  nodes = {
-    one =
-      { config, pkgs, ... }:
-        {
-          services = {
-           mongodb.enable = true;
-           mongodb.extraConfig = ''
-             # Allow starting engine with only a small virtual disk
-             storage.journal.enabled: false
-             storage.mmapv1.smallFiles: true
-           '';
-          };
-        };
-    };
-
   testScript = ''
-    startAll;
-    $one->waitForUnit("mongodb.service");
-    $one->succeed("mongo nixtest ${testQuery}") =~ /hello/ or die;
+    start_all()
+
+    with subtest("start mongodb"):
+        mongodb.wait_for_unit("mongodb.service")
+        mongodb.wait_for_open_port(27017)
+
+    with subtest("insert and find a document"):
+        result = mongodb.succeed("${mongoshExe} ${testQuery}")
+        print("Test output:", result)
+        assert result.strip() == "hello"
   '';
-})
+}

@@ -1,37 +1,71 @@
-{ stdenv, fetchFromGitHub
-, python3Packages
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  gobject-introspection,
+  wrapGAppsHook3,
+  python3,
+  ibus,
 }:
 
+let
+  python = python3.withPackages (
+    ps: with ps; [
+      pygobject3
+      (toPythonModule ibus)
+      pyxdg
+      levenshtein
+    ]
+  );
+in
 stdenv.mkDerivation rec {
-  name = "ibus-uniemoji-${version}";
-  version = "0.6.0";
+  pname = "ibus-uniemoji";
+  version = "0.7.0";
 
   src = fetchFromGitHub {
     owner = "salty-horse";
     repo = "ibus-uniemoji";
-    rev = "v${version}";
-    sha256 = "121zh3q0li1k537fcvbd4ns4jgl9bbb9gm9ihy8cfxgirv38lcfa";
+    tag = "v${version}";
+    hash = "sha256-iP72lExXnLFeWNJQfaDI/T4tRlXjHbRy+1X8+cAT+Zo=";
   };
 
-  propagatedBuildInputs = with python3Packages; [ pyxdg python-Levenshtein pygobject3 ];
+  patches = [
+    # Do not run wrapper script with Python,
+    # the wrapped script will have Python in shebang anyway.
+    ./allow-wrapping.patch
+  ];
 
-  nativeBuildInputs = [ python3Packages.wrapPython ];
+  nativeBuildInputs = [
+    wrapGAppsHook3
+    gobject-introspection
+  ];
+
+  buildInputs = [
+    python
+    ibus
+  ];
+
+  makeFlags = [
+    "PREFIX=${placeholder "out"}"
+    "SYSCONFDIR=${placeholder "out"}/etc"
+    "PYTHON=${python.interpreter}"
+  ];
 
   postFixup = ''
-    buildPythonPath $out
-    patchPythonScript $out/share/ibus-uniemoji/uniemoji.py
+    chmod +x      "$out/share/ibus-uniemoji/ibus.py"
+    patchShebangs "$out/share/ibus-uniemoji/ibus.py"
+    wrapGApp      "$out/share/ibus-uniemoji/ibus.py"
   '';
 
-  makeFlags = [ "PREFIX=$(out)" "SYSCONFDIR=$(out)/etc"
-                "PYTHON=${python3Packages.python.interpreter}"
-              ];
-
-  meta = with stdenv.lib; {
+  meta = {
     isIbusEngine = true;
-    description  = "Input method (ibus) for entering unicode symbols and emoji by name";
-    homepage     = "https://github.com/salty-horse/ibus-uniemoji";
-    license      = with licenses; [ gpl3 mit ];
-    platforms    = platforms.linux;
-    maintainers  = with maintainers; [ aske ];
+    description = "Input method (ibus) for entering unicode symbols and emoji by name";
+    homepage = "https://github.com/salty-horse/ibus-uniemoji";
+    license = with lib.licenses; [
+      gpl3
+      mit
+    ];
+    platforms = lib.platforms.linux;
+    maintainers = with lib.maintainers; [ aske ];
   };
 }

@@ -1,19 +1,45 @@
-{ stdenv, buildPythonPackage, fetchurl }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  latex2mathml,
+  pygments,
+  pytest7CheckHook,
+  setuptools,
+  wavedrom,
+}:
 
 buildPythonPackage rec {
   pname = "markdown2";
-  version = "2.3.5";
-  name = "${pname}-${version}";
+  version = "2.5.5";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/m/markdown2/${name}.zip";
-    sha256 = "8bb9a24eb2aa02f1427aabe46483f0f0215ab18c8a345315ae8e2ee3c3a09c03";
+  src = fetchFromGitHub {
+    owner = "trentm";
+    repo = "python-markdown2";
+    tag = version;
+    hash = "sha256-h0vzv59RsceTZSvFF9DX5D6YanAKMTG3cNc1napXMyI=";
   };
 
-  meta = with stdenv.lib; {
-    description = "A fast and complete Python implementation of Markdown";
-    homepage =  https://github.com/trentm/python-markdown2;
-    license = licenses.mit;
-    maintainers = with maintainers; [ hbunke ];
+  build-system = [ setuptools ];
+
+  pythonImportsCheck = [ "markdown2" ];
+
+  nativeCheckInputs = [ pytest7CheckHook ];
+
+  optional-dependencies = {
+    code_syntax_highlighting = [ pygments ];
+    wavedrom = [ wavedrom ];
+    latex = [ latex2mathml ];
+    all = lib.concatAttrValues (lib.removeAttrs optional-dependencies [ "all" ]);
+  };
+
+  meta = {
+    changelog = "https://github.com/trentm/python-markdown2/blob/${src.tag}/CHANGES.md";
+    description = "Fast and complete Python implementation of Markdown";
+    mainProgram = "markdown2";
+    homepage = "https://github.com/trentm/python-markdown2";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ hbunke ];
   };
 }

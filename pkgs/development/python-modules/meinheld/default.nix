@@ -1,22 +1,41 @@
-{ stdenv, fetchPypi, buildPythonPackage, greenlet }:
+{
+  lib,
+  stdenv,
+  pythonAtLeast,
+  fetchPypi,
+  buildPythonPackage,
+  setuptools,
+  greenlet,
+}:
 
 buildPythonPackage rec {
   pname = "meinheld";
-  version = "0.6.1";
+  version = "1.0.2";
+  pyproject = true;
+
+  disabled = pythonAtLeast "3.13";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0rg5878njn66cc0x2fwrakikz24946r0cxxl6j8vvz5phd4zygi9";
+    hash = "sha256-AIx2k3rCEXzGngMtxpzqn4X8YF3pusFBf0R8QcFqVtY=";
   };
 
-  propagatedBuildInputs = [ greenlet ];
+  pythonRelaxDeps = [ "greenlet" ];
+
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.cc.isGNU "-Wno-error=implicit-function-declaration";
+
+  build-system = [ setuptools ];
+
+  dependencies = [ greenlet ];
 
   # No tests
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "meinheld" ];
+
+  meta = {
     description = "High performance asynchronous Python WSGI Web Server";
-    homepage = http://meinheld.org/;
-    license = licenses.bsd3;
+    homepage = "https://meinheld.org/";
+    license = lib.licenses.bsd3;
   };
 }

@@ -1,17 +1,18 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, contrib
-, lightyear
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  contrib,
+  lightyear,
+  lib,
 }:
-
-build-idris-package  {
-  name = "tomladris";
+build-idris-package {
+  pname = "tomladris";
   version = "2017-11-14";
 
-  idrisDeps = [ prelude lightyear contrib ];
+  idrisDeps = [
+    lightyear
+    contrib
+  ];
 
   src = fetchFromGitHub {
     owner = "emptyflash";
@@ -22,9 +23,11 @@ build-idris-package  {
 
   meta = {
     description = "TOML parser for Idris";
-    homepage = https://github.com/emptyflash/tomladris;
+    homepage = "https://github.com/emptyflash/tomladris";
     license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ siddharthist brainrape ];
-    inherit (idris.meta) platforms;
+    maintainers = with lib.maintainers; [
+      siddharthist
+      brainrape
+    ];
   };
 }

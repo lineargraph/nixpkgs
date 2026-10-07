@@ -1,33 +1,40 @@
-{ stdenv, fetchurl, pkgconfig, gwenhywfar, pcsclite, zlib }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  pkg-config,
+  gwenhywfar,
+  pcsclite,
+  zlib,
+}:
 
 let
-  inherit ((import ./sources.nix).libchipcard) sha256 releaseId version;
-in stdenv.mkDerivation rec {
-  name = "libchipcard-${version}";
+  inherit ((import ./sources.nix).libchipcard) hash releaseId version;
+in
+stdenv.mkDerivation rec {
+  pname = "libchipcard";
   inherit version;
 
-  src = let
-    qstring = "package=02&release=${releaseId}&file=01";
-    mkURLs = map (base: "${base}/sites/download/download.php?${qstring}");
-  in fetchurl {
-    name = "${name}.tar.gz";
-    urls = mkURLs [ "http://www.aquamaniac.de" "http://www2.aquamaniac.de" ];
-    inherit sha256;
+  src = fetchurl {
+    url = "https://www.aquamaniac.de/rdm/attachments/download/${releaseId}/libchipcard-${version}.tar.gz";
+    inherit hash;
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
 
-  buildInputs = [ gwenhywfar pcsclite zlib ];
+  buildInputs = [
+    gwenhywfar
+    pcsclite
+    zlib
+  ];
 
   makeFlags = [ "crypttokenplugindir=$(out)/lib/gwenhywfar/plugins/ct" ];
 
-  configureFlags = [ "--with-gwen-dir=${gwenhywfar}" ];
-
-  meta = with stdenv.lib; {
+  meta = {
     description = "Library for access to chipcards";
-    homepage = http://www2.aquamaniac.de/sites/download/packages.php?package=02&showall=1;
-    license = licenses.lgpl21;
-    maintainers = with maintainers; [ aszlig ];
-    platforms = platforms.linux;
+    homepage = "https://www.aquamaniac.de/rdm/projects/libchipcard";
+    license = lib.licenses.lgpl21;
+    maintainers = with lib.maintainers; [ aszlig ];
+    platforms = lib.platforms.linux;
   };
 }

@@ -1,23 +1,45 @@
-{ lib, buildPythonPackage, fetchurl, pkgs, pytestrunner }:
+{
+  lib,
+  buildPythonPackage,
+  cython,
+  fetchFromGitHub,
+  keyutils,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "keyutils";
-  version = "0.5";
-  name = "${pname}-${version}";
+  version = "0.6";
+  format = "setuptools";
 
-  src = fetchurl {
-    url = "mirror://pypi/k/${pname}/${name}.tar.gz";
-    sha256 = "0dskys71vkn59vlsfs1ljli0qnzk7b10iv4pawxawnk2hvyjrf10";
+  # github version comes bundled with tests
+  src = fetchFromGitHub {
+    owner = "sassoftware";
+    repo = "python-keyutils";
+    rev = version;
+    sha256 = "0pfqfr5xqgsqkxzrmj8xl2glyl4nbq0irs0k6ik7iy3gd3mxf5g1";
   };
 
-  buildInputs = [ pkgs.keyutils pytestrunner ];
+  postPatch = ''
+    substituteInPlace setup.py --replace '"pytest-runner"' ""
+  '';
 
-  doCheck = false;
+  preBuild = ''
+    cython keyutils/_keyutils.pyx
+  '';
+
+  preCheck = ''
+    rm -rf keyutils
+  '';
+
+  buildInputs = [ keyutils ];
+  nativeBuildInputs = [ cython ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
   meta = {
-    description = "A set of python bindings for keyutils";
-    homepage = https://github.com/sassoftware/python-keyutils;
+    description = "Set of python bindings for keyutils";
+    homepage = "https://github.com/sassoftware/python-keyutils";
     license = lib.licenses.asl20;
-    maintainers = with lib.maintainers; [ primeos ];
+    maintainers = [ ];
   };
 }

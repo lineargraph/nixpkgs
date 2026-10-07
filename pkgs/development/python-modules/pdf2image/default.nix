@@ -1,21 +1,40 @@
-{ stdenv, buildPythonPackage, fetchPypi, pillow, poppler_utils }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pillow,
+  poppler-utils,
+}:
 
 buildPythonPackage rec {
   pname = "pdf2image";
-  version = "0.1.13";
-
-  buildInputs = [ pillow poppler_utils ];
+  version = "1.17.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "784928038588059e00c7f97e5608047cb754b6ec8fd10e7551e7ad0f40d2cd56";
+    hash = "sha256-6qlZvBFrQg3X7EFfyuSbmBAN2j3RjNL9+obQnxEvbVc=";
   };
 
-  meta = with stdenv.lib; {
-    description = "A python module that wraps the pdftoppm utility to convert PDF to PIL Image object";
-    homepage = https://github.com/Belval/pdf2image;
-    license = licenses.mit;
-    maintainers = with maintainers; [ gerschtli ];
-    platforms = platforms.all;
+  postPatch = ''
+    # replace all default values of paths to poppler-utils
+    substituteInPlace pdf2image/pdf2image.py \
+      --replace-fail 'poppler_path: Union[str, PurePath] = None' \
+                     'poppler_path: Union[str, PurePath] = "${poppler-utils}/bin"' \
+      --replace-fail 'poppler_path: str = None' \
+                     'poppler_path: str = "${poppler-utils}/bin"'
+  '';
+
+  propagatedBuildInputs = [ pillow ];
+
+  pythonImportsCheck = [ "pdf2image" ];
+
+  meta = {
+    description = "Module that wraps the pdftoppm utility to convert PDF to PIL Image object";
+    homepage = "https://github.com/Belval/pdf2image";
+    changelog = "https://github.com/Belval/pdf2image/releases/tag/v${version}";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ gerschtli ];
+    platforms = lib.platforms.all;
   };
 }

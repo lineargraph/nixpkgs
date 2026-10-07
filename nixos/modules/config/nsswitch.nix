@@ -1,103 +1,179 @@
 # Configuration for the Name Service Switch (/etc/nsswitch.conf).
-
-{ config, lib, pkgs, ... }:
-
-with lib;
-
-let
-
-  # only with nscd up and running we can load NSS modules that are not integrated in NSS
-  canLoadExternalModules = config.services.nscd.enable;
-  myhostname = canLoadExternalModules;
-  mymachines = canLoadExternalModules;
-  nssmdns = canLoadExternalModules && config.services.avahi.nssmdns;
-  nsswins = canLoadExternalModules && config.services.samba.nsswins;
-  ldap = canLoadExternalModules && (config.users.ldap.enable && config.users.ldap.nsswitch);
-  sssd = canLoadExternalModules && config.services.sssd.enable;
-  resolved = canLoadExternalModules && config.services.resolved.enable;
-
-  hostArray = [ "files" ]
-    ++ optional mymachines "mymachines"
-    ++ optional nssmdns "mdns_minimal [NOTFOUND=return]"
-    ++ optional nsswins "wins"
-    ++ optional resolved "resolve [!UNAVAIL=return]"
-    ++ [ "dns" ]
-    ++ optional nssmdns "mdns"
-    ++ optional myhostname "myhostname";
-
-  passwdArray = [ "files" ]
-    ++ optional sssd "sss"
-    ++ optional ldap "ldap"
-    ++ optional mymachines "mymachines"
-    ++ [ "systemd" ];
-
-  shadowArray = [ "files" ]
-    ++ optional sssd "sss"
-    ++ optional ldap "ldap";
-
-  servicesArray = [ "files" ]
-    ++ optional sssd "sss";
-
-in {
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+{
   options = {
 
     # NSS modules.  Hacky!
     # Only works with nscd!
-    system.nssModules = mkOption {
-      type = types.listOf types.path;
+    system.nssModules = lib.mkOption {
+      type = lib.types.listOf lib.types.path;
       internal = true;
-      default = [];
+      default = [ ];
       description = ''
         Search path for NSS (Name Service Switch) modules.  This allows
         several DNS resolution methods to be specified via
-        <filename>/etc/nsswitch.conf</filename>.
+        {file}`/etc/nsswitch.conf`.
       '';
-      apply = list:
-        {
-          inherit list;
-          path = makeLibraryPath list;
-        };
+      apply = list: {
+        inherit list;
+        path = lib.makeLibraryPath list;
+      };
     };
 
+    system.nssDatabases = {
+      passwd = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = ''
+          List of passwd entries to configure in {file}`/etc/nsswitch.conf`.
+
+          Note that "files" is always prepended while "systemd" is appended if nscd is enabled.
+
+          This option only takes effect if nscd is enabled.
+        '';
+        default = [ ];
+      };
+
+      group = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = ''
+          List of group entries to configure in {file}`/etc/nsswitch.conf`.
+
+          Note that "files" is always prepended while "systemd" is appended if nscd is enabled.
+
+          This option only takes effect if nscd is enabled.
+        '';
+        default = [ ];
+      };
+
+      shadow = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = ''
+          List of shadow entries to configure in {file}`/etc/nsswitch.conf`.
+
+          Note that "files" is always prepended.
+
+          This option only takes effect if nscd is enabled.
+        '';
+        default = [ ];
+      };
+
+      sudoers = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = ''
+          List of sudoers entries to configure in {file}`/etc/nsswitch.conf`.
+
+          Note that "files" is always prepended.
+
+          This option only takes effect if nscd is enabled.
+        '';
+        default = [ ];
+      };
+
+      hosts = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = ''
+          List of hosts entries to configure in {file}`/etc/nsswitch.conf`.
+
+          Note that "files" is always prepended, and "dns" and "myhostname" are always appended.
+
+          This option only takes effect if nscd is enabled.
+        '';
+        default = [ ];
+      };
+
+      services = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = ''
+          List of services entries to configure in {file}`/etc/nsswitch.conf`.
+
+          Note that "files" is always prepended.
+
+          This option only takes effect if nscd is enabled.
+        '';
+        default = [ ];
+      };
+
+      subuid = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = ''
+          List of subuid entries to configure in {file}`/etc/nsswitch.conf`.
+
+          Note that "files" is always prepended.
+
+          This option only takes effect if nscd is enabled.
+        '';
+        default = [ ];
+      };
+
+      subgid = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = ''
+          List of subgid entries to configure in {file}`/etc/nsswitch.conf`.
+
+          Note that "files" is always prepended.
+
+          This option only takes effect if nscd is enabled.
+        '';
+        default = [ ];
+      };
+    };
   };
+
+  imports = [
+    (lib.mkRenamedOptionModule [ "system" "nssHosts" ] [ "system" "nssDatabases" "hosts" ])
+  ];
 
   config = {
     assertions = [
       {
-        # generic catch if the NixOS module adding to nssModules does not prevent it with specific message.
-        assertion = config.system.nssModules.path != "" -> canLoadExternalModules;
-        message = "Loading NSS modules from path ${config.system.nssModules.path} requires nscd being enabled.";
-      }
-      {
-        # resolved does not need to add to nssModules, therefore needs an extra assertion
-        assertion = resolved -> canLoadExternalModules;
-        message = "Loading systemd-resolved's nss-resolve NSS module requires nscd being enabled.";
+        assertion = config.system.nssModules.path != "" -> config.services.nscd.enable;
+        message = ''
+          Loading NSS modules from system.nssModules (${config.system.nssModules.path}),
+          requires services.nscd.enable being set to true.
+
+          If disabling nscd is really necessary, it is possible to disable loading NSS modules
+          by setting `system.nssModules = lib.mkForce [];` in your configuration.nix.
+        '';
       }
     ];
 
     # Name Service Switch configuration file.  Required by the C
-    # library.  !!! Factor out the mdns stuff.  The avahi module
-    # should define an option used by this module.
+    # library.
     environment.etc."nsswitch.conf".text = ''
-      passwd:    ${concatStringsSep " " passwdArray}
-      group:     ${concatStringsSep " " passwdArray}
-      shadow:    ${concatStringsSep " " shadowArray}
+      passwd:    ${lib.concatStringsSep " " config.system.nssDatabases.passwd}
+      group:     ${lib.concatStringsSep " " config.system.nssDatabases.group}
+      shadow:    ${lib.concatStringsSep " " config.system.nssDatabases.shadow}
+      sudoers:   ${lib.concatStringsSep " " config.system.nssDatabases.sudoers}
 
-      hosts:     ${concatStringsSep " " hostArray}
+      hosts:     ${lib.concatStringsSep " " config.system.nssDatabases.hosts}
       networks:  files
 
       ethers:    files
-      services:  ${concatStringsSep " " servicesArray}
+      services:  ${lib.concatStringsSep " " config.system.nssDatabases.services}
       protocols: files
       rpc:       files
+
+      subuid:    ${lib.concatStringsSep " " config.system.nssDatabases.subuid}
+      subgid:    ${lib.concatStringsSep " " config.system.nssDatabases.subgid}
     '';
 
-    # Systemd provides nss-myhostname to ensure that our hostname
-    # always resolves to a valid IP address.  It returns all locally
-    # configured IP addresses, or ::1 and 127.0.0.2 as
-    # fallbacks. Systemd also provides nss-mymachines to return IP
-    # addresses of local containers.
-    system.nssModules = optionals canLoadExternalModules [ config.systemd.package.out ];
-
+    system.nssDatabases = {
+      passwd = lib.mkBefore [ "files" ];
+      group = lib.mkBefore [ "files" ];
+      shadow = lib.mkBefore [ "files" ];
+      sudoers = lib.mkBefore [ "files" ];
+      hosts = lib.mkMerge [
+        (lib.mkOrder 998 [ "files" ])
+        (lib.mkOrder 1499 [ "dns" ])
+      ];
+      services = lib.mkBefore [ "files" ];
+      subuid = lib.mkBefore [ "files" ];
+      subgid = lib.mkBefore [ "files" ];
+    };
   };
 }

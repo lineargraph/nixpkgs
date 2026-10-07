@@ -1,30 +1,60 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, cmdliner , topkg, uchar }:
-let
-  pname = "uutf";
-  webpage = "http://erratique.ch/software/${pname}";
-in
+{
+  lib,
+  stdenv,
+  fetchurl,
+  ocaml,
+  findlib,
+  ocamlbuild,
+  cmdliner,
+  topkg,
+  uchar,
+  version ?
+    if lib.versionAtLeast ocaml.version "4.08" then
+      "1.0.4"
+    else if lib.versionAtLeast ocaml.version "4.03" then
+      "1.0.3"
+    else
+      throw "uutf is not available with OCaml ${ocaml.version}",
+}:
 
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-${pname}-${version}";
-  version = "1.0.1";
+stdenv.mkDerivation (finalAttrs: {
+  name = "ocaml${ocaml.version}-${finalAttrs.pname}-${finalAttrs.version}";
+  pname = "uutf";
+  inherit version;
 
   src = fetchurl {
-    url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "1gp96dcggq7s84934vimxh89caaxa77lqiff1yywbwkilkkjcfqj";
+    url = "https://erratique.ch/software/uutf/releases/uutf-${version}.tbz";
+    hash =
+      {
+        "1.0.3" = "sha256-h3KlYT0ecCmM4U3zMkGjaF8h5O9r20zwP+mF+x7KBWg=";
+        "1.0.4" = "sha256-p6V45q+RSaiJThjjtHWchWWTemnGyaznowu/BIRhnKg=";
+      }
+      ."${version}";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild topkg cmdliner ];
+  nativeBuildInputs = [
+    ocaml
+    ocamlbuild
+    findlib
+    topkg
+  ];
+  buildInputs = [
+    topkg
+    cmdliner
+  ];
   propagatedBuildInputs = [ uchar ];
 
-  unpackCmd = "tar xjf $src";
+  strictDeps = true;
 
   inherit (topkg) buildPhase installPhase;
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Non-blocking streaming Unicode codec for OCaml";
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
-    license = licenses.bsd3;
-    maintainers = [ maintainers.vbgl ];
+    homepage = "https://erratique.ch/software/uutf";
+    changelog = "https://raw.githubusercontent.com/dbuenzli/uutf/refs/tags/v${version}/CHANGES.md";
+    license = lib.licenses.isc;
+    maintainers = [ lib.maintainers.vbgl ];
+    mainProgram = "utftrip";
+    inherit (ocaml.meta) platforms;
   };
-}
+})

@@ -1,19 +1,43 @@
-{ lib, fetchurl, buildPythonPackage, isPy3k }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  pytest-cov-stub,
+  setuptools,
+  zeep,
+}:
 
 buildPythonPackage rec {
-  version = "1.8.1";
   pname = "python-stdnum";
-  name = "${pname}-${version}";
-  # Failing tests and dependency issue on Py3k
-  disabled = isPy3k;
-  src = fetchurl {
-    url = "mirror://pypi/p/python-stdnum/${name}.tar.gz";
-    sha256 = "d7162fdb29337aebed65700cc7297016f6cd32cae4ad7aed8f7e7531f0217943";
+  version = "2.2";
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "arthurdejong";
+    repo = "python-stdnum";
+    tag = version;
+    hash = "sha256-X/VmD9bgOfs58m4YtmIdsYI5B4T0a68Wiiq2Ae27A8w=";
   };
+
+  build-system = [ setuptools ];
+
+  optional-dependencies = {
+    SOAP = [ zeep ];
+  };
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-cov-stub
+  ];
+
+  pythonImportsCheck = [ "stdnum" ];
+
   meta = {
-    homepage = http://arthurdejong.org/python-stdnum/;
     description = "Python module to handle standardized numbers and codes";
+    homepage = "https://arthurdejong.org/python-stdnum/";
+    changelog = "https://github.com/arthurdejong/python-stdnum/blob/${version}/ChangeLog";
+    license = lib.licenses.lgpl21Plus;
     maintainers = with lib.maintainers; [ johbo ];
-    license = lib.licenses.lgpl2Plus;
   };
 }

@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 let
@@ -34,7 +39,6 @@ in
 
           For example "ops" will resolve "vm.ops".
         '';
-        example = "ops";
         default = "ops";
       };
 
@@ -59,7 +63,7 @@ in
       serviceConfig = {
         Type = "simple";
         User = cfg.user;
-        ExecStart="${pkg}/bin/nixops-dns --domain=.${cfg.domain}";
+        ExecStart = "${pkg}/bin/nixops-dns --domain=.${cfg.domain}";
       };
     };
 
@@ -69,10 +73,10 @@ in
       servers = [
         "/${cfg.domain}/127.0.0.1#5300"
       ];
-      extraConfig = ''
-        bind-interfaces
-        listen-address=127.0.0.1
-      '';
+      settings = {
+        bind-interfaces = true;
+        listen-address = "127.0.0.1";
+      };
     };
 
   };

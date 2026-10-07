@@ -1,26 +1,55 @@
-{ lib, stdenv, buildPythonPackage, fetchPypi, aiohttp, jinja2, pytest, pytest-aiohttp }:
+{
+  lib,
+  aiohttp,
+  buildPythonPackage,
+  fetchPypi,
+  jinja2,
+  pytest-aiohttp,
+  pytest-cov-stub,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "aiohttp-jinja2";
-  version = "0.17.0";
+  version = "1.6";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "8139c63fe989e140dceae378440680258dfb72f3301c79173945245299d795e6";
+    hash = "sha256-o6f/UmTlvKUuiuVHu/0HYbcklSMNQ40FtsCRW+YZsOI=";
   };
 
-  propagatedBuildInputs = [ aiohttp jinja2 ];
+  patches = [
+    # Adapted from https://github.com/aio-libs/aiohttp-jinja2/pull/1025
+    ./aiohttp-3.14.patch
+  ];
 
-  checkInputs = [ pytest pytest-aiohttp ];
+  build-system = [ setuptools ];
 
-  checkPhase = ''
-    py.test
-  '';
+  dependencies = [
+    aiohttp
+    jinja2
+  ];
 
-  meta = with lib; {
+  nativeCheckInputs = [
+    pytest-aiohttp
+    pytest-cov-stub
+    pytestCheckHook
+  ];
+
+  __darwinAllowLocalNetworking = true;
+
+  pytestFlags = [
+    "-Wignore::DeprecationWarning"
+  ];
+
+  pythonImportsCheck = [ "aiohttp_jinja2" ];
+
+  meta = {
     description = "Jinja2 support for aiohttp";
-    homepage = https://github.com/aio-libs/aiohttp_jinja2;
-    license = licenses.asl20;
-    maintainers = with maintainers; [ peterhoeg ];
+    homepage = "https://github.com/aio-libs/aiohttp_jinja2";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
   };
 }

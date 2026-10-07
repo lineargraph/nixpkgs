@@ -1,22 +1,55 @@
-{stdenvNoCC, mercurial, nix}: {name ? null, url, rev ? null, md5 ? null, sha256 ? null, fetchSubrepos ? false}:
+{
+  lib,
+  stdenvNoCC,
+  mercurial,
+}:
 
-if md5 != null then
-  throw "fetchhg does not support md5 anymore, please use sha256"
-else
-# TODO: statically check if mercurial as the https support if the url starts woth https.
-stdenvNoCC.mkDerivation {
-  name = "hg-archive" + (if name != null then "-${name}" else "");
-  builder = ./builder.sh;
-  nativeBuildInputs = [mercurial];
+lib.extendMkDerivation {
+  constructDrv = stdenvNoCC.mkDerivation;
 
-  impureEnvVars = stdenvNoCC.lib.fetchers.proxyImpureEnvVars;
+  extendDrvArgs =
+    finalAttrs:
+    {
+      name ? null,
+      url,
+      rev ? null,
+      sha256 ? null,
+      hash ? null,
+      fetchSubrepos ? false,
+      preferLocalBuild ? true,
+    }:
+    # TODO: statically check if mercurial has https support if the url starts with https.
+    {
+      name = "hg-archive" + (lib.optionalString (name != null) "-${name}");
+      builder = ./builder.sh;
+      nativeBuildInputs = [ mercurial ];
 
-  subrepoClause = if fetchSubrepos then "S" else "";
+      strictDeps = true;
+      __structuredAttrs = true;
 
-  outputHashAlgo = "sha256";
-  outputHashMode = "recursive";
-  outputHash = sha256;
+      impureEnvVars = lib.fetchers.proxyImpureEnvVars;
 
-  inherit url rev;
-  preferLocalBuild = true;
+      subrepoClause = lib.optionalString fetchSubrepos "S";
+
+      outputHashAlgo = if finalAttrs.hash != null && finalAttrs.hash != "" then null else "sha256";
+      outputHashMode = "recursive";
+      outputHash =
+        if (hash != null && sha256 != null) then
+          throw "Only one of sha256 or hash can be set"
+        else
+          (
+            if finalAttrs.hash != null then
+              finalAttrs.hash
+            else if sha256 != null then
+              sha256
+            else
+              ""
+          );
+
+      inherit url rev hash;
+      inherit preferLocalBuild;
+    };
+
+  # No ellipsis
+  inheritFunctionArgs = false;
 }

@@ -1,35 +1,53 @@
-{ stdenv, fetchurl, pkgconfig, buildPythonPackage, isPy3k, at-spi2-core, pygobject3, gnome3 }:
+{
+  lib,
+  fetchurl,
+  meson,
+  ninja,
+  pkg-config,
+  buildPythonPackage,
+  isPy3k,
+  at-spi2-core,
+  pygobject3,
+  gnome,
+}:
 
 buildPythonPackage rec {
   pname = "pyatspi";
-  version = "2.26.0";
-  format = "other";
+  version = "2.58.1";
+
+  pyproject = false;
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "0xdnix7gxzgf75xy9ris4dd6b05mqwicw190b98xqmypydyf95n6";
+    url = "mirror://gnome/sources/pyatspi/${lib.versions.majorMinor version}/pyatspi-${version}.tar.xz";
+    sha256 = "Px8HmTX5JlhDMQJcdTGFjetCJFyZO2USH09LAeawRTY=";
   };
+
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+  ];
 
   buildInputs = [
     at-spi2-core
-    pkgconfig
     pygobject3
   ];
 
   disabled = !isPy3k;
 
   passthru = {
-    updateScript = gnome3.updateScript {
-      packageName = pname;
-      attrPath = "python3.pkgs.${pname}";
+    updateScript = gnome.updateScript {
+      packageName = "pyatspi";
+      attrPath = "python3.pkgs.pyatspi";
+      versionPolicy = "odd-unstable";
     };
   };
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Python client bindings for D-Bus AT-SPI";
-    homepage = https://wiki.linuxfoundation.org/accessibility/d-bus;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ jgeerds jtojnar ];
-    platforms = with platforms; unix;
+    homepage = "https://gitlab.gnome.org/GNOME/pyatspi2";
+    license = lib.licenses.lgpl2Only;
+    maintainers = with lib.maintainers; [ jtojnar ];
+    platforms = with lib.platforms; unix;
   };
 }

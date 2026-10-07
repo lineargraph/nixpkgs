@@ -1,9 +1,12 @@
 # This module defines global configuration for the Bash shell, in
 # particular /etc/bashrc and /etc/profile.
 
-{ config, lib, pkgs, ... }:
-
-with lib;
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
 
@@ -11,93 +14,78 @@ let
 
   cfg = config.programs.bash;
 
-  bashCompletion = optionalString cfg.enableCompletion ''
-    # Check whether we're running a version of Bash that has support for
-    # programmable completion. If we do, enable all modules installed in
-    # the system and user profile in obsolete /etc/bash_completion.d/
-    # directories. Bash loads completions in all
-    # $XDG_DATA_DIRS/share/bash-completion/completions/
-    # on demand, so they do not need to be sourced here.
-    if shopt -q progcomp &>/dev/null; then
-      . "${pkgs.bash-completion}/etc/profile.d/bash_completion.sh"
-      nullglobStatus=$(shopt -p nullglob)
-      shopt -s nullglob
-      for p in $NIX_PROFILES; do
-        for m in "$p/etc/bash_completion.d/"*; do
-          . $m
-        done
-      done
-      eval "$nullglobStatus"
-      unset nullglobStatus p m
-    fi
-  '';
-
-  bashAliases = concatStringsSep "\n" (
-    mapAttrsFlatten (k: v: "alias ${k}='${v}'") cfg.shellAliases
+  bashAliases = builtins.concatStringsSep "\n" (
+    lib.mapAttrsToList (k: v: "alias -- ${k}=${lib.escapeShellArg v}") (
+      lib.filterAttrs (k: v: v != null) cfg.shellAliases
+    )
   );
 
 in
 
 {
+
   options = {
 
     programs.bash = {
 
-      /*
-      enable = mkOption {
+      enable = lib.mkOption {
         default = true;
         description = ''
           Whenever to configure Bash as an interactive shell.
           Note that this tries to make Bash the default
-          <option>users.defaultUserShell</option>,
+          {option}`users.defaultUserShell`,
           which in turn means that you might need to explicitly
           set this variable if you have another shell configured
           with NixOS.
         '';
-        type = types.bool;
+        type = lib.types.bool;
       };
-      */
 
-      shellAliases = mkOption {
-        default = config.environment.shellAliases;
+      shellAliases = lib.mkOption {
+        default = { };
         description = ''
-          Set of aliases for bash shell. See <option>environment.shellAliases</option>
-          for an option format description.
+          Set of aliases for bash shell, which overrides {option}`environment.shellAliases`.
+          See {option}`environment.shellAliases` for an option format description.
         '';
-        type = types.attrs; # types.attrsOf types.stringOrPath;
+        type = with lib.types; attrsOf (nullOr (either str path));
       };
 
-      shellInit = mkOption {
+      shellInit = lib.mkOption {
         default = "";
         description = ''
           Shell script code called during bash shell initialisation.
         '';
-        type = types.lines;
+        type = lib.types.lines;
       };
 
-      loginShellInit = mkOption {
+      loginShellInit = lib.mkOption {
         default = "";
         description = ''
           Shell script code called during login bash shell initialisation.
         '';
-        type = types.lines;
+        type = lib.types.lines;
       };
 
-      interactiveShellInit = mkOption {
+      interactiveShellInit = lib.mkOption {
         default = "";
         description = ''
           Shell script code called during interactive bash shell initialisation.
         '';
-        type = types.lines;
+        type = lib.types.lines;
       };
 
-      promptInit = mkOption {
+      promptInit = lib.mkOption {
         default = ''
           # Provide a nice prompt if the terminal supports it.
-          if [ "$TERM" != "dumb" -o -n "$INSIDE_EMACS" ]; then
+          if [ "$TERM" != "dumb" ] || [ -n "$INSIDE_EMACS" ]; then
             PROMPT_COLOR="1;31m"
-            let $UID && PROMPT_COLOR="1;32m"
-            PS1="\n\[\033[$PROMPT_COLOR\][\u@\h:\w]\\$\[\033[0m\] "
+            ((UID)) && PROMPT_COLOR="1;32m"
+            if [ -n "$INSIDE_EMACS" ]; then
+              # Emacs term mode doesn't support xterm title escape sequence (\e]0;)
+              PS1="\n\[\033[$PROMPT_COLOR\][\u@\h:\w]\\$\[\033[0m\] "
+            else
+              PS1="\n\[\033[$PROMPT_COLOR\][\[\e]0;\u@\h: \w\a\]\u@\h:\w]\\$\[\033[0m\] "
+            fi
             if test "$TERM" = "xterm"; then
               PS1="\[\033]2;\h:\u:\w\007\]$PS1"
             fi
@@ -106,27 +94,46 @@ in
         description = ''
           Shell script code used to initialise the bash prompt.
         '';
-        type = types.lines;
+        type = lib.types.lines;
       };
 
-      enableCompletion = mkOption {
-        default = true;
+      promptPluginInit = lib.mkOption {
+        default = "";
         description = ''
-          Enable Bash completion for all interactive bash shells.
+          Shell script code used to initialise bash prompt plugins.
         '';
-        type = types.bool;
+        type = lib.types.lines;
+        internal = true;
       };
 
+      logout = lib.mkOption {
+        # Reset the title bar when logging out.  This protects against a remote
+        # NixOS system clobbering your local terminal's title bar when you SSH
+        # into the remote NixOS system and then log out.
+        #
+        # For more details, see: https://superuser.com/a/339946
+        default = ''
+          printf '\e]0;\a'
+        '';
+        description = ''
+          Shell script code called during login bash shell logout.
+        '';
+        type = lib.types.lines;
+      };
     };
 
   };
 
-  config = /* mkIf cfg.enable */ {
+  config = lib.mkIf cfg.enable {
 
     programs.bash = {
 
+      shellAliases = builtins.mapAttrs (name: lib.mkDefault) cfge.shellAliases;
+
       shellInit = ''
-        ${config.system.build.setEnvironment.text}
+        if [ -z "$__NIXOS_SET_ENVIRONMENT_DONE" ]; then
+            . ${config.system.build.setEnvironment}
+        fi
 
         ${cfge.shellInit}
       '';
@@ -134,14 +141,11 @@ in
       loginShellInit = cfge.loginShellInit;
 
       interactiveShellInit = ''
-        # Check the window size after every command.
-        shopt -s checkwinsize
-
         # Disable hashing (i.e. caching) of command lookups.
         set +h
 
         ${cfg.promptInit}
-        ${bashCompletion}
+        ${cfg.promptPluginInit}
         ${bashAliases}
 
         ${cfge.interactiveShellInit}
@@ -149,79 +153,87 @@ in
 
     };
 
-    environment.etc."profile".text =
-      ''
-        # /etc/profile: DO NOT EDIT -- this file has been generated automatically.
-        # This file is read for login shells.
+    environment.etc.profile.text = ''
+      # /etc/profile: DO NOT EDIT -- this file has been generated automatically.
+      # This file is read for login shells.
 
-        # Only execute this file once per shell.
-        if [ -n "$__ETC_PROFILE_SOURCED" ]; then return; fi
-        __ETC_PROFILE_SOURCED=1
+      # Only execute this file once per shell.
+      if [ -n "$__ETC_PROFILE_SOURCED" ]; then return; fi
+      __ETC_PROFILE_SOURCED=1
 
-        # Prevent this file from being sourced by interactive non-login child shells.
-        export __ETC_PROFILE_DONE=1
+      # Prevent this file from being sourced by interactive non-login child shells.
+      export __ETC_PROFILE_DONE=1
 
-        ${cfg.shellInit}
-        ${cfg.loginShellInit}
+      ${cfg.shellInit}
+      ${cfg.loginShellInit}
 
-        # Read system-wide modifications.
-        if test -f /etc/profile.local; then
+      # Read system-wide modifications.
+      if test -f /etc/profile.local; then
           . /etc/profile.local
-        fi
+      fi
 
-        if [ -n "''${BASH_VERSION:-}" ]; then
+      if [ -n "''${BASH_VERSION:-}" ]; then
           . /etc/bashrc
-        fi
-      '';
+      fi
+    '';
 
-    environment.etc."bashrc".text =
-      ''
-        # /etc/bashrc: DO NOT EDIT -- this file has been generated automatically.
+    environment.etc.bashrc.text = ''
+      # /etc/bashrc: DO NOT EDIT -- this file has been generated automatically.
 
-        # Only execute this file once per shell.
-        if [ -n "$__ETC_BASHRC_SOURCED" -o -n "$NOSYSBASHRC" ]; then return; fi
-        __ETC_BASHRC_SOURCED=1
+      # Only execute this file once per shell.
+      if [ -n "$__ETC_BASHRC_SOURCED" ] || [ -n "$NOSYSBASHRC" ]; then return; fi
+      __ETC_BASHRC_SOURCED=1
 
-        # If the profile was not loaded in a parent process, source
-        # it.  But otherwise don't do it because we don't want to
-        # clobber overridden values of $PATH, etc.
-        if [ -z "$__ETC_PROFILE_DONE" ]; then
-            . /etc/profile
-        fi
+      # If the profile was not loaded in a parent process, source
+      # it.  But otherwise don't do it because we don't want to
+      # clobber overridden values of $PATH, etc.
+      if [ -z "$__ETC_PROFILE_DONE" ]; then
+          . /etc/profile
+      fi
 
-        # We are not always an interactive shell.
-        if [ -n "$PS1" ]; then
+      # We are not always an interactive shell.
+      if [ -n "$PS1" ]; then
           ${cfg.interactiveShellInit}
-        fi
+      fi
 
-        # Read system-wide modifications.
-        if test -f /etc/bashrc.local; then
+      # Read system-wide modifications.
+      if test -f /etc/bashrc.local; then
           . /etc/bashrc.local
-        fi
-      '';
+      fi
+    '';
+
+    environment.etc.bash_logout.text = ''
+      # /etc/bash_logout: DO NOT EDIT -- this file has been generated automatically.
+
+      # Only execute this file once per shell.
+      if [ -n "$__ETC_BASHLOGOUT_SOURCED" ] || [ -n "$NOSYSBASHLOGOUT" ]; then return; fi
+      __ETC_BASHLOGOUT_SOURCED=1
+
+      ${cfg.logout}
+
+      # Read system-wide modifications.
+      if test -f /etc/bash_logout.local; then
+          . /etc/bash_logout.local
+      fi
+    '';
 
     # Configuration for readline in bash. We use "option default"
     # priority to allow user override using both .text and .source.
-    environment.etc."inputrc".source = mkOptionDefault ./inputrc;
+    environment.etc.inputrc.source = lib.mkOptionDefault ./inputrc;
 
-    users.defaultUserShell = mkDefault pkgs.bashInteractive;
+    users.defaultUserShell = lib.mkDefault pkgs.bashInteractive;
 
-    environment.pathsToLink = optionals cfg.enableCompletion [
+    environment.pathsToLink = lib.optionals cfg.completion.enable [
       "/etc/bash_completion.d"
       "/share/bash-completion"
     ];
 
-    environment.systemPackages = optional cfg.enableCompletion
-      pkgs.nix-bash-completions;
-
-    environment.shells =
-      [ "/run/current-system/sw/bin/bash"
-        "/var/run/current-system/sw/bin/bash"
-        "/run/current-system/sw/bin/sh"
-        "/var/run/current-system/sw/bin/sh"
-        "${pkgs.bashInteractive}/bin/bash"
-        "${pkgs.bashInteractive}/bin/sh"
-      ];
+    environment.shells = [
+      "/run/current-system/sw/bin/bash"
+      "/run/current-system/sw/bin/sh"
+      "${pkgs.bashInteractive}/bin/bash"
+      "${pkgs.bashInteractive}/bin/sh"
+    ];
 
   };
 

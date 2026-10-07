@@ -1,48 +1,51 @@
-{ lib
-, buildPythonPackage
-, pythonOlder
-, fetchPypi
-, hypothesis
-, pytestcache
-, pytestflakes
-, pytestpep8
-, pytest
-, glibcLocales
-, mock ? null
-, pathlib ? null
+{
+  lib,
+  buildPythonPackage,
+  fastnumbers,
+  fetchPypi,
+  glibcLocales,
+  hypothesis,
+  pyicu,
+  pytest-mock,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "natsort";
-  version = "5.2.0";
-
-  checkInputs = [
-    hypothesis
-    pytestcache
-    pytestflakes
-    pytestpep8
-    pytest
-    glibcLocales
-  ]
-  # pathlib was made part of standard library in 3.5:
-  ++ (lib.optionals (pythonOlder "3.4") [ pathlib ])
-  # based on testing-requirements.txt:
-  ++ (lib.optionals (pythonOlder "3.3") [ mock ]);
+  version = "8.4.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "c960082d2145b04723041c4b85092546560538e29664dd197a1344d5b090bc91";
+    hash = "sha256-RTEsSg5VB1k9oZPe3QSrsUaSU7YB7K9jRFrYDwoepYE=";
   };
 
-  # testing based on project's tox.ini
-  checkPhase = ''
-    pytest --doctest-modules natsort
-    pytest --flakes --pep8
-  '';
+  propagatedBuildInputs = [
+    fastnumbers
+    pyicu
+  ];
+
+  nativeCheckInputs = [
+    glibcLocales
+    hypothesis
+    pytest-mock
+    pytestCheckHook
+  ];
+
+  disabledTests = [
+    # timing sensitive test
+    # hypothesis.errors.DeadlineExceeded: Test took 524.23ms, which exceeds the deadline of 200.00ms
+    "test_string_component_transform_factory"
+  ];
+
+  pythonImportsCheck = [ "natsort" ];
 
   meta = {
-    description = "Natural sorting for python";
-    homepage = https://github.com/SethMMorton/natsort;
+    description = "Natural sorting for Python";
+    mainProgram = "natsort";
+    homepage = "https://github.com/SethMMorton/natsort";
+    changelog = "https://github.com/SethMMorton/natsort/blob/${version}/CHANGELOG.md";
     license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

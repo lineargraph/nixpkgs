@@ -1,38 +1,35 @@
-{ stdenv, fetchurl, ocaml, findlib }:
+{
+  lib,
+  fetchurl,
+  fetchpatch,
+  buildDunePackage,
+  ocaml,
+  stdlib-shims,
+}:
 
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-facile-${version}";
-
-  version = "1.1.3";
+buildDunePackage (finalAttrs: {
+  pname = "facile";
+  version = "1.1.4";
 
   src = fetchurl {
-    url = "http://opti.recherche.enac.fr/facile/distrib/facile-${version}.tar.gz";
-    sha256 = "1v4apqcw4gm36ph5xwf1wxaaza0ggvihvgsdslnf33fa1pdkvdjw";
+    url = "https://github.com/Emmanuel-PLF/facile/releases/download/${finalAttrs.version}/facile-${finalAttrs.version}.tbz";
+    sha256 = "0jqrwmn6fr2vj2rrbllwxq4cmxykv7zh0y4vnngx29f5084a04jp";
   };
 
-  dontAddPrefix = 1;
+  patches = fetchpatch {
+    url = "https://patch-diff.githubusercontent.com/raw/Emmanuel-PLF/facile/pull/4.patch";
+    excludes = [ "Makefile" ];
+    hash = "sha256-syZO3lzuHxE2Y4yUaS+XgAQUFtLrENy2MwyWzPygfdg=";
+  };
 
-  buildInputs = [ ocaml findlib ];
+  propagatedBuildInputs = [ stdlib-shims ];
 
-  createFindlibDestdir = true;
-
-  installFlags = [ "FACILEDIR=$(OCAMLFIND_DESTDIR)/facile" ];
-
-  postInstall = ''
-    cat > $OCAMLFIND_DESTDIR/facile/META <<EOF
-    version = "${version}"
-    name = "facile"
-    description = "A Functional Constraint Library"
-    requires = ""
-    archive(byte) = "facile.cma"
-    archive(native) = "facile.cmxa"
-    EOF
-  '';
+  doCheck = true;
 
   meta = {
     homepage = "http://opti.recherche.enac.fr/facile/";
-    license = stdenv.lib.licenses.lgpl21Plus;
-    description = "A Functional Constraint Library";
-    platforms = stdenv.lib.platforms.unix;
+    license = lib.licenses.lgpl21Plus;
+    description = "Functional Constraint Library";
+    broken = lib.versionAtLeast ocaml.version "5.0";
   };
-}
+})

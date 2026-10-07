@@ -1,22 +1,40 @@
-{ stdenv, buildPythonPackage, fetchPypi, pbr, six, argparse }:
+{
+  lib,
+  buildPythonPackage,
+  callPackage,
+  fetchPypi,
+  pbr,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "stevedore";
-  version = "1.28.0";
-  name = "${pname}-${version}";
+  version = "5.9.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "f1c7518e7b160336040fee272174f1f7b29a46febb3632502a8f2055f973d60b";
+    hash = "sha256-6XomZ5I+/akm6HE/3mpzYW32ghCjy8bwK0iWe2dv2L8=";
   };
 
+  build-system = [
+    pbr
+    setuptools
+  ];
+
+  # Checks moved to 'passthru.tests' to workaround infinite recursion
   doCheck = false;
 
-  propagatedBuildInputs = [ pbr six argparse ];
+  passthru.tests = {
+    tests = callPackage ./tests.nix { };
+  };
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "stevedore" ];
+
+  meta = {
     description = "Manage dynamic plugins for Python applications";
-    homepage = https://pypi.python.org/pypi/stevedore;
-    license = licenses.asl20;
+    homepage = "https://github.com/openstack/stevedore";
+    license = lib.licenses.asl20;
+    teams = [ lib.teams.openstack ];
   };
 }

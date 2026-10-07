@@ -1,25 +1,39 @@
-{ stdenv, buildPythonPackage, fetchPypi,
-  six, pytest, pytestrunner, pytestcov, coverage
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  setuptools,
+  six,
 }:
+
 buildPythonPackage rec {
   pname = "libais";
   version = "0.17";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0pyka09h8nb0vlzh14npq4nxmzg1046lr3klgn97dsf5k0iflapb";
+    hash = "sha256-6yrqIpjF6XaSfXSOTA0B4f3aLcHXkgA/3WBZBBNQ018=";
   };
+
+  build-system = [ setuptools ];
+
+  dependencies = [ six ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   # data files missing
   doCheck = false;
 
-  checkInputs = [ pytest pytestrunner pytestcov coverage ];
-  propagatedBuildInputs = [ six ];
+  pythonImportsCheck = [ "ais" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/schwehr/libais;
+  meta = {
     description = "Library for decoding maritime Automatic Identification System messages";
-    license = licenses.asl20;
-    platforms = platforms.linux;  # It currently fails to build on darwin
+    homepage = "https://github.com/schwehr/libais";
+    changelog = "https://github.com/schwehr/libais/blob/master/Changelog.md";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
+    platforms = lib.platforms.unix;
   };
 }

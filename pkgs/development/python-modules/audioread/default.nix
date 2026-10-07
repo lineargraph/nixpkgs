@@ -1,24 +1,41 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  poetry-core,
+  standard-aifc,
+  standard-sunau,
+  ffmpeg-headless,
+  pytestCheckHook,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "audioread";
-  name = "${pname}-${version}";
-  version = "2.1.5";
+  version = "3.1.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "36c3b118f097c58ba073b7d040c4319eff200756f094295677567e256282d0d7";
+  src = fetchFromGitHub {
+    owner = "sampsyo";
+    repo = "audioread";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-QvgwjUGuzeHH69YAdZdImjMT+9t4YxAukbuZKk0lBro=";
   };
 
-  # No tests, need to disable or py3k breaks
-  doCheck = false;
+  build-system = [ poetry-core ];
+
+  dependencies = [
+    standard-aifc
+    standard-sunau
+  ];
+
+  nativeCheckInputs = [
+    ffmpeg-headless
+    pytestCheckHook
+  ];
 
   meta = {
     description = "Cross-platform audio decoding";
     homepage = "https://github.com/sampsyo/audioread";
     license = lib.licenses.mit;
   };
-}
+})

@@ -1,24 +1,25 @@
 # This module contains the basic configuration for building a NixOS
 # installation CD.
-
-{ config, lib, pkgs, ... }:
-
-with lib;
-
 {
-  imports =
-    [ ./iso-image.nix
+  config,
+  lib,
+  options,
+  pkgs,
+  ...
+}:
+{
+  imports = [
+    ./iso-image.nix
 
-      # Profiles of this basic installation CD.
-      ../../profiles/all-hardware.nix
-      ../../profiles/base.nix
-      ../../profiles/installation-device.nix
-    ];
+    # Profiles of this basic installation CD.
+    ../../profiles/base.nix
+    ../../profiles/installation-device.nix
+  ];
 
-  # ISO naming.
-  isoImage.isoName = "${config.isoImage.isoBaseName}-${config.system.nixos.label}-${pkgs.stdenv.system}.iso";
+  hardware.enableAllHardware = true;
 
-  isoImage.volumeID = substring 0 11 "NIXOS_ISO";
+  # Adds terminus_font for people with HiDPI displays
+  console.packages = options.console.packages.default ++ [ pkgs.terminus_font ];
 
   # EFI booting
   isoImage.makeEfiBootable = true;
@@ -29,8 +30,28 @@ with lib;
   # Add Memtest86+ to the CD.
   boot.loader.grub.memtest86.enable = true;
 
-  # Allow the user to log in as root without a password.
-  users.extraUsers.root.initialHashedPassword = "";
+  # An installation media cannot tolerate a host config defined file
+  # system layout on a fresh machine, before it has been formatted.
+  swapDevices = lib.mkImageMediaOverride [ ];
+  fileSystems = lib.mkImageMediaOverride config.lib.isoFileSystems;
+  boot.initrd.luks.devices = lib.mkImageMediaOverride { };
 
-  system.nixos.stateVersion = mkDefault "18.03";
+  boot.postBootCommands = ''
+    for o in $(</proc/cmdline); do
+      case "$o" in
+        live.nixos.passwd=*)
+          set -- $(IFS==; echo $o)
+          echo "nixos:$2" | ${pkgs.shadow}/bin/chpasswd
+          ;;
+      esac
+    done
+  '';
+
+  environment.defaultPackages = with pkgs; [
+    rsync
+  ];
+
+  programs.git.enable = lib.mkDefault true;
+
+  system.stateVersion = lib.mkDefault lib.trivial.release;
 }

@@ -1,30 +1,91 @@
-{ lib
-, fetchPypi
-, buildPythonPackage
-, astropy
-, radio_beam
-, pytest }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  setuptools,
+  setuptools-scm,
+
+  # dependencies
+  astropy,
+  casa-formats-io,
+  dask,
+  joblib,
+  numpy,
+  packaging,
+  radio-beam,
+  tqdm,
+
+  # tests
+  aplpy,
+  pytest-astropy,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "spectral-cube";
-  version = "0.4.3";
+  version = "0.6.7";
+  pyproject = true;
 
-  doCheck = false; # the tests requires several pytest plugins that are not in nixpkgs
-
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "057g3mzlg5cy4wg2hh3p6gssn93rs6i7pswzhldvcq4k8m8hsl3b";
+  src = fetchFromGitHub {
+    owner = "radio-astro-tools";
+    repo = "spectral-cube";
+    tag = "v${version}";
+    hash = "sha256-l5r7oeWr/JrmGOmUo4po2VlGldh8y7E3ufd+Gw1/JmM=";
   };
 
-  propagatedBuildInputs = [ astropy radio_beam pytest ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
+
+  dependencies = [
+    astropy
+    casa-formats-io
+    dask
+    joblib
+    numpy
+    packaging
+    radio-beam
+    tqdm
+  ]
+  ++ dask.optional-dependencies.array;
+
+  nativeCheckInputs = [
+    aplpy
+    pytest-astropy
+    pytestCheckHook
+  ];
+
+  # Tests must be run in the build directory.
+  preCheck = ''
+    cd build/lib
+  '';
+
+  disabledTests = lib.optionals stdenv.hostPlatform.isDarwin [
+    # Flaky: AssertionError: assert diffvals.max()*u.B <= 1*u.MB
+    "test_reproject_3D_memory"
+  ];
+
+  disabledTestPaths = [
+    # This test fails with "Passing a non-Collection iterable to parametrize is deprecated".
+    "spectral_cube/tests/test_casafuncs.py"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    # On x86_darwin, this test fails with "Fatal Python error: Aborted"
+    # when sandbox = true.
+    "spectral_cube/tests/test_visualization.py"
+  ];
+
+  pythonImportsCheck = [ "spectral_cube" ];
 
   meta = {
     description = "Library for reading and analyzing astrophysical spectral data cubes";
-    homepage = http://radio-astro-tools.github.io;
+    homepage = "https://spectral-cube.readthedocs.io";
+    changelog = "https://github.com/radio-astro-tools/spectral-cube/releases/tag/v${version}";
     license = lib.licenses.bsd3;
-    platforms = lib.platforms.all;
     maintainers = with lib.maintainers; [ smaret ];
   };
 }
-
-

@@ -1,10 +1,23 @@
-{ buildPythonPackage, stdenv, fetchFromGitHub, six, python-axolotl, pytest
-, isPy3k
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  isPy3k,
+  fetchFromGitHub,
+  setuptools,
+  appdirs,
+  consonance,
+  protobuf,
+  python-axolotl,
+  six,
+  pyasyncore,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "yowsup";
-  version = "2.5.7";
+  version = "3.3.0";
+  pyproject = true;
 
   # The Python 2.x support of this package is incompatible with `six==1.11`:
   # https://github.com/tgalal/yowsup/issues/2416#issuecomment-365113486
@@ -13,23 +26,37 @@ buildPythonPackage rec {
   src = fetchFromGitHub {
     owner = "tgalal";
     repo = "yowsup";
-    rev = "v${version}";
-    sha256 = "1p0hdj5x38v2cxjnhdnqcnp5g7la57mbi365m0z83wa01x2n73w6";
+    tag = "v${version}";
+    sha256 = "1pz0r1gif15lhzdsam8gg3jm6zsskiv2yiwlhaif5rl7lv3p0v7q";
   };
 
-  checkInputs = [ pytest ];
-  checkPhase = ''
-    HOME=$(mktemp -d) py.test yowsup
-  '';
+  pythonRelaxDeps = true;
+  pythonRemoveDeps = [ "argparse" ];
 
-  patches = [ ./argparse-dependency.patch ];
+  env = {
+    # make protobuf compatible with old versions
+    # https://developers.google.com/protocol-buffers/docs/news/2022-05-06#python-updates
+    PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION = "python";
+  };
 
-  propagatedBuildInputs = [ six python-axolotl ];
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  dependencies = [
+    appdirs
+    consonance
+    protobuf
+    python-axolotl
+    six
+  ]
+  ++ lib.optionals (!pythonOlder "3.12") [ pyasyncore ];
+
+  meta = {
     homepage = "https://github.com/tgalal/yowsup";
-    description = "The python WhatsApp library";
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ ma27 ];
+    description = "Python WhatsApp library";
+    mainProgram = "yowsup-cli";
+    license = lib.licenses.gpl3Plus;
+    maintainers = [ ];
   };
 }

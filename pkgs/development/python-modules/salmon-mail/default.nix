@@ -1,23 +1,68 @@
-{ stdenv, buildPythonPackage, fetchPypi, pythonOlder, nose, dnspython
-,  chardet, lmtpd, pythondaemon, six, jinja2, mock }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  dnspython,
+  chardet,
+  python-daemon,
+  jinja2,
+  click,
+  unittestCheckHook,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "salmon-mail";
-  version = "3.0.0";
+  version = "3.3.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1smggsnkwiqy8zjq604dkm5g0np27pdnj3szsbn8v4ja84nncq18";
+  src = fetchFromGitHub {
+    owner = "moggers87";
+    repo = "salmon";
+    tag = version;
+    hash = "sha256-ysBO/ridfy7YPoTsVwAxar9UvfM/qxrx2dp0EtDNLvE=";
   };
 
-  checkInputs = [ nose jinja2 mock ];
-  propagatedBuildInputs = [ chardet dnspython lmtpd pythondaemon six ];
+  patches = [
+    # Fix test_main expecting exit code 0 from click group with no args (click 8.2 returns 2).
+    ./test-main-click-8.2-exit-code.patch
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://salmon-mail.readthedocs.org/;
+  nativeCheckInputs = [
+    jinja2
+    unittestCheckHook
+  ];
+
+  build-system = [ setuptools ];
+
+  dependencies = [
+    chardet
+    click
+    dnspython
+    python-daemon
+  ];
+
+  pythonImportsCheck = [
+    "salmon"
+    "salmon.handlers"
+  ];
+
+  # Darwin tests fail without this. See:
+  # https://github.com/NixOS/nixpkgs/pull/82166#discussion_r399909846
+  __darwinAllowLocalNetworking = true;
+
+  # The tests use salmon executable installed by salmon itself so we need to add
+  # that to PATH
+  preCheck = ''
+    export PATH=$out/bin:$PATH
+  '';
+
+  meta = {
+    homepage = "https://salmon-mail.readthedocs.org/";
+    changelog = "https://github.com/moggers87/salmon/blob/${src.rev}/CHANGELOG.rst";
     description = "Pythonic mail application server";
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ jluttine ];
+    mainProgram = "salmon";
+    license = lib.licenses.gpl3Only;
+    maintainers = with lib.maintainers; [ jluttine ];
   };
 }

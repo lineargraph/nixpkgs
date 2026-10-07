@@ -1,11 +1,21 @@
-{ stdenv, buildPackages, fetchurl, kernel, pciutils, gettext }:
+{
+  lib,
+  stdenv,
+  buildPackages,
+  kernel,
+  pciutils,
+  gettext,
+  which,
+}:
 
 stdenv.mkDerivation {
-  name = "cpupower-${kernel.version}";
+  pname = "cpupower";
+  inherit (kernel) version src patches;
 
-  src = kernel.src;
-
-  nativeBuildInputs = [ gettext ];
+  nativeBuildInputs = [
+    gettext
+    which
+  ];
   buildInputs = [ pciutils ];
 
   postPatch = ''
@@ -15,25 +25,33 @@ stdenv.mkDerivation {
     sed -i 's,/usr/bin/install,${buildPackages.coreutils}/bin/install,' Makefile
   '';
 
-  makeFlags = [ "CROSS=${stdenv.cc.targetPrefix}" ];
-
-  installFlags = [
-    "bindir=$(out)/bin"
-    "sbindir=$(out)/sbin"
-    "mandir=$(out)/share/man"
-    "includedir=$(out)/include"
-    "libdir=$(out)/lib"
-    "localedir=$(out)/share/locale"
-    "docdir=$(out)/share/doc/cpupower"
-    "confdir=$(out)/etc"
+  makeFlags = [
+    "CROSS=${stdenv.cc.targetPrefix}"
+    "CC=${stdenv.cc.targetPrefix}cc"
+    "LD=${stdenv.cc.targetPrefix}cc"
   ];
+
+  installFlags = lib.mapAttrsToList (n: v: "${n}dir=${placeholder "out"}/${v}") {
+    bin = "bin";
+    sbin = "sbin";
+    man = "share/man";
+    include = "include";
+    lib = "lib";
+    libexec = "libexec";
+    locale = "share/locale";
+    doc = "share/doc/cpupower";
+    conf = "etc";
+    bash_completion_ = "share/bash-completion/completions";
+    unit = "lib/systemd/system";
+  };
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "Tool to examine and tune power saving features";
-    homepage = https://www.kernel.org/;
-    license = licenses.gpl2;
-    platforms = platforms.linux;
+    homepage = "https://www.kernel.org/";
+    license = lib.licenses.gpl2Only;
+    mainProgram = "cpupower";
+    platforms = lib.platforms.linux;
   };
 }

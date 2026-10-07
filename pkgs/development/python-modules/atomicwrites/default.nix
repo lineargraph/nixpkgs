@@ -1,17 +1,31 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytest,
+  setuptools,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "atomicwrites";
-  version = "1.1.5";
+  version = "1.4.1";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "240831ea22da9ab882b551b31d4225591e5e447a68c5e188db5b89ca1d487585";
+    inherit (finalAttrs) pname version;
+    hash = "sha256-gbLJBxpJNnp/dwFw5e7Iy2ZWfPu8jHPSDOXKSo1xzxE=";
   };
 
-  meta = with stdenv.lib; {
+  build-system = [ setuptools ];
+
+  # Tests depend on pytest but atomicwrites is a dependency of pytest
+  doCheck = false;
+  nativeCheckInputs = [ pytest ];
+
+  meta = {
     description = "Atomic file writes on POSIX";
-    homepage = https://pypi.python.org/pypi/atomicwrites;
-    maintainers = with maintainers; [ matthiasbeyer ];
+    homepage = "https://pypi.org/project/atomicwrites/";
+    maintainers = with lib.maintainers; [ matthiasbeyer ];
+    license = lib.licenses.mit;
   };
-}
+})

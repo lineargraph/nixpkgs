@@ -1,42 +1,72 @@
-{ stdenv, makeWrapper, buildOcaml, fetchFromGitHub,
-  ocaml, opam, jbuilder, menhir, merlin_extend, ppx_tools_versioned, utop }:
+{
+  lib,
+  callPackage,
+  buildDunePackage,
+  fetchurl,
+  fix,
+  menhir,
+  menhirLib,
+  menhirSdk,
+  merlin-extend,
+  ppxlib,
+  cppo,
+  cmdliner,
+  dune-build-info,
+}:
 
-buildOcaml rec {
-  name = "reason";
-  version = "3.0.4";
+let
+  param =
+    if lib.versionAtLeast ppxlib.version "0.36" then
+      {
+        version = "3.18.0";
+        hash = "sha256-T7pqFvVFUbeOHZDrLBZ/bulkyvU4O8LS+TzszH5k3EQ=";
+      }
+    else
+      {
+        version = "3.15.0";
 
-  src = fetchFromGitHub {
-    owner = "facebook";
-    repo = "reason";
-    rev = version;
-    sha256 = "15qhx85him5rr4j0ygj3jh3qv9ijrn82ibr9scbn0qrnn43kj047";
+        hash = "sha256-7D0gJfQ5Hw0riNIFPmJ6haoa3dnFEyDp5yxpDgX7ZqY=";
+      };
+in
+
+buildDunePackage rec {
+  pname = "reason";
+  inherit (param) version;
+
+  minimalOCamlVersion = "4.11";
+
+  src = fetchurl {
+    url = "https://github.com/reasonml/reason/releases/download/${version}/reason-${version}.tbz";
+    inherit (param) hash;
   };
 
-  propagatedBuildInputs = [ menhir merlin_extend ppx_tools_versioned ];
+  nativeBuildInputs = [
+    menhir
+    cppo
+  ];
 
-  buildInputs = [ makeWrapper opam jbuilder utop menhir ];
+  buildInputs = [
+    dune-build-info
+    fix
+    menhirSdk
+    merlin-extend
+  ]
+  ++ lib.optional (lib.versionAtLeast version "3.17") cmdliner;
 
-  buildFlags = [ "build" ]; # do not "make tests" before reason lib is installed
+  propagatedBuildInputs = [
+    ppxlib
+    menhirLib
+  ];
 
-  createFindlibDestdir = true;
+  passthru.tests = {
+    hello = callPackage ./tests/hello { };
+  };
 
-  postPatch = ''
-    substituteInPlace src/reasonbuild/myocamlbuild.ml \
-      --replace "refmt --print binary" "$out/bin/refmt --print binary"
-  '';
-
-  installPhase = ''
-    ${jbuilder.installPhase}
-
-    wrapProgram $out/bin/rtop \
-      --prefix PATH : "${utop}/bin" \
-      --set OCAMLPATH $out/lib/ocaml/${ocaml.version}/site-lib:$OCAMLPATH
-  '';
-
-  meta = with stdenv.lib; {
-    homepage = https://reasonml.github.io/;
-    description = "Facebook's friendly syntax to OCaml";
-    license = licenses.bsd3;
-    maintainers = [ maintainers.volth ];
+  meta = {
+    homepage = "https://reasonml.github.io/";
+    downloadPage = "https://github.com/reasonml/reason";
+    description = "User-friendly programming language built on OCaml";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

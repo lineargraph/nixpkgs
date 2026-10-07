@@ -1,29 +1,91 @@
-{ mkDerivation, fetchzip, async, base, bytestring, hpack, http-conduit
-, lens, lens-aeson, optparse-applicative, retry, stdenv, text, unix
-, unordered-containers, utf8-string
+{
+  mkDerivation,
+  HsOpenSSL,
+  QuickCheck,
+  aeson,
+  async,
+  base,
+  bytestring,
+  containers,
+  crypton-connection,
+  directory,
+  hpack,
+  hspec,
+  hspec-discover,
+  hspec-expectations,
+  http-client,
+  http-client-openssl,
+  http-conduit,
+  lib,
+  megaparsec,
+  network-uri,
+  optparse-applicative,
+  parser-combinators,
+  quickcheck-instances,
+  retry,
+  text,
+  unix,
+  unordered-containers,
+  utf8-string,
+  dotenv,
+  fetchFromGitHub,
 }:
-
 mkDerivation rec {
   pname = "vaultenv";
-  version = "0.5.3";
+  version = "0.19.0";
 
-  src = fetchzip {
-    url = "https://github.com/channable/vaultenv/archive/v${version}.tar.gz";
-    sha256 = "1kxq2pp8l8xf7xwjyd9cwyi7z192013s6psq5fk8jrkkhrk8z3li";
+  src = fetchFromGitHub {
+    owner = "channable";
+    repo = "vaultenv";
+    rev = "v${version}";
+    hash = "sha256-x3c9TKrCF3tsEFofYAXfK6DWdirEUxWWTttNqU/sJSc=";
   };
 
   buildTools = [ hpack ];
-  preConfigure = "hpack .";
+
+  prePatch = ''
+    substituteInPlace package.yaml \
+        --replace -Werror ""
+    hpack
+  '';
 
   isLibrary = false;
   isExecutable = true;
   executableHaskellDepends = [
-    async base bytestring http-conduit lens lens-aeson
-    optparse-applicative retry text unix unordered-containers
+    HsOpenSSL
+    aeson
+    async
+    base
+    bytestring
+    containers
+    crypton-connection
+    directory
+    dotenv
+    http-client
+    http-client-openssl
+    http-conduit
+    megaparsec
+    network-uri
+    optparse-applicative
+    optparse-applicative
+    parser-combinators
+    retry
+    text
+    unix
+    unordered-containers
     utf8-string
   ];
-  homepage = "https://github.com/channable/vaultenv";
+  testHaskellDepends = executableHaskellDepends ++ [
+    QuickCheck
+    directory
+    hspec
+    hspec-discover
+    hspec-expectations
+    quickcheck-instances
+  ];
+  homepage = "https://github.com/channable/vaultenv#readme";
   description = "Runs processes with secrets from HashiCorp Vault";
-  license = stdenv.lib.licenses.bsd3;
-  maintainers = with stdenv.lib.maintainers; [ lnl7 ];
+  license = lib.licenses.bsd3;
+  maintainers = [
+  ];
 }

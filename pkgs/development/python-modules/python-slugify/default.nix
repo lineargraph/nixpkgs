@@ -1,24 +1,45 @@
-{ stdenv, fetchPypi, buildPythonPackage, unidecode, regex, isPy3k }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  setuptools,
+  text-unidecode,
+  unidecode,
+}:
 
 buildPythonPackage rec {
-    name = "${pname}-${version}";
-    pname = "python-slugify";
-    version = "1.2.5";
+  pname = "python-slugify";
+  version = "8.0.4";
+  pyproject = true;
 
-    src = fetchPypi {
-      inherit pname version;
-      sha256 = "5dbb360b882b2dabe0471a1a92f604504d83c2a73c71f2098d004ab62e695534";
-    };
-    doCheck = !isPy3k;
-    # (only) on python3 unittest loader (loadTestsFromModule) fails
+  src = fetchFromGitHub {
+    owner = "un33k";
+    repo = "python-slugify";
+    tag = "v${version}";
+    hash = "sha256-zReUMIkItnDot3XyYCoPUNHrrAllbClWFYcxdTy3A30=";
+  };
 
-    propagatedBuildInputs = [ unidecode regex ];
+  nativeBuildInputs = [ setuptools ];
 
-    meta = with stdenv.lib; {
-      homepage = https://github.com/un33k/python-slugify;
-      description = "A Python Slugify application that handles Unicode";
-      license = licenses.mit;
-      platforms = platforms.all;
-      maintainers = with maintainers; [ vrthra ];
-    };
+  propagatedBuildInputs = [ text-unidecode ];
+
+  optional-dependencies = {
+    unidecode = [ unidecode ];
+  };
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  enabledTestPaths = [ "test.py" ];
+
+  pythonImportsCheck = [ "slugify" ];
+
+  meta = {
+    description = "Python Slugify application that handles Unicode";
+    mainProgram = "slugify";
+    homepage = "https://github.com/un33k/python-slugify";
+    changelog = "https://github.com/un33k/python-slugify/blob/v${version}/CHANGELOG.md";
+    license = lib.licenses.mit;
+    maintainers = [ ];
+  };
 }

@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
@@ -15,6 +20,7 @@ in
   options = {
 
     networking.tcpcrypt.enable = mkOption {
+      type = types.bool;
       default = false;
       description = ''
         Whether to enable opportunistic TCP encryption. If the other end
@@ -29,8 +35,7 @@ in
 
   config = mkIf cfg.enable {
 
-    users.extraUsers = singleton {
-      name = "tcpcryptd";
+    users.users.tcpcryptd = {
       uid = config.ids.uids.tcpcryptd;
       description = "tcpcrypt daemon user";
     };
@@ -41,7 +46,11 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
 
-      path = [ pkgs.iptables pkgs.tcpcrypt pkgs.procps ];
+      path = [
+        pkgs.iptables
+        pkgs.tcpcrypt
+        pkgs.procps
+      ];
 
       preStart = ''
         mkdir -p /run/tcpcryptd

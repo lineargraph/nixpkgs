@@ -1,26 +1,33 @@
-{ lib
-, pkgs
-, fetchPypi
-, buildPythonPackage
+{
+  lib,
+  attr,
+  fetchPypi,
+  stdenv,
+  buildPythonPackage,
+  setuptools,
 }:
 
-buildPythonPackage rec {
-    pname = "pyxattr";
-    version = "0.6.0";
-    name = pname + "-" + version;
+buildPythonPackage (finalAttrs: {
+  pname = "pyxattr";
+  version = "0.8.1";
+  pyproject = true;
 
-    src = fetchPypi {
-      inherit pname version;
-      sha256 = "1a3fqjlgbzq5hmc3yrnxxxl8nyn3rz2kfn17svbsahaq4gj0xl09";
-    };
+  src = fetchPypi {
+    inherit (finalAttrs) pname version;
+    hash = "sha256-SMV47PjqC9Q1GxdSRw4wGpCjdhx8IfAPlT3PbW+m7lo=";
+  };
 
-    # IOError: [Errno 95] Operation not supported (expected)
-    doCheck = false;
+  build-system = [ setuptools ];
 
-    buildInputs = with pkgs; [ attr ];
+  # IOError: [Errno 95] Operation not supported (expected)
+  doCheck = false;
 
-    meta = with lib; {
-      description = "A Python extension module which gives access to the extended attributes for filesystem objects available in some operating systems";
-      license = licenses.lgpl21Plus;
-    };
-}
+  buildInputs = lib.optional (lib.meta.availableOn stdenv.buildPlatform attr) attr;
+
+  meta = {
+    description = "Python extension module which gives access to the extended attributes for filesystem objects available in some operating systems";
+    license = lib.licenses.lgpl21Plus;
+    # Darwin doesn't need `attr` for this.
+    platforms = lib.platforms.linux ++ lib.platforms.darwin;
+  };
+})

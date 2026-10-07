@@ -1,15 +1,11 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, base
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  lib,
 }:
-build-idris-package  {
-  name = "fsm";
+build-idris-package {
+  pname = "fsm";
   version = "2017-04-16";
-
-  idrisDeps = [ prelude base ];
 
   src = fetchFromGitHub {
     owner = "ctford";
@@ -20,9 +16,8 @@ build-idris-package  {
 
   meta = {
     description = "Comonads for Idris";
-    homepage = https://github.com/ctford/flying-spaghetti-monster;
+    homepage = "https://github.com/ctford/flying-spaghetti-monster";
     license = lib.licenses.bsd3;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

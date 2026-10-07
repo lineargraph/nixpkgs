@@ -1,22 +1,32 @@
-{ buildPythonPackage
-, lib
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  psutil,
 }:
 
 buildPythonPackage rec {
   pname = "portpicker";
-  version = "1.2.0";
-  name = "${pname}-${version}";
+  version = "1.6.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0c1lm3i4yngi1qclb0hny19vwjd2si5k2qni30wcrnxqqasqak1y";
+    hash = "sha256-vVB/1vlvZe4CeB8uZ06dxsmbv6bjw5mS45FiBMnUMfo=";
   };
 
+  nativeBuildInputs = [ setuptools ];
+
+  propagatedBuildInputs = [ psutil ];
+
+  pythonImportsCheck = [ "portpicker" ];
+
   meta = {
-    description = "A library to choose unique available network ports.";
+    description = "Library to choose unique available network ports";
+    mainProgram = "portserver.py";
     homepage = "https://github.com/google/python_portpicker";
     license = lib.licenses.asl20;
-    maintainers = with lib.maintainers; [ danharaj ];
+    maintainers = [ ];
   };
 }

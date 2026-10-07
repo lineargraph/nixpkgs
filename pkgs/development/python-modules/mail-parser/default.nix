@@ -1,41 +1,57 @@
-{ lib, buildPythonPackage, python, pythonOlder, glibcLocales, fetchFromGitHub, ipaddress, six, simplejson }:
+{
+  lib,
+  buildPythonPackage,
+  python,
+  extract-msg,
+  fetchFromGitHub,
+  hatchling,
+  pytest-cov-stub,
+  pytest-mock,
+  pytestCheckHook,
+}:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "mail-parser";
-  version = "3.3.1";
+  version = "4.8.0";
+  pyproject = true;
 
-  # no tests in PyPI tarball
   src = fetchFromGitHub {
     owner = "SpamScope";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "1b1v61zwgdx2xjzds3hp6bv53yq424hhlrhf445n4faj1l0c4lkg";
+    repo = "mail-parser";
+    tag = finalAttrs.version;
+    hash = "sha256-eiLnNTkBanoJkBthOLsblL0VEWNUKtGV1c2obMuUXJA=";
   };
 
-  LC_ALL = "en_US.utf-8";
+  build-system = [ hatchling ];
 
-  # ipaddress is part of the standard library of Python 3.3+
-  prePatch = lib.optionalString (!pythonOlder "3.3") ''
-    substituteInPlace requirements.txt \
-      --replace "ipaddress" ""
-  '';
+  optional-dependencies = {
+    outlook = [ extract-msg ];
+  };
 
-  nativeBuildInputs = [ glibcLocales ];
-  propagatedBuildInputs = [ simplejson six ] ++ lib.optional (pythonOlder "3.3") ipaddress;
+  pythonImportsCheck = [ "mailparser" ];
 
-  # Taken from .travis.yml
-  checkPhase = ''
-    ${python.interpreter} tests/test_main.py
+  nativeCheckInputs = [
+    pytest-cov-stub
+    pytest-mock
+    pytestCheckHook
+  ]
+  ++ lib.concatAttrValues finalAttrs.passthru.optional-dependencies;
+
+  # Taken from .github/workflows/main.yml
+  postCheck = ''
     ${python.interpreter} -m mailparser -v
     ${python.interpreter} -m mailparser -h
     ${python.interpreter} -m mailparser -f tests/mails/mail_malformed_3 -j
+    ${python.interpreter} -m mailparser -f tests/mails/mail_outlook_1 -j
     cat tests/mails/mail_malformed_3 | ${python.interpreter} -m mailparser -k -j
   '';
 
-  meta = with lib; {
-    description = "A mail parser for python 2 and 3";
-    homepage = https://github.com/SpamScope/mail-parser;
-    license = licenses.asl20;
-    maintainers = with maintainers; [ psyanticy ];
+  meta = {
+    changelog = "https://github.com/SpamScope/mail-parser/releases/tag/${finalAttrs.src.tag}";
+    description = "Mail parser for python 2 and 3";
+    mainProgram = "mail-parser";
+    homepage = "https://github.com/SpamScope/mail-parser";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ psyanticy ];
   };
-}
+})

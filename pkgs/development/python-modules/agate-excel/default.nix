@@ -1,22 +1,45 @@
-{ stdenv, fetchPypi, buildPythonPackage, agate, openpyxl, xlrd }:
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  setuptools,
+  agate,
+  openpyxl,
+  xlrd,
+  olefile,
+  pytestCheckHook,
+}:
 
-buildPythonPackage rec {
-    name = "${pname}-${version}";
-    pname = "agate-excel";
-    version = "0.2.2";
+buildPythonPackage (finalAttrs: {
+  pname = "agate-excel";
+  version = "0.4.2";
+  pyproject = true;
 
-    src = fetchPypi {
-      inherit pname version;
-      sha256 = "8923f71ee2b5b7b21e52fb314a769b28fb902f647534f5cbbb41991d8710f4c7";
-    };
+  src = fetchFromGitHub {
+    owner = "wireservice";
+    repo = "agate-excel";
+    tag = finalAttrs.version;
+    hash = "sha256-sKy7NaRhJ4KYOOUKuNs0SGutUn8XEmSeQFQ/57gTGCg=";
+  };
 
-    propagatedBuildInputs = [ agate openpyxl xlrd ];
+  build-system = [ setuptools ];
 
-    meta = with stdenv.lib; {
-      description = "Adds read support for excel files to agate";
-      homepage    = "https://github.com/wireservice/agate-excel";
-      license     = licenses.mit;
-      maintainers = with maintainers; [ vrthra ];
-    };
+  dependencies = [
+    agate
+    openpyxl
+    xlrd
+    olefile
+  ];
 
-}
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "agate" ];
+
+  meta = {
+    description = "Adds read support for excel files to agate";
+    homepage = "https://github.com/wireservice/agate-excel";
+    changelog = "https://github.com/wireservice/agate-excel/blob/${finalAttrs.src.tag}/CHANGELOG.rst";
+    license = lib.licenses.mit;
+    maintainers = [ ];
+  };
+})

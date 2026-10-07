@@ -1,35 +1,85 @@
-{ lib, buildPythonPackage, fetchPypi, isPy3k
-, pytest, pytestrunner, pbr, glibcLocales , pytestcov
-, requests, requests_oauthlib, requests_toolbelt, defusedxml
-, ipython
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  defusedxml,
+  flaky,
+  ipython,
+  keyring,
+  packaging,
+  pillow,
+  pyjwt,
+  pytestCheckHook,
+  pytest-cov-stub,
+  requests,
+  requests-futures,
+  requests-mock,
+  requests-oauthlib,
+  requests-toolbelt,
+  setuptools,
+  setuptools-scm,
+  typing-extensions,
 }:
 
 buildPythonPackage rec {
   pname = "jira";
-  version = "1.0.15";
+  version = "3.10.5";
+  pyproject = true;
 
-  PBR_VERSION = version;
-
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "20108a1d5b0dd058d5d4e0047f2d09ee06aaa413b22ca4d5c249e86167417fe8";
+  src = fetchFromGitHub {
+    owner = "pycontribs";
+    repo = "jira";
+    tag = version;
+    hash = "sha256-Gj9RmNJwmYQviXeNLL6WWFIO91jy6zY/s29Gy18lzyA=";
   };
 
-  buildInputs = [ glibcLocales pytest pytestcov pytestrunner pbr ];
-  propagatedBuildInputs = [ requests requests_oauthlib requests_toolbelt defusedxml pbr ipython ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
+
+  dependencies = [
+    defusedxml
+    packaging
+    requests
+    requests-oauthlib
+    requests-toolbelt
+    pillow
+    typing-extensions
+  ];
+
+  optional-dependencies = {
+    cli = [
+      ipython
+      keyring
+    ];
+    opt = [
+      # filemagic
+      pyjwt
+      # requests-jwt
+      # requests-keyberos
+    ];
+    async = [ requests-futures ];
+  };
+
+  nativeCheckInputs = [
+    flaky
+    pytestCheckHook
+    pytest-cov-stub
+    requests-mock
+  ];
+
+  pythonImportsCheck = [ "jira" ];
 
   # impure tests because of connectivity attempts to jira servers
   doCheck = false;
 
-  patches = [ ./sphinx-fix.patch ];
-
-  LC_ALL = "en_US.utf8";
-
-  disabled = !isPy3k;
-
-  meta = with lib; {
-    description = "This library eases the use of the JIRA REST API from Python.";
-    license = licenses.bsd2;
-    maintainers = with maintainers; [ globin ma27 ];
+  meta = {
+    description = "Library to interact with the JIRA REST API";
+    homepage = "https://github.com/pycontribs/jira";
+    changelog = "https://github.com/pycontribs/jira/releases/tag/${src.tag}";
+    license = lib.licenses.bsd2;
+    maintainers = [ ];
+    mainProgram = "jirashell";
   };
 }

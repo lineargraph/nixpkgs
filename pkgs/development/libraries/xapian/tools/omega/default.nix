@@ -1,21 +1,43 @@
-{ stdenv, fetchurl, pkgconfig, xapian, perl, pcre, zlib, libmagic }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  pkg-config,
+  xapian,
+  perl,
+  pcre2,
+  zlib,
+  libmagic,
+}:
 
 stdenv.mkDerivation rec {
-  name = "xapian-omega-${version}";
+  pname = "xapian-omega";
   inherit (xapian) version;
 
   src = fetchurl {
-    url = "http://oligarchy.co.uk/xapian/${version}/xapian-omega-${version}.tar.xz";
-    sha256 = "0zji8ckp4h5xdy2wbir3lvk680w1g1l4h5swmaxsx7ah12lkrjcr";
+    url = "https://oligarchy.co.uk/xapian/${version}/xapian-omega-${version}.tar.xz";
+    hash = "sha256-p9+2CN2LPqU93oUjbUdXloJgacTRJhieozp5M0myMXo=";
   };
 
-  buildInputs = [ xapian perl pcre zlib libmagic ];
-  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [
+    xapian
+    perl
+    pcre2
+    zlib
+    libmagic
+  ];
+  nativeBuildInputs = [ pkg-config ];
 
-  meta = with stdenv.lib; {
+  postInstall = ''
+    mkdir -p $out/share/omega
+    cp -r templates $out/share/omega
+  '';
+
+  meta = {
     description = "Indexer and CGI search front-end built on Xapian library";
-    homepage = http://xapian.org/;
-    license = licenses.gpl2Plus;
-    platforms = platforms.unix;
+    homepage = "https://xapian.org/";
+    changelog = "https://xapian.org/docs/xapian-omega-${version}/NEWS";
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.unix;
   };
 }

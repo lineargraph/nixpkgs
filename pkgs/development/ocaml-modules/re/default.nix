@@ -1,30 +1,51 @@
-{ stdenv, fetchzip, ocaml, findlib, ocamlbuild, ounit }:
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+  ocaml,
+  ounit,
+  ounit2,
+  seq,
+}:
 
-stdenv.mkDerivation rec {
-  name = "ocaml-re-${version}";
-  version = "1.7.1";
+let
+  version_sha =
+    if lib.versionAtLeast ocaml.version "4.12" then
+      {
+        version = "1.12.0";
+        hash = "sha256-oB8r8i9ywvSrq9jT52NeNcG/a8WkGtbVoAdFTdq60dQ=";
+      }
+    else if lib.versionAtLeast ocaml.version "4.08" then
+      {
+        version = "1.11.0";
+        hash = "sha256-AfwkR4DA9r5yrnlrH7dQ82feGGJP110H7nl4LtbfjU8=";
+      }
+    else
+      {
+        version = "1.9.0";
+        hash = "sha256:1gas4ky49zgxph3870nffzkr6y41kkpqp4nj38pz1gh49zcf12aj";
+      };
+in
 
-  src = fetchzip {
-    url = "https://github.com/ocaml/ocaml-re/archive/${version}.tar.gz";
-    sha256 = "1z2z4fjrpdbl0q50fdxvy3746w1vx6ybxcb0k81hqm1342nylbmw";
+buildDunePackage (finalAttrs: {
+  pname = "re";
+  version = version_sha.version;
+
+  minimalOCamlVersion = "4.02";
+
+  src = fetchurl {
+    url = "https://github.com/ocaml/ocaml-re/releases/download/${finalAttrs.version}/re-${finalAttrs.version}.tbz";
+    inherit (version_sha) hash;
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild ounit ];
-
-  configurePhase = "ocaml setup.ml -configure --prefix $out"
-  + stdenv.lib.optionalString doCheck " --enable-tests";
-  buildPhase = "ocaml setup.ml -build";
-  doCheck = !stdenv.lib.versionAtLeast ocaml.version "4.06";
-  checkPhase = "ocaml setup.ml -test";
-  installPhase = "ocaml setup.ml -install";
-
-  createFindlibDestdir = true;
+  propagatedBuildInputs = [ seq ];
+  doCheck = lib.versionAtLeast ocaml.version "4.08";
+  checkInputs = [ (if lib.versionAtLeast finalAttrs.version "1.12" then ounit2 else ounit) ];
 
   meta = {
-    homepage = https://github.com/ocaml/ocaml-re;
-    platforms = ocaml.meta.platforms or [];
+    homepage = "https://github.com/ocaml/ocaml-re";
     description = "Pure OCaml regular expressions, with support for Perl and POSIX-style strings";
-    license = stdenv.lib.licenses.lgpl2;
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
+    license = lib.licenses.lgpl2;
+    maintainers = with lib.maintainers; [ vbgl ];
   };
-}
+})

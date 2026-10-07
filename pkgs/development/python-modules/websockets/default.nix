@@ -1,26 +1,71 @@
-{ lib
-, fetchurl
-, buildPythonPackage
-, pythonOlder
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  unittestCheckHook,
+  pyprojectVersionPatchHook,
+  pythonAtLeast,
+  setuptools,
+  werkzeug,
 }:
 
-let
+buildPythonPackage rec {
   pname = "websockets";
-  version = "4.0.1";
-in buildPythonPackage rec {
-  name = "${pname}-${version}";
+  version = "16.1";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/${builtins.substring 0 1 pname}/${pname}/${name}.tar.gz";
-    sha256 = "da4d4fbe059b0453e726d6d993760065d69b823a27efc3040402a6fcfe6a1ed9";
+  src = fetchFromGitHub {
+    owner = "aaugustin";
+    repo = "websockets";
+    tag = version;
+    hash = "sha256-YbiDoL4edb6QGDOBRBJliRhEOs5UvZUgWO9f+ooyBcc=";
   };
 
-  disabled = pythonOlder "3.3";
-  doCheck = false; # protocol tests fail
+  nativeBuildInputs = [ pyprojectVersionPatchHook ];
+
+  build-system = [ setuptools ];
+
+  disabledTests = [
+    # Disables tests relying on tight timeouts to avoid failures like:
+    #   File "/build/source/tests/legacy/test_protocol.py", line 1270, in test_keepalive_ping_with_no_ping_timeout
+    #     ping_1_again, ping_2 = tuple(self.protocol.pings)
+    #   ValueError: too many values to unpack (expected 2)
+    "test_keepalive_ping_stops_when_connection_closing"
+    "test_keepalive_ping_does_not_crash_when_connection_lost"
+    "test_keepalive_ping"
+    "test_keepalive_ping_not_acknowledged_closes_connection"
+    "test_keepalive_ping_with_no_ping_timeout"
+  ]
+  ++ lib.optionals (pythonAtLeast "3.13") [
+    # https://github.com/python-websockets/websockets/issues/1569
+    "test_writing_in_send_context_fails"
+  ];
+
+  nativeCheckInputs = [
+    unittestCheckHook
+    werkzeug
+  ];
+
+  preCheck = ''
+    # https://github.com/python-websockets/websockets/issues/1509
+    export WEBSOCKETS_TESTS_TIMEOUT_FACTOR=100
+    # Disable all tests that need to terminate within a predetermined amount of
+    # time. This is nondeterministic.
+    sed -i 's/with self.assertCompletesWithin.*:/if True:/' \
+      tests/legacy/test_protocol.py
+  '';
+
+  # Tests fail on Darwin with `OSError: AF_UNIX path too long`
+  doCheck = !stdenv.hostPlatform.isDarwin;
+
+  pythonImportsCheck = [ "websockets" ];
 
   meta = {
-    description = "WebSocket implementation in Python 3";
-    homepage = https://github.com/aaugustin/websockets;
+    description = "WebSocket implementation in Python";
+    homepage = "https://websockets.readthedocs.io/";
+    changelog = "https://github.com/aaugustin/websockets/blob/${src.tag}/docs/project/changelog.rst";
     license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ fab ];
   };
 }

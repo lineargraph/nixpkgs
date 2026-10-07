@@ -1,33 +1,43 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg, result }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  ocaml,
+  version ? "2.1.1",
+}:
 
-let
+stdenv.mkDerivation {
   pname = "cmdliner";
-in
-
-assert stdenv.lib.versionAtLeast ocaml.version "4.01.0";
-
-stdenv.mkDerivation rec {
-  name = "ocaml-${pname}-${version}";
-  version = "1.0.2";
+  inherit version;
 
   src = fetchurl {
-    url = "http://erratique.ch/software/${pname}/releases/${pname}-${version}.tbz";
-    sha256 = "18jqphjiifljlh9jg8zpl6310p3iwyaqphdkmf89acyaix0s4kj1";
+    url = "https://erratique.ch/software/cmdliner/releases/cmdliner-${version}.tbz";
+    hash =
+      {
+        "1.0.4" = "sha256-XCqT1Er4o4mWosD4D715cP5HUfEEvkcMr6BpNT/ABMA=";
+        "1.3.0" = "sha256-joGA9XO0QPanqMII2rLK5KgjhP7HMtInhNG7bmQWjLs=";
+        "2.1.1" = "sha256-Bbk40d709UxHgXjxmCgig0UQQx7ZjyrGfLTZCqEg1rY=";
+      }
+      ."${version}";
   };
 
-  unpackCmd = "tar xjf $src";
+  nativeBuildInputs = [ ocaml ];
 
-  nativeBuildInputs = [ ocamlbuild topkg ];
-  buildInputs = [ ocaml findlib ];
-  propagatedBuildInputs = [ result ];
+  makeFlags = [ "PREFIX=$(out)" ];
+  installTargets = "install install-doc";
+  installFlags = [
+    "LIBDIR=$(out)/lib/ocaml/${ocaml.version}/site-lib/cmdliner"
+    "DOCDIR=$(out)/share/doc/cmdliner"
+  ];
+  postInstall = ''
+    mv $out/lib/ocaml/${ocaml.version}/site-lib/cmdliner/{opam,cmdliner.opam}
+  '';
 
-  inherit (topkg) buildPhase installPhase;
-
-  meta = with stdenv.lib; {
-    homepage = http://erratique.ch/software/cmdliner;
-    description = "An OCaml module for the declarative definition of command line interfaces";
-    license = licenses.bsd3;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = [ maintainers.vbgl ];
+  meta = {
+    homepage = "https://erratique.ch/software/cmdliner";
+    description = "OCaml module for the declarative definition of command line interfaces";
+    license = lib.licenses.isc;
+    inherit (ocaml.meta) platforms;
+    maintainers = [ lib.maintainers.vbgl ];
   };
 }

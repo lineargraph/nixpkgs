@@ -1,104 +1,125 @@
-{ runCommand
-, stdenv
-, storeDir ? builtins.storeDir
-, writeScript
-, singularity
-, writeReferencesToFile
-, bash
-, vmTools
-, gawk
-, utillinux
-, e2fsprogs
-, squashfsTools }:
+{
+  lib,
+  # Build helpers
+  stdenv,
+  runCommand,
+  vmTools,
+  writeClosure,
+  writeDirectReferencesToFile,
+  writeScript,
+  writeStringReferencesToFile,
+  # Native build inputs
+  buildPackages,
+  e2fsprogs,
+  util-linux,
+  # Build inputs
+  bashInteractive,
+  runtimeShell,
+  singularity,
+}:
 
-rec {
-  shellScript = name: text:
-    writeScript name ''
-      #!${stdenv.shell}
-      set -e
-      ${text}
-    '';
-
-  mkLayer = {
-    name,
-    contents ? [],
-  }:
-    runCommand "singularity-layer-${name}" {
-      inherit contents;
-    } ''
-      mkdir $out
-      for f in $contents ; do
-        cp -ra $f $out/
-      done
-    '';
-
-  buildImage = {
-    name,
-    contents ? [],
-    diskSize ? 1024,
-    runScript ? "#!${stdenv.shell}\nexec /bin/sh",
-    runAsRoot ? null,
-    extraSpace ? 0
-  }:
-    let layer = mkLayer {
-          inherit name;
-          contents = contents ++ [ bash runScriptFile ];
-          };
-        runAsRootFile = shellScript "run-as-root.sh" runAsRoot;
-        runScriptFile = shellScript "run-script.sh" runScript;
-        result = vmTools.runInLinuxVM (
-          runCommand "singularity-image-${name}.img" {
-            buildInputs = [ singularity e2fsprogs utillinux gawk ];
-            layerClosure = writeReferencesToFile layer;
+let
+  defaultSingularity = singularity;
+in
+lib.makeExtensible (final: {
+  buildImage =
+    {
+      name,
+      contents ? [ ],
+      diskSize ? 1024,
+      memSize ? 1024,
+      runAsRoot ? null,
+      runScript ? "#!${stdenv.shell}\nexec /bin/sh",
+      singularity ? defaultSingularity,
+    }:
+    let
+      projectName = singularity.projectName or "singularity";
+      runAsRootFile = buildPackages.writers.writeBash "run-as-root.sh" ''
+        set -e
+        ${runAsRoot}
+      '';
+      runScriptFile = writeScript "run-script.sh" ''
+        #!/bin/sh
+        set -e
+        ${runScript}
+      '';
+      runScriptReferences =
+        if builtins ? getContext then
+          lib.splitString "\n" (writeStringReferencesToFile runScriptFile.text).text
+        else
+          [ (writeDirectReferencesToFile runScriptFile) ];
+      result = vmTools.runInLinuxVM (
+        runCommand "${projectName}-image-${name}.sif"
+          {
+            __structuredAttrs = true;
+            nativeBuildInputs = [
+              singularity
+              e2fsprogs
+              util-linux
+            ];
+            strictDeps = true;
+            inherit contents;
+            layerClosure = writeClosure ([ bashInteractive ] ++ runScriptReferences ++ contents);
             preVM = vmTools.createEmptyImage {
               size = diskSize;
-              fullName = "singularity-run-disk";
+              fullName = "${projectName}-run-disk";
+              # Leaving "$out" for the Singularity/Container image
+              destination = "disk-image";
             };
+            inherit memSize;
           }
           ''
-            rm -rf $out
-            mkdir disk
+            mkdir workspace
             mkfs -t ext3 -b 4096 /dev/${vmTools.hd}
-            mount /dev/${vmTools.hd} disk
-            cd disk
+            mount /dev/${vmTools.hd} workspace
+            mkdir -p workspace/img
+            cd workspace/img
             mkdir proc sys dev
 
             # Run root script
-            ${stdenv.lib.optionalString (runAsRoot != null) ''
-              mkdir -p ./${storeDir}
-              mount --rbind ${storeDir} ./${storeDir}
+            ${lib.optionalString (runAsRoot != null) ''
+              mkdir -p ./${builtins.storeDir}
+              mount --rbind "${builtins.storeDir}" ./${builtins.storeDir}
               unshare -imnpuf --mount-proc chroot ./ ${runAsRootFile}
-              umount -R ./${storeDir}
+              umount -R ./${builtins.storeDir}
             ''}
 
             # Build /bin and copy across closure
-            mkdir -p bin nix/store
-            for f in $(cat $layerClosure) ; do
-              cp -ar $f ./$f
-              for f in $f/bin/* ; do
-                if [ ! -e bin/$(basename $f) ] ; then
-                  ln -s $f bin/
+            mkdir -p bin ./${builtins.storeDir}
+            # Loop over the line-separated paths in $layerClosure
+            while IFS= read -r f; do
+              cp -ar "$f" "./$f"
+            done < "$layerClosure"
+
+            for c in "''${contents[@]}"; do
+              for f in "$c"/bin/* ; do
+                if [ ! -e "bin/$(basename "$f")" ] ; then
+                  ln -s "$f" bin/
                 fi
               done
             done
 
-            # Create runScript
-            ln -s ${runScriptFile} singularity
+            # Link /bin/sh
+            if [ ! -e bin/sh ]; then
+              ln -s ${lib.getExe bashInteractive} bin/sh
+            fi
+            mkdir -p .singularity.d
 
-            # Size calculation
+            # Create runscript
+            cp "${runScriptFile}" .singularity.d/runscript
+
+            # Fill out .singularity.d
+            mkdir -p .singularity.d/env
+            touch .singularity.d/env/94-appsbase.sh
+
             cd ..
-            umount disk
-            size=$(resize2fs -P /dev/${vmTools.hd} | awk '{print $NF}')
-            mount /dev/${vmTools.hd} disk
-            cd disk
+            mkdir -p /var/lib/${projectName}/mnt/session
+            echo "root:x:0:0:System administrator:/root:/bin/sh" > /etc/passwd
+            echo > /etc/resolv.conf
+            TMPDIR="$(pwd -P)" ${projectName} build "$out" ./img
+          ''
+      );
 
-            export PATH=$PATH:${e2fsprogs}/bin/
-            echo creating
-            singularity image.create -s $((1 + size * 4 / 1024 + ${toString extraSpace})) $out
-            echo importing
-            mkdir -p /var/singularity/mnt/container
-            tar -c . | singularity image.import $out
-          '');
-
-    in result;
-}
+    in
+    result;
+})

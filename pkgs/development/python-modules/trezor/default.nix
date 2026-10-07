@@ -1,26 +1,97 @@
-{ lib, fetchPypi, buildPythonPackage,
-  protobuf, hidapi, ecdsa, mnemonic, requests, pyblake2, click, libusb1, rlp
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  flit-core,
+  pytestCheckHook,
+  pytest-random-order,
+  # dependencies
+  click,
+  construct,
+  construct-classes,
+  cryptography,
+  keyring,
+  libusb1,
+  mnemonic,
+  noiseprotocol,
+  platformdirs,
+  requests,
+  shamir-mnemonic,
+  slip10,
+  typing-extensions,
+  # optional-dependencies
+  bleak,
+  pillow,
+  hidapi,
+  web3,
+  pyqt5,
 }:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "trezor";
-  version = "0.9.1";
+  version = "0.20.2";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "a481191011bade98f1e9f1201e7c72a83945050657bbc90dc4ac32dc8b8b46a4";
+    hash = "sha256-CrPOu0T+y1Mrd9WitAG1AYeh1wtyUabMLfVJTlL/31c=";
   };
 
-  propagatedBuildInputs = [ protobuf hidapi ecdsa mnemonic requests pyblake2 click libusb1 rlp ];
+  build-system = [ flit-core ];
 
-  # There are no actual tests: "ImportError: No module named tests"
-  doCheck = false;
+  dependencies = [
+    click
+    construct
+    construct-classes
+    cryptography
+    keyring
+    libusb1
+    mnemonic
+    noiseprotocol
+    platformdirs
+    requests
+    shamir-mnemonic
+    slip10
+    typing-extensions
+  ];
+
+  optional-dependencies = {
+    ble = [ bleak ];
+    extra = [ pillow ];
+    hidapi = [ hidapi ];
+    ethereum = [ web3 ];
+    qt-widgets = [ pyqt5 ];
+    # stellar = [ stellar-sdk ]; # missing in nixpkgs
+    full = lib.flatten (lib.attrValues (lib.removeAttrs optional-dependencies [ "full" ]));
+  };
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-random-order
+  ];
+
+  disabledTestPaths = [
+    "tests/test_stellar.py" # requires stellar-sdk
+    "tests/test_firmware.py" # requires network downloads
+  ];
+
+  pythonImportsCheck = [ "trezorlib" ];
+
+  postCheck = ''
+    $out/bin/trezorctl --version
+  '';
 
   meta = {
-    description = "Python library for communicating with TREZOR Bitcoin Hardware Wallet";
-    homepage = https://github.com/trezor/python-trezor;
-    license = lib.licenses.gpl3;
-    maintainers = with lib.maintainers; [ np ];
+    description = "Python library for communicating with Trezor Hardware Wallet";
+    mainProgram = "trezorctl";
+    homepage = "https://github.com/trezor/trezor-firmware/tree/master/python";
+    changelog = "https://github.com/trezor/trezor-firmware/blob/python/v${version}/python/CHANGELOG.md";
+    license = lib.licenses.lgpl3Only;
+    maintainers = with lib.maintainers; [
+      np
+      prusnak
+      mmahut
+    ];
   };
 }

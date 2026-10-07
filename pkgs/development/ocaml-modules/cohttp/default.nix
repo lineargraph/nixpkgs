@@ -1,32 +1,80 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, jbuilder
-, ppx_fields_conv, ppx_sexp_conv, ppx_deriving
-, base64, fieldslib, jsonm, logs, re, stringext, uri
+{
+  lib,
+  fetchurl,
+  buildDunePackage,
+  ocaml,
+  ppx_sexp_conv,
+  base64,
+  jsonm,
+  http,
+  logs,
+  re,
+  stringext,
+  ipaddr,
+  uri-sexp,
+  fmt,
+  alcotest,
+  crowbar,
+  ppx_expect,
 }:
 
-stdenv.mkDerivation rec {
-	version = "1.0.2";
-	name = "ocaml${ocaml.version}-cohttp-${version}";
+buildDunePackage (finalAttrs: {
+  pname = "cohttp";
+  version =
+    if lib.versionAtLeast ocaml.version "5.2" then
+      "6.3.0"
+    else if lib.versionAtLeast ocaml.version "4.13" then
+      "6.2.1"
+    else
+      "5.3.1";
 
-	src = fetchFromGitHub {
-		owner = "mirage";
-		repo = "ocaml-cohttp";
-		rev = "v${version}";
-		sha256 = "0zgn32axmjvkmbvyfkbjcqximzc4zcfxs118b98xyrqnvwb0k7ka";
-	};
+  src = fetchurl {
+    url = "https://github.com/mirage/ocaml-cohttp/releases/download/v${finalAttrs.version}/cohttp-${finalAttrs.version}.tbz";
+    hash =
+      {
+        "6.3.0" = "sha256-MRMPaKnwpc2NcbVfBCRW5tNb+LeranGrbXvX29tgeyQ=";
+        "6.2.1" = "sha256-ZQgCR3Y0QtHcPNkGeLgjO3mHcvA2rIHNHqreH11mpl8=";
+        "5.3.1" = "sha256-9eJz08Lyn/R71+Ftsj4fPWzQGkC+ACCJhbxDTIjUV2s=";
+      }
+      ."${finalAttrs.version}";
+  };
 
-	buildInputs = [ ocaml findlib jbuilder jsonm ppx_fields_conv ppx_sexp_conv ];
+  postPatch = ''
+    substituteInPlace cohttp/src/dune --replace-warn 'bytes base64' 'base64'
+  '';
 
-	propagatedBuildInputs = [ ppx_deriving base64 fieldslib re stringext uri ];
+  buildInputs = [
+    ppx_sexp_conv
+  ]
+  ++ lib.optionals (lib.versionOlder finalAttrs.version "6.0.0") [
+    jsonm
+  ];
 
-	buildPhase = "jbuilder build -p cohttp";
+  propagatedBuildInputs = [
+    base64
+    re
+    stringext
+    uri-sexp
+  ]
+  ++ lib.optionals (lib.versionAtLeast finalAttrs.version "6.0.0") [
+    http
+    ipaddr
+    logs
+  ];
 
-	inherit (jbuilder) installPhase;
+  doCheck = true;
+  checkInputs = [
+    fmt
+    alcotest
+  ]
+  ++ [
+    (if lib.versionOlder finalAttrs.version "6.0.0" then crowbar else ppx_expect)
+  ];
 
-	meta = {
-		description = "HTTP(S) library for Lwt, Async and Mirage";
-		license = stdenv.lib.licenses.isc;
-		maintainers = [ stdenv.lib.maintainers.vbgl ];
-		inherit (src.meta) homepage;
-		inherit (ocaml.meta) platforms;
-	};
-}
+  meta = {
+    description = "HTTP(S) library for Lwt, Async and Mirage";
+    license = lib.licenses.isc;
+    maintainers = [ lib.maintainers.vbgl ];
+    homepage = "https://github.com/mirage/ocaml-cohttp";
+  };
+})

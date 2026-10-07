@@ -1,30 +1,40 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
-  inherit (lib) mkOption mkIf types;
   cfg = config.programs.screen;
 in
 
 {
-  ###### interface
-
   options = {
     programs.screen = {
+      enable = lib.mkEnableOption "screen, a basic terminal multiplexer";
 
-      screenrc = mkOption {
+      package = lib.mkPackageOption pkgs "screen" { };
+
+      screenrc = lib.mkOption {
+        type = lib.types.lines;
         default = "";
-        description = ''
-          The contents of /etc/screenrc file.
+        example = ''
+          defscrollback 10000
+          startup_message off
         '';
-        type = types.lines;
+        description = "The contents of {file}`/etc/screenrc` file";
       };
     };
   };
 
-  ###### implementation
-
-  config = mkIf (cfg.screenrc != "") {
-    environment.etc."screenrc".text = cfg.screenrc;
-  };
-
+  config = lib.mkMerge [
+    (lib.mkIf cfg.enable {
+      environment.etc.screenrc = {
+        text = cfg.screenrc;
+      };
+      environment.systemPackages = [ cfg.package ];
+      security.pam.services.screen = { };
+    })
+  ];
 }

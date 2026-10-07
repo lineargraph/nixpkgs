@@ -1,37 +1,62 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, nose
-, isPy27
-, mock
-, traitlets
-, jupyter_core
-, jupyter_client
-, pygments
-, ipykernel
-, pyqt5
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  ipykernel,
+  jupyter-core,
+  jupyter-client,
+  pygments,
+  pyqt6,
+  qtpy,
+  traitlets,
+
+  # tests
+  pytestCheckHook,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "qtconsole";
-  version = "4.3.1";
-  name = "${pname}-${version}";
+  version = "5.7.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "eff8c2faeda567a0bef5781f419a64e9977988db101652b312b9d74ec0a5109c";
+  src = fetchFromGitHub {
+    owner = "jupyter";
+    repo = "qtconsole";
+    tag = finalAttrs.version;
+    hash = "sha256-GL6CAXijlgc/3nj9KaJJgK+AIq6wHdEf0kpgryJ3KuQ=";
   };
 
-  buildInputs = [ nose ] ++ lib.optionals isPy27 [mock];
-  propagatedBuildInputs = [traitlets jupyter_core jupyter_client pygments ipykernel pyqt5];
+  build-system = [ setuptools ];
+
+  dependencies = [
+    ipykernel
+    jupyter-core
+    jupyter-client
+    pygments
+    pyqt6
+    qtpy
+    traitlets
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   # : cannot connect to X server
   doCheck = false;
 
+  pythonImportsCheck = [ "qtconsole" ];
+
   meta = {
     description = "Jupyter Qt console";
-    homepage = http://jupyter.org/;
+    mainProgram = "jupyter-qtconsole";
+    homepage = "https://qtconsole.readthedocs.io/";
+    changelog = "https://qtconsole.readthedocs.io/en/stable/changelog.html#changes-in-jupyter-qt-console";
     license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ fridh ];
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ GaetanLepage ];
   };
-}
+})

@@ -1,16 +1,40 @@
-{ stdenv, fetchurl, pkgconfig, atk, cairo, glib, gtk3, pango, vala_0_40
-, libxml2, perl, intltool, gettext, gnome3, gobjectIntrospection, dbus, xvfb_run, shared-mime-info }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  pkg-config,
+  atk,
+  cairo,
+  glib,
+  gtk3,
+  pango,
+  vala,
+  libxml2,
+  perl,
+  intltool,
+  gettext,
+  gobject-introspection,
+  dbus,
+  xvfb-run,
+  shared-mime-info,
+  testers,
+}:
 
-let
-  checkInputs = [ xvfb_run dbus ];
-in stdenv.mkDerivation rec {
-  name = "gtksourceview-${version}";
-  version = "3.24.6";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "gtksourceview";
+  version = "3.24.11";
 
-  src = fetchurl {
-    url = "mirror://gnome/sources/gtksourceview/${gnome3.versionBranch version}/${name}.tar.xz";
-    sha256 = "7aa6bdfebcdc73a763dddeaa42f190c40835e6f8495bb9eb8f78587e2577c188";
-  };
+  __structuredAttrs = true;
+  strictDeps = true;
+
+  src =
+    let
+      inherit (finalAttrs) pname version;
+    in
+    fetchurl {
+      url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+      sha256 = "1zbpj283b5ycz767hqz5kdq02wzsga65pp4fykvhg8xj6x50f6v9";
+    };
 
   propagatedBuildInputs = [
     # Required by gtksourceview-3.0.pc
@@ -19,12 +43,33 @@ in stdenv.mkDerivation rec {
     shared-mime-info
   ];
 
-  outputs = [ "out" "dev" ];
+  outputs = [
+    "out"
+    "dev"
+  ];
 
-  nativeBuildInputs = [ pkgconfig intltool perl gobjectIntrospection vala_0_40 ]
-    ++ stdenv.lib.optionals doCheck checkInputs;
+  nativeBuildInputs = [
+    pkg-config
+    intltool
+    perl
+    gobject-introspection
+    vala
+    libxml2 # xmllint
+  ];
 
-  buildInputs = [ atk cairo glib pango libxml2 gettext ];
+  nativeCheckInputs = [
+    xvfb-run
+    dbus
+  ];
+
+  buildInputs = [
+    atk
+    cairo
+    glib
+    pango
+    libxml2
+    gettext
+  ];
 
   preBuild = ''
     substituteInPlace gtksourceview/gtksourceview-utils.c --replace "@NIX_SHARE_PATH@" "$out/share"
@@ -32,27 +77,32 @@ in stdenv.mkDerivation rec {
 
   patches = [ ./3.x-nix_share_path.patch ];
 
+  env = lib.optionalAttrs stdenv.cc.isGNU {
+    NIX_CFLAGS_COMPILE = "-Wno-error=incompatible-pointer-types";
+  };
+
   enableParallelBuilding = true;
 
-  doCheck = stdenv.isLinux;
+  doCheck = stdenv.hostPlatform.isLinux;
   checkPhase = ''
-    export NO_AT_BRIDGE=1
+    runHook preCheck
+
+    NO_AT_BRIDGE=1 \
+    XDG_DATA_DIRS="$XDG_DATA_DIRS:${shared-mime-info}/share" \
     xvfb-run -s '-screen 0 800x600x24' dbus-run-session \
-      --config-file=${dbus.daemon}/share/dbus-1/session.conf \
+      --config-file=${dbus}/share/dbus-1/session.conf \
       make check
+
+    runHook postCheck
   '';
 
-  passthru = {
-    updateScript = gnome3.updateScript {
-      packageName = "gtksourceview";
-      attrPath = "gnome3.gtksourceview";
-    };
-  };
+  passthru.tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
 
-  meta = with stdenv.lib; {
-    homepage = https://wiki.gnome.org/Projects/GtkSourceView;
-    platforms = with platforms; linux ++ darwin;
-    license = licenses.lgpl21;
-    maintainers = gnome3.maintainers;
+  meta = {
+    homepage = "https://gitlab.gnome.org/GNOME/gtksourceview";
+    pkgConfigModules = [ "gtksourceview-3.0" ];
+    platforms = with lib.platforms; linux ++ darwin;
+    license = lib.licenses.lgpl21;
+    teams = [ lib.teams.gnome ];
   };
-}
+})

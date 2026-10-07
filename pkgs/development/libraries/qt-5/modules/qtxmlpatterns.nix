@@ -1,7 +1,17 @@
-{ qtModule, qtbase }:
+{
+  qtModule,
+  qtbase,
+  qtdeclarative,
+}:
 
 qtModule {
-  name = "qtxmlpatterns";
-  qtInputs = [ qtbase ];
-  devTools = [ "bin/xmlpatterns" "bin/xmlpatternsvalidator" ];
+  pname = "qtxmlpatterns";
+  propagatedBuildInputs = [
+    qtbase
+    qtdeclarative
+  ];
+  devTools = [
+    "bin/xmlpatterns"
+    "bin/xmlpatternsvalidator"
+  ];
 }

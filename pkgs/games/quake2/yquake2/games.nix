@@ -1,59 +1,74 @@
-{ stdenv, lib, fetchFromGitHub, cmake }:
+{
+  stdenv,
+  lib,
+  fetchFromGitHub,
+}:
 
 let
   games = {
     ctf = {
       id = "ctf";
-      version = "1.05";
+      version = "1.07";
       description = "'Capture The Flag' for Yamagi Quake II";
-      sha256 = "15ihspyshls645ig0gq6bwdzvghyyysqk60g6ad3n4idb2ms52md";
+      sha256 = "0i9bwhjvq6yhalrsbzjambh27fdzrzgswqz3jgfn9qw6k1kjvlin";
     };
 
     ground-zero = {
       id = "rogue";
-      version = "2.04";
+      version = "2.07";
       description = "'Ground Zero' for Yamagi Quake II";
-      sha256 = "0x1maaycrxv7d3xvvk1ih2zymhvcd3jnab7g3by8qh6g5y33is5l";
+      sha256 = "1m2r4vgfdxpsi0lkf32liwf1433mdhhmjxiicjwzqjlkncjyfcb1";
     };
 
     the-reckoning = {
       id = "xatrix";
-      version = "2.05";
+      version = "2.08";
       description = "'The Reckoning' for Yamagi Quake II";
-      sha256 = "0gf2ryhgz8nw1mb1arlbriihjsx09fa0wmkgcayc8ijignfi1qkh";
+      sha256 = "1wp9fg1q8nly2r9hh4394r1h4dxyni3lvdy7g419cz5s8hhn5msr";
     };
   };
 
-  toDrv = title: data: stdenv.mkDerivation rec {
-    inherit (data) id version description sha256;
-    inherit title;
+  toDrv =
+    title: data:
+    stdenv.mkDerivation rec {
+      inherit (data)
+        id
+        version
+        description
+        sha256
+        ;
+      inherit title;
 
-    name = "yquake2-${title}-${version}";
+      pname = "yquake2-${title}";
 
-    src = fetchFromGitHub {
-      inherit sha256;
-      owner = "yquake2";
-      repo = data.id;
-      rev = "${lib.toUpper id}_${builtins.replaceStrings ["."] ["_"] version}";
+      src = fetchFromGitHub {
+        inherit sha256;
+        owner = "yquake2";
+        repo = data.id;
+        rev = "${lib.toUpper id}_${builtins.replaceStrings [ "." ] [ "_" ] version}";
+      };
+
+      env =
+        # Uses `false` and `true` as enum constants, which are keywords in C23 (GCC 15 default)
+        lib.optionalAttrs stdenv.cc.isGNU {
+          NIX_CFLAGS_COMPILE = "-std=gnu17";
+        };
+
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out/lib/yquake2/${id}
+        cp release/* $out/lib/yquake2/${id}
+        runHook postInstall
+      '';
+
+      meta = {
+        inherit (data) description;
+        homepage = "https://www.yamagi.org/quake2/";
+        license = lib.licenses.unfree;
+        platforms = lib.platforms.unix;
+        maintainers = with lib.maintainers; [ tadfisher ];
+      };
     };
-
-    enableParallelBuilding = true;
-
-    nativeBuildInputs = [ cmake ];
-
-    installPhase = ''
-      mkdir -p $out/lib/yquake2/${id}
-      cp Release/* $out/lib/yquake2/${id}
-    '';
-
-    meta = with stdenv.lib; {
-      inherit (data) description;
-      homepage = "https://www.yamagi.org/quake2/";
-      license = licenses.unfree;
-      platforms = platforms.unix;
-      maintainers = with maintainers; [ tadfisher ];
-    };
-  };
 
 in
-  lib.mapAttrs toDrv games
+lib.mapAttrs toDrv games

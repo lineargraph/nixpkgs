@@ -1,44 +1,61 @@
-{ stdenv, fetchurl, mpfr, m4, binutils, fetchcvs, emacs, zlib, which
-, texinfo, libX11, xproto, inputproto, libXi, gmp
-, libXext, xextproto, libXt, libXaw, libXmu } :
-
-assert stdenv ? cc ;
-assert stdenv.cc.isGNU ;
-assert stdenv.cc ? libc ;
-assert stdenv.cc.libc != null ;
+{
+  lib,
+  stdenv,
+  fetchurl,
+  mpfr,
+  m4,
+  binutils,
+  emacs,
+  zlib,
+  which,
+  texinfo,
+  libx11,
+  xorgproto,
+  libxi,
+  gmp,
+  libxext,
+  libxt,
+  libxaw,
+  libxmu,
+}:
 
 stdenv.mkDerivation rec {
-  name = "gcl-${version}";
-  version = "2.6.12";
+  pname = "gcl";
+  version = "2.6.14";
 
   src = fetchurl {
-    sha256 = "1s4hs2qbjqmn9h88l4xvsifq5c3dlc5s74lyb61rdi5grhdlkf4f";
-    url = "http://gnu.spinellicreations.com/gcl/${name}.tar.gz";
+    url = "mirror://gnu/gcl/gcl-${version}.tar.gz";
+    hash = "sha256-CfNBfFEqoXM6Y4gJ06Y6wpDuuUSL6CeV9bZoG9MHNFo=";
   };
 
-  patches = [(fetchurl {
-    url = https://gitweb.gentoo.org/repo/gentoo.git/plain/dev-lisp/gcl/files/gcl-2.6.12-gcc5.patch;
-    sha256 = "00jbsn0qp8ki2w7dx8caha7g2hr9076xa6bg48j3qqqncff93zdh";
-  })];
-
   buildInputs = [
-    mpfr m4 binutils emacs gmp
-    libX11 xproto inputproto libXi
-    libXext xextproto libXt libXaw libXmu
-    zlib which texinfo
+    mpfr
+    m4
+    binutils
+    emacs
+    gmp
+    libx11
+    xorgproto
+    libxi
+    libxext
+    libxt
+    libxaw
+    libxmu
+    zlib
+    which
+    texinfo
   ];
 
   configureFlags = [
     "--enable-ansi"
   ];
 
-  hardeningDisable = [ "pic" "bindnow" ];
-
-  NIX_CFLAGS_COMPILE = "-fgnu89-inline";
-
   meta = {
     description = "GNU Common Lisp compiler working via GCC";
-    maintainers = [ stdenv.lib.maintainers.raskin ];
-    platforms = stdenv.lib.platforms.linux;
+    mainProgram = "gcl";
+    teams = [ lib.teams.lisp ];
+    license = lib.licenses.gpl2;
+    platforms = lib.platforms.linux;
+    broken = true; # 2025-01-21; to check after 2.7.0 is tagged
   };
 }

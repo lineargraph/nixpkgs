@@ -1,15 +1,14 @@
-{ build-idris-package
-, fetchFromGitHub
-, prelude
-, idrisscript
-, lib
-, idris
+{
+  build-idris-package,
+  fetchFromGitHub,
+  idrisscript,
+  lib,
 }:
-build-idris-package  {
-  name = "xhr";
+build-idris-package {
+  pname = "xhr";
   version = "2017-04-22";
 
-  idrisDeps = [ prelude idrisscript ];
+  idrisDeps = [ idrisscript ];
 
   src = fetchFromGitHub {
     owner = "pierrebeaucamp";
@@ -20,9 +19,8 @@ build-idris-package  {
 
   meta = {
     description = "Idris library to interact with xhr";
-    homepage = https://github.com/pierrebeaucamp/idris-xhr;
+    homepage = "https://github.com/pierrebeaucamp/idris-xhr";
     license = lib.licenses.asl20;
     maintainers = [ lib.maintainers.brainrape ];
-    inherit (idris.meta) platforms;
   };
 }

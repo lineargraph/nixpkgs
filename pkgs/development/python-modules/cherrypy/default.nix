@@ -1,31 +1,130 @@
-{ lib, buildPythonPackage, fetchPypi
-, cheroot, portend, routes, six
-, setuptools_scm
-, backports_unittest-mock, objgraph, pathpy, pytest, pytestcov
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  cheroot,
+  fetchPypi,
+  jaraco-collections,
+  more-itertools,
+  objgraph,
+  path,
+  portend,
+  pyopenssl,
+  pytest-cov-stub,
+  pytest-forked,
+  pytest-services,
+  pytestCheckHook,
+  python-memcached,
+  pythonAtLeast,
+  requests-toolbelt,
+  routes,
+  setuptools-scm,
+  simplejson,
+  zc-lockfile,
 }:
 
 buildPythonPackage rec {
-  pname = "CherryPy";
-  version = "14.0.1";
+  pname = "cherrypy";
+  version = "18.10.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "721d09bbeedaf5b3493e9e644ae9285d776ea7f16b1d4a0a5aaec7c0d22e5074";
+    hash = "sha256-bHDnjuETAOiyHAdnxUKuaxAqScrFz9Tj4xPXu5B8WJE=";
   };
 
-  propagatedBuildInputs = [ cheroot portend routes six ];
-
-  buildInputs = [ setuptools_scm ];
-
-  checkInputs = [ backports_unittest-mock objgraph pathpy pytest pytestcov ];
-
-  checkPhase = ''
-    LANG=en_US.UTF-8 pytest
+  postPatch = ''
+    # Disable doctest plugin because times out
+    substituteInPlace pytest.ini \
+      --replace-fail "--doctest-modules" "-vvv"
   '';
 
-  meta = with lib; {
-    homepage = "http://www.cherrypy.org";
-    description = "A pythonic, object-oriented HTTP framework";
-    license = licenses.bsd3;
+  build-system = [ setuptools-scm ];
+
+  dependencies = [
+    cheroot
+    jaraco-collections
+    more-itertools
+    portend
+    zc-lockfile
+  ];
+
+  nativeCheckInputs = [
+    objgraph
+    path
+    pytest-cov-stub
+    pytest-forked
+    pytest-services
+    pytestCheckHook
+    requests-toolbelt
+  ];
+
+  preCheck = ''
+    export CI=true
+  '';
+
+  pytestFlags = [
+    "-Wignore::DeprecationWarning"
+    "-Wignore::pytest.PytestUnraisableExceptionWarning"
+  ];
+
+  disabledTests = [
+    # Keyboard interrupt ends test suite run
+    "KeyboardInterrupt"
+    # daemonize and autoreload tests have issue with sockets within sandbox
+    "daemonize"
+    "Autoreload"
+
+    "test_antistampede"
+    "test_file_stream"
+    "test_basic_request"
+    "test_3_Redirect"
+    "test_4_File_deletion"
+    # excepts a tcp reset for the 16th connection, but doesn't get it
+    "test_queue_full"
+  ]
+  ++ lib.optionals (pythonAtLeast "3.11") [
+    "testErrorHandling"
+    "testHookErrors"
+    "test_HTTP10_KeepAlive"
+    "test_No_Message_Body"
+    "test_HTTP11_Timeout"
+    "testGzip"
+    "test_malformed_header"
+    "test_no_content_length"
+    "test_post_filename_with_special_characters"
+    "test_post_multipart"
+    "test_iterator"
+    "test_1_Ram_Concurrency"
+    "test_2_File_Concurrency"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [ "test_block" ];
+
+  disabledTestPaths = lib.optionals stdenv.hostPlatform.isDarwin [
+    "cherrypy/test/test_config_server.py"
+  ];
+
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [ "cherrypy" ];
+
+  optional-dependencies = {
+    json = [ simplejson ];
+    memcached_session = [ python-memcached ];
+    routes_dispatcher = [ routes ];
+    ssl = [ pyopenssl ];
+    # not packaged yet
+    xcgi = [
+      # flup
+    ];
+  };
+
+  meta = {
+    description = "Object-oriented HTTP framework";
+    mainProgram = "cherryd";
+    homepage = "https://cherrypy.dev/";
+    changelog = "https://github.com/cherrypy/cherrypy/blob/v${version}/CHANGES.rst";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
 }

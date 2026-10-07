@@ -1,24 +1,68 @@
-{ stdenv, fetchzip, perl, gmp, mpfr, ppl, ocaml, findlib, camlidl, mlgmpidl }:
+{
+  stdenv,
+  lib,
+  fetchFromGitHub,
+  perl,
+  gmp,
+  mpfr,
+  ppl,
+  ocaml,
+  findlib,
+  camlidl,
+  mlgmpidl,
+  flint,
+  pplite,
+}:
 
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-apron-${version}";
-  version = "20160125";
-  src = fetchzip {
-    url = "http://apron.gforge.inria.fr/apron-${version}.tar.gz";
-    sha256 = "1a7b7b9wsd0gdvm41lgg6ayb85wxc2a3ggcrghy4qiphs4b9v4m4";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "ocaml${ocaml.version}-apron";
+  version = "0.9.15";
+  src = fetchFromGitHub {
+    owner = "antoinemine";
+    repo = "apron";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-gHLCurydxX1pS66DTAWUJGl9Yqu9RWRjkZh6lXzM7YY=";
   };
 
-  buildInputs = [ perl gmp mpfr ppl ocaml findlib camlidl ];
-  propagatedBuildInputs = [ mlgmpidl ];
+  nativeBuildInputs = [
+    ocaml
+    findlib
+    perl
+  ];
+  buildInputs = [
+    gmp
+    ppl
+    flint
+    pplite
+  ];
+  propagatedBuildInputs = [
+    camlidl
+    mlgmpidl
+    mpfr
+  ];
 
-  prefixKey = "-prefix ";
-  createFindlibDestdir = true;
+  outputs = [
+    "out"
+    "dev"
+  ];
+
+  configurePhase = ''
+    runHook preConfigure
+    ./configure -prefix $out ${lib.optionalString stdenv.hostPlatform.isDarwin "--no-strip"}
+    mkdir -p $out/lib/ocaml/${ocaml.version}/site-lib/stublibs
+    runHook postConfigure
+  '';
+
+  postInstall = ''
+    mkdir -p $dev/lib
+    mv $out/lib/ocaml $dev/lib/
+  '';
 
   meta = {
-    license = stdenv.lib.licenses.lgpl21;
-    homepage = http://apron.cri.ensmp.fr/library/;
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
+    license = lib.licenses.lgpl21;
+    homepage = "https://github.com/antoinemine/apron";
+    maintainers = [ lib.maintainers.vbgl ];
     description = "Numerical abstract domain library";
     inherit (ocaml.meta) platforms;
   };
-}
+})

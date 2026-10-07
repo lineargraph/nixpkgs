@@ -1,43 +1,73 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, python
-, numpy
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  numpy,
+  pytest-run-parallel,
+  pytestCheckHook,
+  setuptools,
+  # sets NUMEXPR_NUM_THREADS and OMP_NUM_THREADS for packages
+  # invoking numexpr during checkPhase/installCheckPhase to
+  # avoid overloading builders with excessive parallelism
+  # See also: https://numexpr.readthedocs.io/en/latest/user_guide.html#threadpool-configuration
+  checkPhaseThreadLimitHook,
 }:
 
 buildPythonPackage rec {
   pname = "numexpr";
-  version = "2.6.5";
+  version = "2.14.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "f8ad8014085628eab91bc82fb9d10cf9ab8e04ede4884e4a1061445d395b36bb";
+    hash = "sha256-S+ALEIbHt6XDLjFVgSK3uAJD/gmFebFwln2oPzFStIs=";
   };
 
-  propagatedBuildInputs = [ numpy ];
+  build-system = [
+    setuptools
+    numpy
+  ];
 
-  # Run the test suite.
-  # It requires the build path to be in the python search path.
-  checkPhase = ''
-    ${python}/bin/${python.executable} <<EOF
-    import sysconfig
-    import sys
-    import os
-    f = "lib.{platform}-{version[0]}.{version[1]}"
-    lib = f.format(platform=sysconfig.get_platform(),
-                   version=sys.version_info)
-    build = os.path.join(os.getcwd(), 'build', lib)
-    sys.path.insert(0, build)
-    import numexpr
-    r = numexpr.test()
-    if not r.wasSuccessful():
-        sys.exit(1)
-    EOF
+  dependencies = [ numpy ];
+
+  preBuild = ''
+    # Remove existing site.cfg, use the one we built for numpy
+    ln -s ${numpy.cfg} site.cfg
   '';
+
+  nativeCheckInputs = [
+    pytest-run-parallel
+    pytestCheckHook
+  ];
+
+  propagatedNativeBuildInputs = [
+    checkPhaseThreadLimitHook
+  ];
+
+  # tests check for OMP_NUM_THREADS application and complete quick enough
+  env.dontLimitCheckPhaseThreads = 1;
+
+  preCheck = ''
+    pushd $out
+  '';
+
+  postCheck = ''
+    popd
+  '';
+
+  disabledTests = [
+    # fails on computers with more than 8 threads
+    # https://github.com/pydata/numexpr/issues/479
+    "test_numexpr_max_threads_empty_string"
+    "test_omp_num_threads_empty_string"
+  ];
+
+  pythonImportsCheck = [ "numexpr" ];
 
   meta = {
     description = "Fast numerical array expression evaluator for NumPy";
     homepage = "https://github.com/pydata/numexpr";
     license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

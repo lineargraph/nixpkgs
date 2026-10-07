@@ -1,43 +1,68 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, geos, glibcLocales, pytest, cython
-, numpy
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+
+  cython,
+  geos,
+  numpy,
+  oldest-supported-numpy,
+  setuptools,
+  wheel,
 }:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
-  pname = "Shapely";
-  version = "1.6.4.post1";
+  pname = "shapely";
+  version = "2.1.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "30df7572d311514802df8dc0e229d1660bc4cbdcf027a8281e79c5fc2fcf02f2";
+  src = fetchFromGitHub {
+    owner = "shapely";
+    repo = "shapely";
+    tag = version;
+    hash = "sha256-tnnOJsAI3v52ngFOIUIkeDuRIu2JlZGuHreVv4W8LeE=";
   };
 
-  buildInputs = [ geos glibcLocales cython ];
+  nativeBuildInputs = [
+    cython
+    geos # for geos-config
+    oldest-supported-numpy
+    setuptools
+    wheel
+  ];
 
-  checkInputs = [ pytest ];
+  buildInputs = [ geos ];
 
-  propagatedBuildInputs = [ numpy ];
+  dependencies = [ numpy ];
 
-  preConfigure = ''
-    export LANG="en_US.UTF-8";
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  # Fix a ModuleNotFoundError. Investigated at:
+  # https://github.com/NixOS/nixpkgs/issues/255262
+  preCheck = ''
+    cd $out
   '';
 
-  patchPhase = let
-    libc = if stdenv.isDarwin then "libc.dylib" else "libc.so.6";
-  in ''
-    sed -i "s|_lgeos = load_dll('geos_c', fallbacks=.*)|_lgeos = load_dll('geos_c', fallbacks=['${geos}/lib/libgeos_c${stdenv.hostPlatform.extensions.sharedLibrary}'])|" shapely/geos.py
-    sed -i "s|free = load_dll('c').free|free = load_dll('c', fallbacks=['${stdenv.cc.libc}/lib/${libc}']).free|" shapely/geos.py
-  '';
+  disabledTests = lib.optionals (stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isAarch64) [
+    # FIXME(lf-): these logging tests are broken, which is definitely our
+    # fault. I've tried figuring out the cause and failed.
+    #
+    # It is apparently some sandbox or no-sandbox related thing on macOS only
+    # though.
+    "test_error_handler_exception"
+    "test_error_handler"
+    "test_info_handler"
+  ];
 
-  # Disable the tests that improperly try to use the built extensions
-  checkPhase = ''
-    py.test -k 'not test_vectorized and not test_fallbacks' tests
-  '';
+  pythonImportsCheck = [ "shapely" ];
 
-  meta = with stdenv.lib; {
-    description = "Geometric objects, predicates, and operations";
-    maintainers = with maintainers; [ knedlsepp ];
-    homepage = "https://pypi.python.org/pypi/Shapely/";
+  meta = {
+    changelog = "https://github.com/shapely/shapely/blob/${src.tag}/CHANGES.txt";
+    description = "Manipulation and analysis of geometric objects";
+    homepage = "https://github.com/shapely/shapely";
+    license = lib.licenses.bsd3;
+    teams = [ lib.teams.geospatial ];
   };
 }

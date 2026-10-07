@@ -2,33 +2,40 @@
 
 shopt -s nullglob
 
-export PATH=/empty
-for i in @path@; do PATH=$PATH:$i/bin; done
+export PATH=/empty:@path@
 
 usage() {
-    echo "usage: $0 -t <timeout> -c <path-to-default-configuration> [-d <boot-dir>] [-g <num-generations>]" >&2
+    echo "usage: $0 -t <timeout> -c <path-to-default-configuration> [-d <boot-dir>] [-g <num-generations>] [-n <dtbName>] [-r]" >&2
     exit 1
 }
 
 timeout=                # Timeout in centiseconds
+menu=1                  # Enable menu by default
 default=                # Default configuration
 target=/boot            # Target directory
 numGenerations=0        # Number of other generations to include in the menu
 
-while getopts "t:c:d:g:" opt; do
+while getopts "t:c:d:g:n:r" opt; do
     case "$opt" in
-        t) # U-Boot interprets '0' as infinite and negative as instant boot
+        t) # U-Boot interprets '0' as infinite
             if [ "$OPTARG" -lt 0 ]; then
+                # When negative (or null coerced to -1), disable timeout which means that we wait forever for input
                 timeout=0
             elif [ "$OPTARG" = 0 ]; then
-                timeout=-10
+                # When zero, which means disabled in Nix module, disable menu which results in instant boot of the default item
+                # .. timeout is actually ignored by u-Boot but set here for the rest of the script
+                timeout=1
+                menu=0
             else
+                # Positive results in centi-seconds of timeout, which when passed with no input results in boot of the default item
                 timeout=$((OPTARG * 10))
             fi
             ;;
         c) default="$OPTARG" ;;
         d) target="$OPTARG" ;;
         g) numGenerations="$OPTARG" ;;
+        n) dtbName="$OPTARG" ;;
+        r) noDeviceTree=1 ;;
         \?) usage ;;
     esac
 done
@@ -75,9 +82,8 @@ addEntry() {
 
     copyToKernelsDir "$path/kernel"; kernel=$result
     copyToKernelsDir "$path/initrd"; initrd=$result
-    # XXX UGLY: maybe the system config should have a top-level "dtbs" entry?
-    dtbDir=$(readlink -m "$path/kernel/../dtbs")
-    if [ -d "$dtbDir" ]; then
+    dtbDir=$(readlink -m "$path/dtbs")
+    if [ -e "$dtbDir" ]; then
         copyToKernelsDir "$dtbDir"; dtbs=$result
     fi
 
@@ -96,10 +102,25 @@ addEntry() {
     fi
     echo "  LINUX ../nixos/$(basename $kernel)"
     echo "  INITRD ../nixos/$(basename $initrd)"
-    if [ -d "$dtbDir" ]; then
-        echo "  FDTDIR ../nixos/$(basename $dtbs)"
+    echo "  APPEND init=$path/init $extraParams"
+
+    if [ -n "$noDeviceTree" ]; then
+        return
     fi
-    echo "  APPEND systemConfig=$path init=$path/init $extraParams"
+
+    if [ -d "$dtbDir" ]; then
+        # if a dtbName was specified explicitly, use that, else use FDTDIR
+        if [ -n "$dtbName" ]; then
+            echo "  FDT ../nixos/$(basename $dtbs)/${dtbName}"
+        else
+            echo "  FDTDIR ../nixos/$(basename $dtbs)"
+        fi
+    else
+        if [ -n "$dtbName" ]; then
+            echo "Explicitly requested dtbName $dtbName, but there's no FDTDIR - bailing out." >&2
+            exit 1
+        fi
+    fi
 }
 
 tmpFile="$target/extlinux/extlinux.conf.tmp.$$"
@@ -110,9 +131,11 @@ cat > $tmpFile <<EOF
 # Change this to e.g. nixos-42 to temporarily boot to an older configuration.
 DEFAULT nixos-default
 
-MENU TITLE ------------------------------------------------------------
 TIMEOUT $timeout
 EOF
+
+[ "$menu" == "1" ] \
+  && echo "MENU TITLE ------------------------------------------------------------" >> $tmpFile
 
 addEntry $default default >> $tmpFile
 
@@ -125,7 +148,13 @@ if [ "$numGenerations" -gt 0 ]; then
             | sort -n -r \
             | head -n $numGenerations); do
         link=/nix/var/nix/profiles/system-$generation-link
-        addEntry $link $generation
+        addEntry $link "${generation}-default"
+        for specialisation in $(
+            ls /nix/var/nix/profiles/system-$generation-link/specialisation \
+            | sort -n -r); do
+            link=/nix/var/nix/profiles/system-$generation-link/specialisation/$specialisation
+            addEntry $link "${generation}-${specialisation}"
+        done
     done >> $tmpFile
 fi
 

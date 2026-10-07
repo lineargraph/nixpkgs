@@ -1,54 +1,93 @@
-{ stdenv, fetchFromGitHub, cmake, boost, pkgconfig, doxygen, qt48Full, libharu
-, pango, fcgi, firebird, mysql, postgresql, graphicsmagick, glew, openssl
-, pcre
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  cmake,
+  boost,
+  pkg-config,
+  doxygen,
+  qt5,
+  libharu,
+  pango,
+  fcgi,
+  firebird,
+  libmysqlclient,
+  libpq,
+  graphicsmagick,
+  glew,
+  openssl,
+  harfbuzz,
+  icu,
+  libice,
+  libsm,
 }:
 
 let
   generic =
-    { version, sha256 }:
-    stdenv.mkDerivation rec {
-      name = "wt-${version}";
+    { version, hash }:
+    stdenv.mkDerivation {
+      pname = "wt";
+      inherit version;
 
       src = fetchFromGitHub {
         owner = "emweb";
         repo = "wt";
-        rev = version;
-        inherit sha256;
+        tag = version;
+        inherit hash;
       };
 
-      enableParallelBuilding = true;
-
-      nativeBuildInputs = [ pkgconfig ];
+      nativeBuildInputs = [
+        cmake
+        pkg-config
+      ];
       buildInputs = [
-        cmake boost doxygen qt48Full libharu
-        pango fcgi firebird mysql.connector-c postgresql graphicsmagick glew
-        openssl pcre
+        boost
+        doxygen
+        qt5.qtbase
+        libharu
+        pango
+        fcgi
+        firebird
+        libmysqlclient
+        libpq
+        graphicsmagick
+        glew
+        openssl
+        harfbuzz
+        icu
+        libice
+        libsm
       ];
 
+      dontWrapQtApps = true;
       cmakeFlags = [
-        "-DWT_WRASTERIMAGE_IMPLEMENTATION=GraphicsMagick"
+        "-DCMAKE_INSTALL_RPATH=${
+          lib.makeLibraryPath [
+            libice
+            libsm
+          ]
+        }"
         "-DWT_CPP_11_MODE=-std=c++11"
-        "-DGM_PREFIX=${graphicsmagick}"
-        "-DMYSQL_PREFIX=${mysql.connector-c}"
         "--no-warn-unused-cli"
-      ];
+      ]
+      ++ lib.optionals (graphicsmagick != null) [
+        "-DWT_WRASTERIMAGE_IMPLEMENTATION=GraphicsMagick"
+        "-DGM_PREFIX=${graphicsmagick}"
+      ]
+      ++ lib.optional (libmysqlclient != null) "-DMYSQL_PREFIX=${libmysqlclient}";
 
-      meta = with stdenv.lib; {
-        homepage = https://www.webtoolkit.eu/wt;
+      meta = {
+        homepage = "https://www.webtoolkit.eu/wt";
         description = "C++ library for developing web applications";
-        platforms = platforms.linux;
-        license = licenses.gpl2;
-        maintainers = with maintainers; [ juliendehos willibutz ];
+        platforms = lib.platforms.linux;
+        license = lib.licenses.gpl2Only;
+        maintainers = with lib.maintainers; [ juliendehos ];
       };
     };
-in {
-  wt3 = generic {
-    version = "3.3.10";
-    sha256 = "1y25mhghgbgjgycpny0x4z95xn98q0wraab1c5gkwnay097bgwdy";
-  };
-
+in
+{
   wt4 = generic {
-    version = "4.0.3";
-    sha256 = "01xch5dkpcanwhr515236wa9mdmnq2a2j13dn7smyhwzqgbpknsg";
+    version = "4.14.4";
+    hash = "sha256-Hx3Sc6m+diFjyc+j+lJAOKsT9q3PzbyUE36k7G95Iy8=";
   };
 }

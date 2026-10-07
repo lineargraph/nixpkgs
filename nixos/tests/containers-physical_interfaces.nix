@@ -1,14 +1,13 @@
-
-import ./make-test.nix ({ pkgs, ...} : {
+{ pkgs, lib, ... }:
+{
   name = "containers-physical_interfaces";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ kampfschlaefer ];
+  meta = {
   };
 
   nodes = {
-    server = { config, pkgs, ... }:
+    server =
+      { ... }:
       {
-        virtualisation.memorySize = 256;
         virtualisation.vlans = [ 1 ];
 
         containers.server = {
@@ -17,117 +16,172 @@ import ./make-test.nix ({ pkgs, ...} : {
 
           config = {
             networking.interfaces.eth1.ipv4.addresses = [
-              { address = "10.10.0.1"; prefixLength = 24; }
+              {
+                address = "10.10.0.1";
+                prefixLength = 24;
+              }
             ];
             networking.firewall.enable = false;
+            nix.enable = false; # disabled by default on the test's host. See all-tests.nix / tag(no-nix-by-default)
           };
         };
       };
-    bridged = { config, pkgs, ... }: {
-      virtualisation.memorySize = 128;
-      virtualisation.vlans = [ 1 ];
+    autoStart =
+      { ... }:
+      {
+        virtualisation.vlans = [ 1 ];
 
-      containers.bridged = {
-        privateNetwork = true;
-        interfaces = [ "eth1" ];
+        networking.useNetworkd = true;
 
-        config = {
-          networking.bridges.br0.interfaces = [ "eth1" ];
-          networking.interfaces.br0.ipv4.addresses = [
-            { address = "10.10.0.2"; prefixLength = 24; }
-          ];
-          networking.firewall.enable = false;
+        systemd.network.netdevs."20-dummy-test".netdevConfig = {
+          Name = "dummy-test";
+          Kind = "dummy";
         };
-      };
-    };
 
-    bonded = { config, pkgs, ... }: {
-      virtualisation.memorySize = 128;
-      virtualisation.vlans = [ 1 ];
+        containers.autoStart = {
+          autoStart = true;
+          privateNetwork = true;
+          interfaces = [ "dummy-test" ];
 
-      containers.bonded = {
-        privateNetwork = true;
-        interfaces = [ "eth1" ];
-
-        config = {
-          networking.bonds.bond0 = {
-            interfaces = [ "eth1" ];
-            driverOptions.mode = "active-backup";
+          config = {
+            networking.firewall.enable = false;
+            nix.enable = false; # disabled by default on the test's host. See all-tests.nix / tag(no-nix-by-default)
           };
-          networking.interfaces.bond0.ipv4.addresses = [
-            { address = "10.10.0.3"; prefixLength = 24; }
-          ];
-          networking.firewall.enable = false;
         };
       };
-    };
+    bridged =
+      { ... }:
+      {
+        virtualisation.vlans = [ 1 ];
 
-    bridgedbond = { config, pkgs, ... }: {
-      virtualisation.memorySize = 128;
-      virtualisation.vlans = [ 1 ];
+        containers.bridged = {
+          privateNetwork = true;
+          interfaces = [ "eth1" ];
 
-      containers.bridgedbond = {
-        privateNetwork = true;
-        interfaces = [ "eth1" ];
-
-        config = {
-          networking.bonds.bond0 = {
-            interfaces = [ "eth1" ];
-            driverOptions.mode = "active-backup";
+          config = {
+            networking.bridges.br0.interfaces = [ "eth1" ];
+            networking.interfaces.br0.ipv4.addresses = [
+              {
+                address = "10.10.0.2";
+                prefixLength = 24;
+              }
+            ];
+            networking.firewall.enable = false;
+            nix.enable = false; # disabled by default on the test's host. See all-tests.nix / tag(no-nix-by-default)
           };
-          networking.bridges.br0.interfaces = [ "bond0" ];
-          networking.interfaces.br0.ipv4.addresses = [
-            { address = "10.10.0.4"; prefixLength = 24; }
-          ];
-          networking.firewall.enable = false;
         };
       };
-    };
+
+    bonded =
+      { ... }:
+      {
+        virtualisation.vlans = [ 1 ];
+
+        containers.bonded = {
+          privateNetwork = true;
+          interfaces = [ "eth1" ];
+
+          config = {
+            networking.bonds.bond0 = {
+              interfaces = [ "eth1" ];
+              driverOptions.mode = "active-backup";
+            };
+            networking.interfaces.bond0.ipv4.addresses = [
+              {
+                address = "10.10.0.3";
+                prefixLength = 24;
+              }
+            ];
+            networking.firewall.enable = false;
+            nix.enable = false; # disabled by default on the test's host. See all-tests.nix / tag(no-nix-by-default)
+          };
+        };
+      };
+
+    bridgedbond =
+      { ... }:
+      {
+        virtualisation.vlans = [ 1 ];
+
+        containers.bridgedbond = {
+          privateNetwork = true;
+          interfaces = [ "eth1" ];
+
+          config = {
+            networking.bonds.bond0 = {
+              interfaces = [ "eth1" ];
+              driverOptions.mode = "active-backup";
+            };
+            networking.bridges.br0.interfaces = [ "bond0" ];
+            networking.interfaces.br0.ipv4.addresses = [
+              {
+                address = "10.10.0.4";
+                prefixLength = 24;
+              }
+            ];
+            networking.firewall.enable = false;
+            nix.enable = false; # disabled by default on the test's host. See all-tests.nix / tag(no-nix-by-default)
+          };
+        };
+      };
   };
 
   testScript = ''
-    startAll;
+    start_all()
 
-    subtest "prepare server", sub {
-      $server->waitForUnit("default.target");
-      $server->succeed("ip link show dev eth1 >&2");
-    };
+    with subtest("Prepare server"):
+        server.wait_for_unit("default.target")
+        server.succeed("ip link show dev eth1 >&2")
 
-    subtest "simple physical interface", sub {
-      $server->succeed("nixos-container start server");
-      $server->waitForUnit("container\@server");
-      $server->succeed("systemctl -M server list-dependencies network-addresses-eth1.service >&2");
+    with subtest("Simple physical interface is up"):
+        server.succeed("nixos-container start server")
+        server.wait_for_unit("container@server")
+        server.succeed(
+            "systemctl -M server list-dependencies network-addresses-eth1.service >&2"
+        )
 
-      # The other tests will ping this container on its ip. Here we just check
-      # that the device is present in the container.
-      $server->succeed("nixos-container run server -- ip a show dev eth1 >&2");
-    };
+        # The other tests will ping this container on its ip. Here we just check
+        # that the device is present in the container.
+        server.succeed("nixos-container run server -- ip a show dev eth1 >&2")
 
-    subtest "physical device in bridge in container", sub {
-      $bridged->waitForUnit("default.target");
-      $bridged->succeed("nixos-container start bridged");
-      $bridged->waitForUnit("container\@bridged");
-      $bridged->succeed("systemctl -M bridged list-dependencies network-addresses-br0.service >&2");
-      $bridged->succeed("systemctl -M bridged status -n 30 -l network-addresses-br0.service");
-      $bridged->succeed("nixos-container run bridged -- ping -w 10 -c 1 -n 10.10.0.1");
-    };
+    with subtest("Simple dummy interface is up, with autoStart enabled"):
+        autoStart.wait_for_unit("container@autoStart")
 
-    subtest "physical device in bond in container", sub {
-      $bonded->waitForUnit("default.target");
-      $bonded->succeed("nixos-container start bonded");
-      $bonded->waitForUnit("container\@bonded");
-      $bonded->succeed("systemctl -M bonded list-dependencies network-addresses-bond0 >&2");
-      $bonded->succeed("systemctl -M bonded status -n 30 -l network-addresses-bond0 >&2");
-      $bonded->succeed("nixos-container run bonded -- ping -w 10 -c 1 -n 10.10.0.1");
-    };
+        # Check if any dependency of container@autoStart.service timed out.
+        # If a non-existing .device dependency is set in Wants, systemd will
+        # wait until that unit times out, resulting a delay of the container.
+        autoStart.fail("journalctl _PID=1 | grep sys-subsystem-net-devices | grep 'timed out'")
 
-    subtest "physical device in bond in bridge in container", sub {
-      $bridgedbond->waitForUnit("default.target");
-      $bridgedbond->succeed("nixos-container start bridgedbond");
-      $bridgedbond->waitForUnit("container\@bridgedbond");
-      $bridgedbond->succeed("systemctl -M bridgedbond list-dependencies network-addresses-br0.service >&2");
-      $bridgedbond->succeed("systemctl -M bridgedbond status -n 30 -l network-addresses-br0.service");
-      $bridgedbond->succeed("nixos-container run bridgedbond -- ping -w 10 -c 1 -n 10.10.0.1");
-    };
+        autoStart.succeed("nixos-container run autoStart -- ip a show dev dummy-test >&2")
+
+    with subtest("Physical device in bridge in container can ping server"):
+        bridged.wait_for_unit("default.target")
+        bridged.succeed("nixos-container start bridged")
+        bridged.wait_for_unit("container@bridged")
+        bridged.succeed(
+            "systemctl -M bridged list-dependencies network-addresses-br0.service >&2",
+            "systemctl -M bridged status -n 30 -l network-addresses-br0.service",
+            "nixos-container run bridged -- ping -w 10 -c 1 -n 10.10.0.1",
+        )
+
+    with subtest("Physical device in bond in container can ping server"):
+        bonded.wait_for_unit("default.target")
+        bonded.succeed("nixos-container start bonded")
+        bonded.wait_for_unit("container@bonded")
+        bonded.succeed(
+            "systemctl -M bonded list-dependencies network-addresses-bond0 >&2",
+            "systemctl -M bonded status -n 30 -l network-addresses-bond0 >&2",
+            "nixos-container run bonded -- ping -w 10 -c 1 -n 10.10.0.1",
+        )
+
+    with subtest("Physical device in bond in bridge in container can ping server"):
+        bridgedbond.wait_for_unit("default.target")
+        bridgedbond.succeed("nixos-container start bridgedbond")
+        bridgedbond.wait_for_unit("container@bridgedbond")
+        bridgedbond.succeed(
+            "systemctl -M bridgedbond list-dependencies network-addresses-br0.service >&2",
+            "systemctl -M bridgedbond status -n 30 -l network-addresses-br0.service",
+            "nixos-container run bridgedbond -- ping -w 10 -c 1 -n 10.10.0.1",
+        )
   '';
-})
+}

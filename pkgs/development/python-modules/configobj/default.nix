@@ -1,34 +1,42 @@
-{ stdenv, buildPythonPackage
-, fetchFromGitHub
-, six
-, mock, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  mock,
+  pytestCheckHook,
+  six,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "configobj";
-  version = "5.0.6";
+  version = "5.0.9";
+  pyproject = true;
 
-  # Pypi archives don't contain the tests
+  __structuredAttrs = true;
+
   src = fetchFromGitHub {
     owner = "DiffSK";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "0x97794nk3dfn0i3si9fv7y19jnpnarb34bkdwlz7ii7ag6xihhw";
+    repo = "configobj";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-duPCGBaHCXp4A6ZHLnyL1SZtR7K4FJ4hs5wCE1V9WB4=";
   };
 
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [ six ];
+  dependencies = [ six ];
 
-  checkPhase = ''
-    pytest --deselect=tests/test_configobj.py::test_options_deprecation
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  checkInputs = [ mock pytest ];
+  checkInputs = [ mock ];
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "configobj" ];
+
+  meta = {
     description = "Config file reading, writing and validation";
-    homepage = https://pypi.python.org/pypi/configobj;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ garbas ];
+    homepage = "https://github.com/DiffSK/configobj";
+    changelog = "https://github.com/DiffSK/configobj/blob/v${finalAttrs.version}/CHANGES.rst";
+    license = lib.licenses.bsd3;
+    maintainers = [ ];
   };
-}
+})

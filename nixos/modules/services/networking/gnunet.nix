@@ -1,35 +1,39 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.gnunet;
 
-  homeDir = "/var/lib/gnunet";
+  stateDir = "/var/lib/gnunet";
 
-  configFile = with cfg; pkgs.writeText "gnunetd.conf"
-    ''
-      [PATHS]
-      SERVICEHOME = ${homeDir}
+  configFile = with cfg; ''
+    [PATHS]
+    GNUNET_HOME = ${stateDir}
+    GNUNET_RUNTIME_DIR = /run/gnunet
+    GNUNET_USER_RUNTIME_DIR = /run/gnunet
+    GNUNET_DATA_HOME = ${stateDir}/data
 
-      [ats]
-      WAN_QUOTA_IN = ${toString load.maxNetDownBandwidth} b
-      WAN_QUOTA_OUT = ${toString load.maxNetUpBandwidth} b
+    [ats]
+    WAN_QUOTA_IN = ${toString load.maxNetDownBandwidth} b
+    WAN_QUOTA_OUT = ${toString load.maxNetUpBandwidth} b
 
-      [datastore]
-      QUOTA = ${toString fileSharing.quota} MB
+    [datastore]
+    QUOTA = ${toString fileSharing.quota} MB
 
-      [transport-udp]
-      PORT = ${toString udp.port}
-      ADVERTISED_PORT = ${toString udp.port}
+    [transport-udp]
+    PORT = ${toString udp.port}
+    ADVERTISED_PORT = ${toString udp.port}
 
-      [transport-tcp]
-      PORT = ${toString tcp.port}
-      ADVERTISED_PORT = ${toString tcp.port}
+    [transport-tcp]
+    PORT = ${toString tcp.port}
+    ADVERTISED_PORT = ${toString tcp.port}
 
-      ${extraOptions}
-    '';
+    ${extraOptions}
+  '';
 
 in
 
@@ -41,7 +45,8 @@ in
 
     services.gnunet = {
 
-      enable = mkOption {
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = ''
           Whether to run the GNUnet daemon.  GNUnet is GNU's anonymous
@@ -50,7 +55,8 @@ in
       };
 
       fileSharing = {
-        quota = mkOption {
+        quota = lib.mkOption {
+          type = lib.types.int;
           default = 1024;
           description = ''
             Maximum file system usage (in MiB) for file sharing.
@@ -59,8 +65,9 @@ in
       };
 
       udp = {
-        port = mkOption {
-          default = 2086;  # assigned by IANA
+        port = lib.mkOption {
+          type = lib.types.port;
+          default = 2086; # assigned by IANA
           description = ''
             The UDP port for use by GNUnet.
           '';
@@ -68,8 +75,9 @@ in
       };
 
       tcp = {
-        port = mkOption {
-          default = 2086;  # assigned by IANA
+        port = lib.mkOption {
+          type = lib.types.port;
+          default = 2086; # assigned by IANA
           description = ''
             The TCP port for use by GNUnet.
           '';
@@ -77,7 +85,8 @@ in
       };
 
       load = {
-        maxNetDownBandwidth = mkOption {
+        maxNetDownBandwidth = lib.mkOption {
+          type = lib.types.int;
           default = 50000;
           description = ''
             Maximum bandwidth usage (in bits per second) for GNUnet
@@ -85,7 +94,8 @@ in
           '';
         };
 
-        maxNetUpBandwidth = mkOption {
+        maxNetUpBandwidth = lib.mkOption {
+          type = lib.types.int;
           default = 50000;
           description = ''
             Maximum bandwidth usage (in bits per second) for GNUnet
@@ -93,7 +103,8 @@ in
           '';
         };
 
-        hardNetUpBandwidth = mkOption {
+        hardNetUpBandwidth = lib.mkOption {
+          type = lib.types.int;
           default = 0;
           description = ''
             Hard bandwidth limit (in bits per second) when uploading
@@ -102,55 +113,56 @@ in
         };
       };
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.gnunet;
-        defaultText = "pkgs.gnunet";
-        description = "Overridable attribute of the gnunet package to use.";
-        example = literalExample "pkgs.gnunet_git";
+      package = lib.mkPackageOption pkgs "gnunet" {
+        example = "gnunet_git";
       };
 
-      extraOptions = mkOption {
+      extraOptions = lib.mkOption {
+        type = lib.types.lines;
         default = "";
         description = ''
-          Additional options that will be copied verbatim in `gnunet.conf'.
-          See `gnunet.conf(5)' for details.
+          Additional options that will be copied verbatim in {file}`gnunet.conf`.
+          See {manpage}`gnunet.conf(5)` for details.
         '';
       };
     };
 
   };
 
-
   ###### implementation
 
-  config = mkIf config.services.gnunet.enable {
+  config = lib.mkIf config.services.gnunet.enable {
 
-    users.extraUsers.gnunet = {
+    users.users.gnunet = {
       group = "gnunet";
       description = "GNUnet User";
-      home = homeDir;
-      createHome = true; 
       uid = config.ids.uids.gnunet;
     };
 
-    users.extraGroups.gnunet.gid = config.ids.gids.gnunet;
+    users.groups.gnunet.gid = config.ids.gids.gnunet;
 
     # The user tools that talk to `gnunetd' should come from the same source,
     # so install them globally.
     environment.systemPackages = [ cfg.package ];
 
+    environment.etc."gnunet.conf".text = configFile;
+
     systemd.services.gnunet = {
       description = "GNUnet";
+      documentation = [ "info:gnunet" ];
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
-      path = [ cfg.package pkgs.miniupnpc ];
-      environment.TMPDIR = "/tmp";
-      serviceConfig.PrivateTemp = true;
-      serviceConfig.ExecStart = "${cfg.package}/lib/gnunet/libexec/gnunet-service-arm -c ${configFile}";
+      restartTriggers = [ config.environment.etc."gnunet.conf".source ];
+      path = [
+        cfg.package
+        pkgs.miniupnpc
+      ];
+      serviceConfig.ExecStart = "${cfg.package}/lib/gnunet/libexec/gnunet-service-arm -c /etc/gnunet.conf";
       serviceConfig.User = "gnunet";
       serviceConfig.UMask = "0007";
-      serviceConfig.WorkingDirectory = homeDir;
+      serviceConfig.WorkingDirectory = stateDir;
+      serviceConfig.RuntimeDirectory = "gnunet";
+      serviceConfig.StateDirectory = "gnunet";
     };
 
   };

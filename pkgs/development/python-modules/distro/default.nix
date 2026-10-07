@@ -1,25 +1,32 @@
-{ stdenv, fetchPypi, buildPythonPackage, pytest, pytestcov, tox }:
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "distro";
-  version = "1.2.0";
-
-  buildInputs = [ pytest pytestcov tox];
-
-  checkPhase = ''
-    touch tox.ini
-    tox
-  '';
+  version = "1.9.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "d94370e43b676ac44fbe1ab68ca903a6147eaba3a9e8eff85b2c05556a455b76";
+    hash = "sha256-L6d8b9iUDxFu4da5Si+QsTteqNAZuYvIuv3KvN2b2+0=";
   };
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/nir0s/distro;
-    description = "Linux Distribution - a Linux OS platform information API.";
-    license = licenses.asl20;
-    maintainers = with maintainers; [ nand0p ];
+  nativeBuildInputs = [ setuptools ];
+
+  # tests are very targeted at individual linux distributions
+  doCheck = false;
+
+  pythonImportsCheck = [ "distro" ];
+
+  meta = {
+    homepage = "https://github.com/nir0s/distro";
+    description = "Linux Distribution - a Linux OS platform information API";
+    mainProgram = "distro";
+    license = lib.licenses.asl20;
+    maintainers = [ ];
   };
 }

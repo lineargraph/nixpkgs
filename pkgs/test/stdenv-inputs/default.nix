@@ -1,10 +1,10 @@
-{ stdenv }:
+{ lib, stdenv }:
 
 let
   foo = stdenv.mkDerivation {
     name = "foo-test";
 
-    unpackPhase = ":";
+    dontUnpack = true;
 
     installPhase = ''
       mkdir -p $out/bin $out/include $out/lib
@@ -12,7 +12,7 @@ let
       chmod +x $out/bin/foo
       cp ${./foo.c} $out/include/foo.h
       $CC -shared \
-        ${stdenv.lib.optionalString stdenv.isDarwin "-Wl,-install_name,$out/lib/libfoo.dylib"} \
+        ${lib.optionalString stdenv.hostPlatform.isDarwin "-Wl,-install_name,$out/lib/libfoo.dylib"} \
         -o $out/lib/libfoo${stdenv.hostPlatform.extensions.sharedLibrary} \
         ${./foo.c}
     '';
@@ -20,9 +20,12 @@ let
 
   bar = stdenv.mkDerivation {
     name = "bar-test";
-    outputs = [ "out" "dev" ];
+    outputs = [
+      "out"
+      "dev"
+    ];
 
-    unpackPhase = ":";
+    dontUnpack = true;
 
     installPhase = ''
       mkdir -p $out/bin $dev/include $dev/lib
@@ -30,7 +33,7 @@ let
       chmod +x $out/bin/bar
       cp ${./bar.c} $dev/include/bar.h
       $CC -shared \
-        ${stdenv.lib.optionalString stdenv.isDarwin "-Wl,-install_name,$dev/lib/libbar.dylib"} \
+        ${lib.optionalString stdenv.hostPlatform.isDarwin "-Wl,-install_name,$dev/lib/libbar.dylib"} \
         -o $dev/lib/libbar${stdenv.hostPlatform.extensions.sharedLibrary} \
         ${./bar.c}
     '';
@@ -39,11 +42,13 @@ in
 
 stdenv.mkDerivation {
   name = "stdenv-inputs-test";
-  phases = [ "buildPhase" ];
 
-  buildInputs = [ foo bar ];
+  buildInputs = [
+    foo
+    bar
+  ];
 
-  buildPhase = ''
+  buildCommand = ''
     env
 
     printf "checking whether binaries are available... " >&2
@@ -64,5 +69,8 @@ stdenv.mkDerivation {
     touch $out
   '';
 
-  meta.platforms = stdenv.lib.platforms.all;
+  meta.platforms = lib.platforms.all;
+  passthru = {
+    inherit foo bar;
+  };
 }

@@ -1,21 +1,53 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, enum34, hpack, hyperframe }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  hpack,
+  hyperframe,
+  pytestCheckHook,
+  hypothesis,
+}:
 
 buildPythonPackage rec {
-  name = "${pname}-${version}";
   pname = "h2";
-  version = "3.0.1";
+  version = "4.3.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0r3f43r0v7sqgdjjg5ngw0dndk2v6cyd0jncpwya54m37y42z5mj";
+  src = fetchFromGitHub {
+    owner = "python-hyper";
+    repo = "h2";
+    tag = "v${version}";
+    hash = "sha256-04we2xeh5LtLA4La9WPfXQVczDIz7NpL/6y9TmIELgM=";
   };
 
-  propagatedBuildInputs = [ enum34 hpack hyperframe ];
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
+  dependencies = [
+    hpack
+    hyperframe
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    hypothesis
+  ];
+
+  disabledTests = [
+    # timing sensitive
+    "test_changing_max_frame_size"
+  ];
+
+  pythonImportsCheck = [
+    "h2.connection"
+    "h2.config"
+  ];
+
+  meta = {
+    changelog = "https://github.com/python-hyper/h2/blob/${src.tag}/CHANGELOG.rst";
     description = "HTTP/2 State-Machine based protocol implementation";
-    homepage = "http://hyper.rtfd.org/";
-    license = licenses.mit;
+    homepage = "https://github.com/python-hyper/h2";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

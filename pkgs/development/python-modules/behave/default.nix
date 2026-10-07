@@ -1,44 +1,90 @@
-{ stdenv, fetchPypi
-, buildPythonApplication, isPy27, python, pythonOlder
-, mock, nose, pathpy, pyhamcrest, pytest
-, glibcLocales, parse, parse-type, six
-, traceback2
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  buildPythonPackage,
+  python,
+  pytestCheckHook,
+  assertpy,
+  chardet,
+  freezegun,
+  mock,
+  path,
+  pyhamcrest,
+  pytest-html,
+  colorama,
+  cucumber-expressions,
+  cucumber-tag-expressions,
+  parse,
+  parse-type,
+  setuptools,
+  six,
 }:
-buildPythonApplication rec {
-  pname = "behave";
-  version = "1.2.6";
-  name = "${pname}-${version}";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "11hsz365qglvpp1m1w16239c3kiw15lw7adha49lqaakm8kj6rmr";
+buildPythonPackage rec {
+  pname = "behave";
+  version = "1.3.3";
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "behave";
+    repo = "behave";
+    tag = "v${version}";
+    hash = "sha256-sHsnBeyl0UJ0f7WcTUc+FhUxATh84RPxVE3TqGYosrs=";
   };
 
-  checkInputs = [ mock nose pathpy pyhamcrest pytest ];
-  buildInputs = [ glibcLocales ];
-  propagatedBuildInputs = [ parse parse-type six ] ++ stdenv.lib.optional (pythonOlder "3.0") traceback2;
+  build-system = [ setuptools ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    assertpy
+    chardet
+    freezegun
+    mock
+    path
+    pyhamcrest
+    pytest-html
+  ];
+
+  pythonImportsCheck = [ "behave" ];
+
+  dependencies = [
+    colorama
+    cucumber-expressions
+    cucumber-tag-expressions
+    parse
+    parse-type
+    six
+  ];
 
   postPatch = ''
     patchShebangs bin
   '';
 
-  doCheck = true;
+  # timing-based test flaky on Darwin
+  # https://github.com/NixOS/nixpkgs/pull/97737#issuecomment-691489824
+  disabledTests = lib.optionals stdenv.hostPlatform.isDarwin [
+    "test_step_decorator_async_run_until_complete"
+  ];
 
-  checkPhase = ''
-    export LANG="en_US.UTF-8"
-    export LC_ALL="en_US.UTF-8"
-
-    pytest test tests
-
-    ${python.interpreter} bin/behave -f progress3 --stop --tags='~@xfail' features/
+  # -e disables tags.help.feature from being executed (due to stdout formatting differences)
+  postCheck = ''
+    ${python.interpreter} bin/behave -f progress3 --stop --tags='~@xfail' \
+      -e tags.help.feature \
+      features/
     ${python.interpreter} bin/behave -f progress3 --stop --tags='~@xfail' tools/test-features/
     ${python.interpreter} bin/behave -f progress3 --stop --tags='~@xfail' issue.features/
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/behave/behave;
-    description = "behaviour-driven development, Python style";
-    license = licenses.bsd2;
-    maintainers = with maintainers; [ alunduil ];
+  meta = {
+    changelog = "https://github.com/behave/behave/blob/${src.tag}/CHANGES.rst";
+    homepage = "https://github.com/behave/behave";
+    description = "Behaviour-driven development, Python style";
+    mainProgram = "behave";
+    license = lib.licenses.bsd2;
+    maintainers = with lib.maintainers; [
+      alunduil
+      maxxk
+    ];
   };
 }

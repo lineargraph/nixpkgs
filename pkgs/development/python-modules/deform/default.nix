@@ -1,41 +1,58 @@
-{ lib, buildPythonPackage, fetchPypi
-, chameleon, colander, iso8601, peppercorn, translationstring, zope_deprecation
-, nose, coverage, beautifulsoup4, flaky }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  chameleon,
+  colander,
+  iso8601,
+  peppercorn,
+  translationstring,
+  zope-deprecation,
+  setuptools,
+  coverage,
+  beautifulsoup4,
+  flaky,
+  pyramid,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "deform";
-  version = "2.0.5";
+  version = "2.0.15";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "874d3346a02c500432efdcc73b1a7174aa0ea69cd52a99bb9a812967f54f6f79";
+    hash = "sha256-HpEpN2UMHbuDAHndnAOZUHYqIwIjpWd0D78bI/EJA2c=";
   };
 
-  postPatch = ''
-    substituteInPlace setup.py \
-      --replace "iso8601<=0.1.11" iso8601
-  '';
+  build-system = [ setuptools ];
 
-  propagatedBuildInputs = [
+  dependencies = [
     chameleon
     colander
     iso8601
     peppercorn
     translationstring
-    zope_deprecation
+    zope-deprecation
   ];
 
-  checkInputs = [
-    nose
+  nativeCheckInputs = [
     coverage
     beautifulsoup4
     flaky
+    pyramid
+    pytestCheckHook
   ];
 
-  meta = with lib; {
+  meta = {
     description = "Form library with advanced features like nested forms";
-    homepage = https://docs.pylonsproject.org/projects/deform/en/latest/;
-    license = licenses.free; # http://www.repoze.org/LICENSE.txt
-    maintainers = with maintainers; [ garbas domenkozar ];
+    homepage = "https://docs.pylonsproject.org/projects/deform/en/latest/";
+    # https://github.com/Pylons/deform/blob/fdc43d59de7d11b0e3ba1b92835b780cfe181719/LICENSE.txt
+    license = [
+      lib.licenses.bsd3
+      lib.licenses.cc-by-30
+    ];
+    maintainers = [ ];
   };
 }

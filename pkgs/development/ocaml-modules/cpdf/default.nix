@@ -1,22 +1,34 @@
-{ stdenv, fetchgit, ocaml, findlib, camlpdf, ncurses }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  ocaml,
+  findlib,
+  camlpdf,
+  nix-update-script,
+}:
 
-let version = "2.2.1"; in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "ocaml${ocaml.version}-cpdf";
+  version = "2.9.2";
 
-stdenv.mkDerivation {
-  name = "ocaml${ocaml.version}-cpdf-${version}";
-
-  src = fetchgit {
-    url = https://github.com/johnwhitington/cpdf-source.git;
-    rev = "refs/tags/v${version}";
-    sha256 = "1i2z417agnzzdavjfwb20r6716jl3sk5yi43ssy4jqzy6ah8x1ff";
+  src = fetchFromGitHub {
+    owner = "johnwhitington";
+    repo = "cpdf-source";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-uhgriPA/y5nElQjbNtzx8CJ8O6ZORKCJAzXYrIOWd60=";
   };
 
-  buildInputs = [ ocaml findlib ncurses ];
+  nativeBuildInputs = [
+    ocaml
+    findlib
+  ];
   propagatedBuildInputs = [ camlpdf ];
 
-  createFindlibDestdir = true;
+  strictDeps = true;
 
-  postInstall = ''
+  preInstall = ''
+    mkdir -p $OCAMLFIND_DESTDIR
     mkdir -p $out/bin
     cp cpdf $out/bin
     mkdir -p $out/share/
@@ -24,10 +36,17 @@ stdenv.mkDerivation {
     cp cpdfmanual.pdf $out/share/doc/cpdf/
   '';
 
+  passthru.updateScript = nix-update-script { };
+
   meta = {
-    homepage = https://www.coherentpdf.com/;
-    platforms = ocaml.meta.platforms or [];
     description = "PDF Command Line Tools";
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
+    homepage = "https://www.coherentpdf.com/";
+    changelog = "https://github.com/johnwhitington/cpdf-source/blob/${finalAttrs.src.rev}/Changes.txt";
+    license = lib.licenses.agpl3Only;
+    maintainers = with lib.maintainers; [ vbgl ];
+    teams = with lib.teams; [ ngi ];
+    mainProgram = "cpdf";
+    inherit (ocaml.meta) platforms;
+    broken = lib.versionOlder ocaml.version "4.10";
   };
-}
+})

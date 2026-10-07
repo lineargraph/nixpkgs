@@ -1,34 +1,108 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, python
-, nose2
-, proj ? null
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  replaceVars,
+
+  certifi,
+  cython,
+  numpy,
+  pandas,
+  proj,
+  setuptools,
+  shapely,
+  xarray,
 }:
 
-buildPythonPackage (rec {
+buildPythonPackage rec {
   pname = "pyproj";
-  version = "1.9.5.1";
-  name = "${pname}-${version}";
+  version = "3.8.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "53fa54c8fa8a1dfcd6af4bf09ce1aae5d4d949da63b90570ac5ec849efaf3ea8";
+  src = fetchFromGitHub {
+    owner = "pyproj4";
+    repo = "pyproj";
+    tag = version;
+    hash = "sha256-+2wUMbswg2yltNMLPc9U8MbEFx2xKVWxGjP/TBfCjto=";
   };
 
-  buildInputs = [ nose2 ];
+  # force pyproj to use ${proj}
+  patches = [
+    (replaceVars ./001.proj.patch {
+      proj = proj;
+      projdev = proj.dev;
+    })
+  ];
 
-  checkPhase = ''
-    runHook preCheck
-    pushd unittest  # changing directory should ensure we're importing the global pyproj
-    ${python.interpreter} test.py && ${python.interpreter} -c "import doctest, pyproj, sys; sys.exit(doctest.testmod(pyproj)[0])"
-    popd
-    runHook postCheck
+  build-system = [
+    cython
+    setuptools
+  ];
+
+  buildInputs = [ proj ];
+
+  dependencies = [ certifi ];
+
+  nativeCheckInputs = [
+    numpy
+    pandas
+    pytestCheckHook
+    shapely
+    xarray
+  ];
+
+  preCheck = ''
+    # import from $out
+    rm -r pyproj
   '';
 
+  disabledTestPaths = [
+    "test/test_datadir.py"
+  ];
+
+  disabledTests = [
+    # The following tests try to access network and end up with a URLError
+    "test__load_grid_geojson_old_file"
+    "test_get_transform_grid_list"
+    "test_sync__area_of_use__list"
+    "test_sync__bbox__list"
+    "test_sync__download_grids"
+    "test_sync__file__list"
+    "test_sync__source_id__list"
+    "test_sync_download"
+    "test_transformer_group__download_grids"
+    # https://github.com/pyproj4/pyproj/issues/1588
+    "test_coordinate_operation__from_string"
+    "test_transformer_from_pipeline__input_types"
+    "test_transformer_from_pipeline__wkt_json"
+  ];
+
+  pythonImportsCheck = [
+    "pyproj"
+    "pyproj.crs"
+    "pyproj.transformer"
+    "pyproj.geod"
+    "pyproj.proj"
+    "pyproj.database"
+    "pyproj.list"
+    "pyproj.datadir"
+    "pyproj.network"
+    "pyproj.sync"
+    "pyproj.enums"
+    "pyproj.aoi"
+    "pyproj.exceptions"
+  ];
+
   meta = {
-    description = "Python interface to PROJ.4 library";
-    homepage = https://github.com/jswhit/pyproj;
-    license = with lib.licenses; [ isc ];
+    description = "Python interface to PROJ library";
+    mainProgram = "pyproj";
+    homepage = "https://github.com/pyproj4/pyproj";
+    changelog = "https://github.com/pyproj4/pyproj/blob/${src.rev}/docs/history.rst";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [
+      dotlambda
+    ];
+    teams = [ lib.teams.geospatial ];
   };
-} // (if proj == null then {} else { PROJ_DIR = proj; }))
+}

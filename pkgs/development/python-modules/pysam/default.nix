@@ -1,20 +1,25 @@
-{ lib
-, buildPythonPackage
-, fetchFromGitHub
-, bzip2
-, bcftools
-, curl
-, cython
-, htslib
-, lzma
-, pytest
-, samtools
-, zlib
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  bzip2,
+  bcftools,
+  curl,
+  cython,
+  htslib,
+  libdeflate,
+  xz,
+  pytestCheckHook,
+  setuptools,
+  samtools,
+  zlib,
+  nix-update-script,
 }:
 
 buildPythonPackage rec {
-  pname   = "pysam";
-  version = "0.13.0";
+  pname = "pysam";
+  version = "0.23.3";
+  pyproject = true;
 
   # Fetching from GitHub instead of PyPi cause the 0.13 src release on PyPi is
   # missing some files which cause test failures.
@@ -22,27 +27,68 @@ buildPythonPackage rec {
   src = fetchFromGitHub {
     owner = "pysam-developers";
     repo = "pysam";
-    rev = "v${version}";
-    sha256 = "1lwbcl38w1x0gciw5psjp87msmv9zzkgiqikg9b83dqaw2y5az1i";
+    tag = "v${version}";
+    hash = "sha256-yOLnfuGQW+j0nHy4MRlwurZMpeRHTGmQ9eLmihcAGoQ=";
   };
 
-  buildInputs = [ bzip2 curl cython lzma zlib ];
+  build-system = [
+    cython
+    setuptools
+  ];
 
-  checkInputs = [ pytest bcftools htslib samtools ];
+  nativeBuildInputs = [
+    samtools
+  ];
 
-  checkPhase = "py.test";
+  buildInputs = [
+    bzip2
+    curl
+    libdeflate
+    xz
+    zlib
+  ];
 
-  preInstall = ''
-    export HOME=$(mktemp -d)
-    make -C tests/pysam_data
-    make -C tests/cbcf_data
+  # Use nixpkgs' htslib instead of the bundled one
+  # See https://pysam.readthedocs.io/en/latest/installation.html#external
+  # NOTE that htslib should be version compatible with pysam
+  preBuild = ''
+    export HTSLIB_MODE=shared
+    export HTSLIB_LIBRARY_DIR=${htslib}/lib
+    export HTSLIB_INCLUDE_DIR=${htslib}/include
   '';
 
+  nativeCheckInputs = [
+    pytestCheckHook
+    bcftools
+    htslib
+  ];
+
+  preCheck = ''
+    export HOME=$TMPDIR
+    make -C tests/pysam_data
+    make -C tests/cbcf_data
+    make -C tests/tabix_data
+    rm -rf pysam
+  '';
+
+  pythonImportsCheck = [
+    "pysam"
+    "pysam.bcftools"
+    "pysam.libchtslib"
+    "pysam.libcutils"
+    "pysam.libcvcf"
+    "pysam.libcsamtools"
+  ];
+
+  passthru.updateScript = nix-update-script { };
+
   meta = {
-    homepage = http://pysam.readthedocs.io/;
-    description = "A python module for reading, manipulating and writing genome data sets";
+    description = "Python module for reading, manipulating and writing genome data sets";
+    downloadPage = "https://github.com/pysam-developers/pysam";
+    changelog = "https://github.com/pysam-developers/pysam/releases/tag/${src.tag}";
+    homepage = "https://pysam.readthedocs.io";
     maintainers = with lib.maintainers; [ unode ];
     license = lib.licenses.mit;
-    platforms = [ "i686-linux" "x86_64-linux" ];
+    platforms = lib.platforms.unix;
   };
 }

@@ -1,44 +1,75 @@
-{ lib
-, fetchPypi
-, buildPythonPackage
-, pythonOlder
-, withVoice ? true, libopus
-, asyncio
-, aiohttp
-, websockets
-, pynacl
+{
+  lib,
+  stdenv,
+  aiohttp,
+  audioop-lts,
+  buildPythonPackage,
+  fetchFromGitHub,
+  ffmpeg,
+  libopus,
+  pynacl,
+  setuptools,
+  withVoice ? true,
+  aiodns,
+  brotli,
+  orjson,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage (finalAttrs: {
   pname = "discord.py";
-  version = "0.16.12";
+  version = "2.6.4";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "17fb8814100fbaf7a79468baa432184db6cef3bbea4ad194fe297c7407d50108";
+  src = fetchFromGitHub {
+    owner = "Rapptz";
+    repo = "discord.py";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-glFXgTNdOQ3cG/jlvi/1ASon2HpcoKli45IhLhjpIvA=";
   };
 
-  propagatedBuildInputs = [ asyncio aiohttp websockets pynacl ];
-  patchPhase = ''
-    substituteInPlace "requirements.txt" \
-      --replace "aiohttp>=1.0.0,<1.1.0" "aiohttp"
-  '' + lib.optionalString withVoice ''
+  build-system = [ setuptools ];
+
+  dependencies = [
+    aiohttp
+    audioop-lts
+  ]
+  ++ lib.optionals withVoice finalAttrs.passthru.optional-dependencies.voice;
+
+  optional-dependencies = {
+    speed = [
+      aiodns
+      brotli
+      orjson
+    ];
+    voice = [ pynacl ];
+  };
+
+  postPatch = lib.optionalString withVoice ''
     substituteInPlace "discord/opus.py" \
-      --replace "ctypes.util.find_library('opus')" "'${libopus}/lib/libopus.so.0'"
+      --replace-fail "ctypes.util.find_library('opus')" "'${libopus}/lib/libopus${stdenv.hostPlatform.extensions.sharedLibrary}'"
+
+    substituteInPlace "discord/player.py" \
+      --replace-fail "executable: str = 'ffmpeg'" "executable: str = '${lib.getExe ffmpeg}'"
   '';
 
-  disabled = pythonOlder "3.5";
-
-  # No tests in archive
+  # Only have integration tests with discord
   doCheck = false;
 
-  meta = {
-    description = "A python wrapper for the Discord API";
-    homepage    = "https://discordpy.rtfd.org/";
-    license     = lib.licenses.mit;
+  pythonImportsCheck = [
+    "discord"
+    "discord.types"
+    "discord.ui"
+    "discord.webhook"
+    "discord.app_commands"
+    "discord.ext.commands"
+    "discord.ext.tasks"
+  ];
 
-    # discord.py requires websockets<4.0
-    # See https://github.com/Rapptz/discord.py/issues/973
-    broken = true;
+  meta = {
+    description = "Python wrapper for the Discord API";
+    homepage = "https://discordpy.rtfd.org/";
+    changelog = "https://github.com/Rapptz/discord.py/blob/${finalAttrs.src.tag}/docs/whats_new.rst";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ getpsyched ];
   };
-}
+})

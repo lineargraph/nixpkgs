@@ -1,10 +1,13 @@
 # Support for DRBD, the Distributed Replicated Block Device.
-
-{ config, lib, pkgs, ... }:
-
-with lib;
-
-let cfg = config.services.drbd; in
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  cfg = config.services.drbd;
+in
 
 {
 
@@ -12,29 +15,28 @@ let cfg = config.services.drbd; in
 
   options = {
 
-    services.drbd.enable = mkOption {
+    services.drbd.enable = lib.mkOption {
       default = false;
-      type = types.bool;
+      type = lib.types.bool;
       description = ''
         Whether to enable support for DRBD, the Distributed Replicated
         Block Device.
       '';
     };
 
-    services.drbd.config = mkOption {
+    services.drbd.config = lib.mkOption {
       default = "";
-      type = types.string;
+      type = lib.types.lines;
       description = ''
-        Contents of the <filename>drbd.conf</filename> configuration file.
+        Contents of the {file}`drbd.conf` configuration file.
       '';
     };
 
   };
 
-
   ###### implementation
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
 
     environment.systemPackages = [ pkgs.drbd ];
 
@@ -42,26 +44,25 @@ let cfg = config.services.drbd; in
 
     boot.kernelModules = [ "drbd" ];
 
-    boot.extraModprobeConfig =
-      ''
-        options drbd usermode_helper=/run/current-system/sw/bin/drbdadm
-      '';
+    boot.extraModprobeConfig = ''
+      options drbd usermode_helper=/run/current-system/sw/bin/drbdadm
+    '';
 
-    environment.etc = singleton
-      { source = pkgs.writeText "drbd.conf" cfg.config;
-        target = "drbd.conf";
-      };
+    environment.etc."drbd.conf" = {
+      source = pkgs.writeText "drbd.conf" cfg.config;
+    };
 
     systemd.services.drbd = {
-      after = [ "systemd-udev.settle.service" "network.target" ];
+      after = [
+        "systemd-udev.settle.service"
+        "network.target"
+      ];
       wants = [ "systemd-udev.settle.service" ];
       wantedBy = [ "multi-user.target" ];
-      script = ''
-        ${pkgs.drbd}/sbin/drbdadm up all
-      '';
-      serviceConfig.ExecStop = ''
-        ${pkgs.drbd}/sbin/drbdadm down all
-      '';
+      serviceConfig = {
+        ExecStart = "${pkgs.drbd}/bin/drbdadm up all";
+        ExecStop = "${pkgs.drbd}/bin/drbdadm down all";
+      };
     };
   };
 }

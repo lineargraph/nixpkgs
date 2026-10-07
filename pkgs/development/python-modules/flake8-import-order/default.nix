@@ -1,25 +1,44 @@
-{ lib, buildPythonPackage, fetchPypi, isPy3k, enum34, pycodestyle, pytest, flake8, pylama }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  flake8,
+  pycodestyle,
+  pylama,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "flake8-import-order";
-  version = "0.17.1";
+  version = "0.19.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "68d430781a9ef15c85a0121500cf8462f1a4bc7672acb2a32bfdbcab044ae0b7";
+  src = fetchFromGitHub {
+    owner = "PyCQA";
+    repo = "flake8-import-order";
+    tag = version;
+    hash = "sha256-mXw3+pQMr2Ut1prj9sCZc4jyErDOyWJgq6OBPU1nZxs=";
   };
 
-  propagatedBuildInputs = [ pycodestyle ] ++ lib.optional (!isPy3k) enum34;
+  build-system = [ setuptools ];
 
-  checkInputs = [ pytest flake8 pycodestyle pylama ];
+  dependencies = [ pycodestyle ];
 
-  checkPhase = ''
-    pytest --strict
-  '';
+  nativeCheckInputs = [
+    flake8
+    pycodestyle
+    pylama
+    pytestCheckHook
+  ];
 
-  meta = with lib; {
+  pythonImportsCheck = [ "flake8_import_order" ];
+
+  meta = {
     description = "Flake8 and pylama plugin that checks the ordering of import statements";
-    homepage = https://github.com/PyCQA/flake8-import-order;
-    license = with licenses; [ lgpl3 mit ];
+    homepage = "https://github.com/PyCQA/flake8-import-order";
+    changelog = "https://github.com/PyCQA/flake8-import-order/blob/${version}/CHANGELOG.rst";
+    license = lib.licenses.lgpl3Only;
+    maintainers = [ ];
   };
 }

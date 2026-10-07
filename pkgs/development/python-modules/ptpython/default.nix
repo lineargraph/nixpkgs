@@ -1,25 +1,43 @@
-{ stdenv, buildPythonPackage, fetchPypi, wcwidth, six, prompt_toolkit, docopt
-, jedi, pygments }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  appdirs,
+  jedi,
+  prompt-toolkit,
+  pygments,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "ptpython";
-  version = "0.41";
-  name  = "${pname}-${version}";
+  version = "3.0.32";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1hcaaadkp5n37hxggraynifa33wx1akklzvf6y4rvgjxbjl2g2x7";
+    hash = "sha256-EWUXeCNt6VxYK0JzcpTlCma6SiH6AcAJDqcIFa9Hj+A=";
   };
 
-  propagatedBuildInputs = [ wcwidth six prompt_toolkit docopt jedi pygments ];
+  build-system = [ setuptools ];
+
+  dependencies = [
+    appdirs
+    jedi
+    prompt-toolkit
+    pygments
+  ];
 
   # no tests to run
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "An advanced Python REPL";
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ mlieberman85 ];
-    platforms = platforms.all;
+  pythonImportsCheck = [ "ptpython" ];
+
+  meta = {
+    description = "Advanced Python REPL";
+    homepage = "https://github.com/prompt-toolkit/ptpython";
+    changelog = "https://github.com/prompt-toolkit/ptpython/blob/${version}/CHANGELOG";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ mlieberman85 ];
   };
 }

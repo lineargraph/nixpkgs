@@ -1,23 +1,54 @@
-{ stdenv, fetchurl, buildPythonPackage, flask, wtforms, nose }:
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  hatchling,
+  flask,
+  itsdangerous,
+  wtforms,
+  email-validator,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
-  pname = "Flask-WTF";
-  version = "0.14.2";
-  name = "${pname}-${version}";
+  pname = "flask-wtf";
+  version = "1.2.2";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/F/Flask-WTF/${name}.tar.gz";
-    sha256 = "0dncc5as2k61b28k8kal5yh3prmv7zya1jz7kvci7ximzmfda52x";
+  src = fetchPypi {
+    pname = "flask_wtf";
+    inherit version;
+    hash = "sha256-edLuHkNs9XC8y32RZTP6GHV6LxjCkKzP+rG5oLaEZms=";
   };
 
-  propagatedBuildInputs = [ flask wtforms nose ];
+  build-system = [
+    hatchling
+    setuptools
+  ];
 
-  doCheck = false; # requires external service
+  dependencies = [
+    flask
+    itsdangerous
+    wtforms
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Simple integration of Flask and WTForms.";
-    license = licenses.bsd3;
-    maintainers = [ maintainers.mic92 ];
-    homepage = https://github.com/lepture/flask-wtf/;
+  optional-dependencies = {
+    email = [ email-validator ];
+  };
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "flask_wtf" ];
+
+  meta = {
+    description = "Simple integration of Flask and WTForms";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [
+      mic92
+      anthonyroussel
+    ];
+    homepage = "https://github.com/pallets-eco/flask-wtf/";
+    changelog = "https://github.com/pallets-eco/flask-wtf/releases/tag/v${version}";
   };
 }

@@ -1,97 +1,143 @@
-{ stdenv, writeText, erlang, perl, which, gitMinimal, wget, lib }:
+{
+  stdenv,
+  writeText,
+  erlang,
+  perl,
+  which,
+  gitMinimal,
+  wget,
+  lib,
+}:
 
-{ name, version
-, src
-, setupHook ? null
-, buildInputs ? []
-, beamDeps ? []
-, postPatch ? ""
-, compilePorts ? false
-, installPhase ? null
-, buildPhase ? null
-, configurePhase ? null
-, meta ? {}
-, enableDebugInfo ? false
-, ... }@attrs:
-
-with stdenv.lib;
+{
+  name,
+  version,
+  src,
+  setupHook ? null,
+  buildInputs ? [ ],
+  beamDeps ? [ ],
+  postPatch ? "",
+  compilePorts ? false,
+  installPhase ? null,
+  buildPhase ? null,
+  configurePhase ? null,
+  meta ? { },
+  enableDebugInfo ? false,
+  buildFlags ? [ ],
+  ...
+}@attrs:
 
 let
   debugInfoFlag = lib.optionalString (enableDebugInfo || erlang.debugInfo) "+debug_info";
 
-  shell = drv: stdenv.mkDerivation {
-          name = "interactive-shell-${drv.name}";
-          buildInputs = [ drv ];
+  shell =
+    drv:
+    stdenv.mkDerivation {
+      name = "interactive-shell-${drv.name}";
+      buildInputs = [ drv ];
     };
 
-  pkg = self: stdenv.mkDerivation ( attrs // {
-    app_name = "${name}";
-    name = "${name}-${version}";
-    inherit version;
+  pkg =
+    self:
+    stdenv.mkDerivation (
+      attrs
+      // {
+        app_name = name;
+        name = "${name}-${version}";
+        inherit version;
 
-    dontStrip = true;
+        dontStrip = true;
 
-    inherit src;
+        inherit src;
 
-    setupHook = if setupHook == null
-    then writeText "setupHook.sh" ''
-       addToSearchPath ERL_LIBS "$1/lib/erlang/lib"
-    ''
-    else setupHook;
+        setupHook =
+          if setupHook == null then
+            writeText "setupHook.sh" ''
+              addToSearchPath ERL_LIBS "$1/lib/erlang/lib"
+            ''
+          else
+            setupHook;
 
-    buildInputs = [ erlang perl which gitMinimal wget ];
-    propagatedBuildInputs = beamDeps;
+        nativeBuildInputs = (attrs.nativeBuildInputs or [ ]) ++ [
+          erlang
+          perl
+          which
+          gitMinimal
+          wget
+        ];
+        inherit buildInputs;
+        propagatedBuildInputs = beamDeps;
 
-    configurePhase = if configurePhase == null
-    then ''
-      runHook preConfigure
+        __structuredAttrs = true;
+        strictDeps = true;
 
-      # We shouldnt need to do this, but it seems at times there is a *.app in
-      # the repo/package. This ensures we start from a clean slate
-      make SKIP_DEPS=1 clean
+        buildFlags = [
+          "SKIP_DEPS=1"
+        ]
+        ++ lib.optional (enableDebugInfo || erlang.debugInfo) ''ERL_OPTS="$ERL_OPTS +debug_info"''
+        ++ buildFlags;
 
-      runHook postConfigure
-    ''
-    else configurePhase;
+        configurePhase =
+          if configurePhase == null then
+            ''
+              runHook preConfigure
 
-    buildPhase = if buildPhase == null
-    then ''
-        runHook preBuild
+              # We shouldnt need to do this, but it seems at times there is a *.app in
+              # the repo/package. This ensures we start from a clean slate
+              make SKIP_DEPS=1 clean
 
-        make SKIP_DEPS=1 ERL_OPTS="$ERL_OPTS ${debugInfoFlag}"
+              runHook postConfigure
+            ''
+          else
+            configurePhase;
 
-        runHook postBuild
-    ''
-    else buildPhase;
+        buildPhase =
+          if buildPhase == null then
+            ''
+              runHook preBuild
 
-    installPhase =  if installPhase == null
-    then ''
-        runHook preInstall
+              flagsArray=()
+              concatTo flagsArray buildFlags buildFlagsArray
 
-        mkdir -p $out/lib/erlang/lib/${name}
-        cp -r ebin $out/lib/erlang/lib/${name}/
-        cp -r src $out/lib/erlang/lib/${name}/
+              make "''${flagsArray[@]}"
 
-        if [ -d include ]; then
-          cp -r include $out/lib/erlang/lib/${name}/
-        fi
+              runHook postBuild
+            ''
+          else
+            buildPhase;
 
-        if [ -d priv ]; then
-          cp -r priv $out/lib/erlang/lib/${name}/
-        fi
+        installPhase =
+          if installPhase == null then
+            ''
+              runHook preInstall
 
-        if [ -d doc ]; then
-          cp -r doc $out/lib/erlang/lib/${name}/
-        fi
+              mkdir -p $out/lib/erlang/lib/${name}
+              cp -r ebin $out/lib/erlang/lib/${name}/
+              cp -r src $out/lib/erlang/lib/${name}/
 
-        runHook postInstall
-    ''
-    else installPhase;
+              if [ -d include ]; then
+                cp -r include $out/lib/erlang/lib/${name}/
+              fi
 
-    passthru = {
-      packageName = name;
-      env = shell self;
-      inherit beamDeps;
-    };
-});
-in fix pkg
+              if [ -d priv ]; then
+                cp -r priv $out/lib/erlang/lib/${name}/
+              fi
+
+              if [ -d doc ]; then
+                cp -r doc $out/lib/erlang/lib/${name}/
+              fi
+
+              runHook postInstall
+            ''
+          else
+            installPhase;
+
+        passthru = {
+          packageName = name;
+          env = shell self;
+          inherit beamDeps;
+        };
+      }
+    );
+in
+lib.fix pkg

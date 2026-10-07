@@ -1,29 +1,75 @@
-{ buildPythonPackage, stdenv, fetchPypi, pytest, unicodecsv, pandas
-, xlwt, openpyxl, pyyaml, xlrd, odfpy, fetchpatch
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  markuppy,
+  odfpy,
+  openpyxl,
+  pandas,
+  pytestCheckHook,
+  pytest-cov-stub,
+  pyyaml,
+  setuptools-scm,
+  tabulate,
+  unicodecsv,
+  xlrd,
+  xlwt,
 }:
 
 buildPythonPackage rec {
   pname = "tablib";
-  version = "0.12.1";
+  version = "3.10.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "11wxchj0qz77dn79yiq30k4b4gsm429f4bizk4lm4rb63nk51kxq";
+    hash = "sha256-eBz6mkLejzPFKv+Ff9CgTkg95P0cU+qqmmrqxiutEd4=";
   };
 
-  checkInputs = [ pytest unicodecsv pandas ];
-  propagatedBuildInputs = [ xlwt openpyxl pyyaml xlrd odfpy ];
+  nativeBuildInputs = [ setuptools-scm ];
 
-  patches = [
-    (fetchpatch {
-      url = "https://github.com/kennethreitz/tablib/commit/0e51a2d0944022af186d2dcd34c0ab3c47141ba5.patch";
-      sha256 = "0lbbl871zdn5vpgqyjkil0c2ap3b5hz19rmihhyvrx7m4mlh1aij";
-    })
+  optional-dependencies = {
+    all = [
+      markuppy
+      odfpy
+      openpyxl
+      pandas
+      pyyaml
+      tabulate
+      xlrd
+      xlwt
+    ];
+    cli = [ tabulate ];
+    html = [ markuppy ];
+    ods = [ odfpy ];
+    pandas = [ pandas ];
+    xls = [
+      xlrd
+      xlwt
+    ];
+    xlsx = [ openpyxl ];
+    yaml = [ pyyaml ];
+  };
+
+  nativeCheckInputs = [
+    pandas
+    pytestCheckHook
+    pytest-cov-stub
+    unicodecsv
   ];
 
-  meta = with stdenv.lib; {
-    description = "Tablib: format-agnostic tabular dataset library";
-    homepage = http://python-tablib.org;
-    license = licenses.mit;
+  disabledTestPaths = [
+    # test_tablib needs MarkupPy, which isn't packaged yet
+    "tests/test_tablib.py"
+  ];
+
+  pythonImportsCheck = [ "tablib" ];
+
+  meta = {
+    description = "Format-agnostic tabular dataset library";
+    homepage = "https://tablib.readthedocs.io/";
+    changelog = "https://github.com/jazzband/tablib/raw/v${version}/HISTORY.md";
+    license = lib.licenses.mit;
+    maintainers = [ ];
   };
 }

@@ -1,47 +1,48 @@
-import ./make-test.nix ({ pkgs, ... }:
-
+{ lib, ... }:
 {
   name = "samba";
 
-  meta.maintainers = [ pkgs.lib.maintainers.eelco ];
+  meta.maintainers = [ lib.maintainers.anthonyroussel ];
 
-  nodes =
-    { client =
-        { config, pkgs, ... }:
-        { fileSystems = pkgs.lib.mkVMOverride
-            { "/public" = {
-                fsType = "cifs";
-                device = "//server/public";
-                options = [ "guest" ];
-              };
-            };
+  nodes = {
+    client =
+      { ... }:
+      {
+        virtualisation.fileSystems = {
+          "/public" = {
+            fsType = "cifs";
+            device = "//server/public";
+            options = [ "guest" ];
+          };
         };
+      };
 
-      server =
-        { config, pkgs, ... }:
-        { services.samba.enable = true;
-          services.samba.shares.public =
-            { path = "/public";
+    server =
+      { ... }:
+      {
+        services.samba = {
+          enable = true;
+          openFirewall = true;
+          settings = {
+            "public" = {
+              "path" = "/public";
               "read only" = true;
-              browseable = "yes";
+              "browseable" = "yes";
               "guest ok" = "yes";
-              comment = "Public samba share.";
+              "comment" = "Public samba share.";
             };
-          networking.firewall.allowedTCPPorts = [ 139 445 ];
-          networking.firewall.allowedUDPPorts = [ 137 138 ];
+          };
         };
-    };
+      };
+  };
 
-  # client# [    4.542997] mount[777]: sh: systemd-ask-password: command not found
+  testScript = ''
+    server.start()
+    server.wait_for_unit("samba.target")
+    server.succeed("mkdir -p /public; echo bar > /public/foo")
 
-  testScript =
-    ''
-      $server->start;
-      $server->waitForUnit("samba.target");
-      $server->succeed("mkdir -p /public; echo bar > /public/foo");
-
-      $client->start;
-      $client->waitForUnit("remote-fs.target");
-      $client->succeed("[[ \$(cat /public/foo) = bar ]]");
-    '';
-})
+    client.start()
+    client.wait_for_unit("remote-fs.target")
+    client.succeed("[[ $(cat /public/foo) = bar ]]")
+  '';
+}

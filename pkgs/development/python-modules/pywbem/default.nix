@@ -1,50 +1,85 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, fetchpatch, libxml2
-, m2crypto, ply, pyyaml, six
-, httpretty, lxml, mock, pytest, requests
+{
+  lib,
+  buildPythonPackage,
+  decorator,
+  fetchPypi,
+  setuptools,
+  setuptools-scm,
+  formencode,
+  httpretty,
+  libxml2,
+  lxml,
+  mock,
+  nocasedict,
+  nocaselist,
+  pbr,
+  ply,
+  pytestCheckHook,
+  pytz,
+  pyyaml,
+  requests,
+  requests-mock,
+  six,
+  testfixtures,
+  yamlloader,
 }:
 
 buildPythonPackage rec {
   pname = "pywbem";
-  version = "0.10.0";
+  version = "1.9.1";
+  pyproject = true;
 
-  src = fetchFromGitHub {
-    owner  = "pywbem";
-    repo   = "pywbem";
-    rev    = "v${version}";
-    sha256 = "0jcwklip03xcni0dvsk9va8ilqz21g4fxwqd5kzvv91slaadfcym";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-tTfr6DfE/W8ifHXdGWF14QW5X66a3PGfeQRXujV1M0M=";
   };
 
-  patches = [
-    # fix timezone handling so the tests pass again. Can go when 0.10.1 is released
-    # https://github.com/pywbem/pywbem/issues/755#issuecomment-327508681
-    ./make_cimdatetime_timezone_aware.patch
-  ];
-
-  propagatedBuildInputs = [ m2crypto ply pyyaml six ];
-
-  checkInputs = [ httpretty lxml mock pytest requests ];
-
-  # 1 test fails because it doesn't like running in our sandbox. Deleting the
-  # whole file is admittedly a little heavy-handed but at least the vast
-  # majority of tests are run.
-  checkPhase = ''
-    rm testsuite/testclient/networkerror.yaml
-
-    substituteInPlace makefile \
-      --replace "PYTHONPATH=." "" \
-      --replace '--cov $(package_name) --cov-config coveragerc' ""
-
-    for f in testsuite/test_cim_xml.py testsuite/validate.py ; do
-      substituteInPlace $f --replace "'xmllint" "'${stdenv.lib.getBin libxml2}/bin/xmllint"
-    done
-
-    make PATH=$PATH:${stdenv.lib.getBin libxml2}/bin test
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace-fail "setuptools-scm>=9.2.0" "setuptools-scm"
   '';
 
-  meta = with stdenv.lib; {
-    description = "Support for the WBEM standard for systems management.";
-    homepage = http://pywbem.github.io/pywbem/;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ peterhoeg ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
+
+  propagatedBuildInputs = [
+    mock
+    nocasedict
+    nocaselist
+    pbr
+    ply
+    pyyaml
+    requests
+    six
+    yamlloader
+  ];
+
+  nativeCheckInputs = [
+    decorator
+    formencode
+    httpretty
+    libxml2
+    lxml
+    pytestCheckHook
+    pytz
+    requests-mock
+    testfixtures
+  ];
+
+  pythonImportsCheck = [ "pywbem" ];
+
+  disabledTestPaths = [
+    "tests/leaktest" # requires 'yagot'
+    "tests/end2endtest" # requires 'pytest_easy_server'
+  ];
+
+  meta = {
+    description = "Support for the WBEM standard for systems management";
+    homepage = "https://pywbem.github.io";
+    changelog = "https://github.com/pywbem/pywbem/blob/${version}/docs/changes.rst";
+    license = lib.licenses.lgpl21Plus;
+    maintainers = [ ];
   };
 }

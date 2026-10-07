@@ -1,43 +1,58 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
 
   cfg = config.services.freeradius;
 
-  freeradiusService = cfg:
-  {
+  freeradiusService = cfg: {
     description = "FreeRadius server";
-    wantedBy = ["multi-user.target"];
-    after = ["network-online.target"];
-    wants = ["network-online.target"];
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network.target" ];
+    wants = [ "network.target" ];
     preStart = ''
-      ${pkgs.freeradius}/bin/radiusd -C -d ${cfg.configDir} -l stdout
+      ${cfg.package}/bin/radiusd -C -d ${cfg.configDir} -l stdout
     '';
 
     serviceConfig = {
-        ExecStart = "${pkgs.freeradius}/bin/radiusd -f -d ${cfg.configDir} -l stdout -xx";
-        ExecReload = [
-          "${pkgs.freeradius}/bin/radiusd -C -d ${cfg.configDir} -l stdout"
-          "${pkgs.coreutils}/bin/kill -HUP $MAINPID"
-        ];
-        User = "radius";
-        ProtectSystem = "full";
-        ProtectHome = "on";
-        Restart = "on-failure";
-        RestartSec = 2;
+      ExecStart =
+        "${cfg.package}/bin/radiusd -f -d ${cfg.configDir} -l stdout" + lib.optionalString cfg.debug " -xx";
+      ExecReload = [
+        "${cfg.package}/bin/radiusd -C -d ${cfg.configDir} -l stdout"
+        "${pkgs.coreutils}/bin/kill -HUP $MAINPID"
+      ];
+      User = "radius";
+      ProtectSystem = "full";
+      ProtectHome = "on";
+      Restart = "on-failure";
+      RestartSec = 1;
+      LogsDirectory = "radius";
     };
   };
 
   freeradiusConfig = {
-    enable = mkEnableOption "the freeradius server";
+    enable = lib.mkEnableOption "the freeradius server";
 
-    configDir = mkOption {
-      type = types.path;
+    package = lib.mkPackageOption pkgs "freeradius" { };
+
+    configDir = lib.mkOption {
+      type = lib.types.path;
       default = "/etc/raddb";
       description = ''
         The path of the freeradius server configuration directory.
+      '';
+    };
+
+    debug = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Whether to enable debug logging for freeradius (-xx
+        option). This should not be left on, since it includes
+        sensitive data such as passwords in the logs.
       '';
     };
 
@@ -53,19 +68,22 @@ in
     services.freeradius = freeradiusConfig;
   };
 
-
   ###### implementation
 
-  config = mkIf (cfg.enable) {
+  config = lib.mkIf (cfg.enable) {
 
     users = {
-      extraUsers.radius = {
-        /*uid = config.ids.uids.radius;*/
+      users.radius = {
+        # uid = config.ids.uids.radius;
         description = "Radius daemon user";
+        isSystemUser = true;
+        group = "radius";
       };
+      groups.radius = { };
     };
 
     systemd.services.freeradius = freeradiusService cfg;
+    warnings = lib.optional cfg.debug "Freeradius debug logging is enabled. This will log passwords in plaintext to the journal!";
 
   };
 

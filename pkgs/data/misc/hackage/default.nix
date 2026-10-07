@@ -1,6 +1,16 @@
-{ fetchurl }:
-
-fetchurl {
-  url = "https://github.com/commercialhaskell/all-cabal-hashes/archive/db00b74891fcaae598fdcaf3835e274be8f2c082.tar.gz";
-  sha256 = "0csvwqnvyg2jg76rr4blm4hm6max10a6as4mnwdz76sliw4092sg";
-}
+# Hackage database snapshot, used by maintainers/scripts/regenerate-hackage-packages.sh
+# and callHackage
+{ lib, fetchurl }:
+let
+  pin = lib.importJSON ./pin.json;
+in
+fetchurl (finalAttrs: {
+  inherit (pin) url sha256;
+  name = "${finalAttrs.pname}-${finalAttrs.version}.tar.gz";
+  pname = "all-cabal-hashes";
+  version = lib.substring 0 7 pin.commit;
+  passthru.updateScript = ../../../../maintainers/scripts/haskell/update-hackage.sh;
+  meta = {
+    license = lib.licenses.mit;
+  };
+})
